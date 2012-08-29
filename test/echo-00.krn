@@ -1,0 +1,9 @@
+Messages {
+  M(str);
+}
+
+Protocol {
+  x >> M(y) {
+    x << M(y);
+  }
+}

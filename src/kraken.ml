@@ -8,6 +8,8 @@ let parse f =
 let main () =
   Sys.argv.(1)
     |> parse
+    |> Spec.spec_coq
+    |> print "%s"
 
 let _ =
   main ()

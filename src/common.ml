@@ -14,6 +14,15 @@ let print =
 let mkstr =
   Printf.sprintf
 
+let range a b =
+  let rec loop acc i =
+    if i < b then
+      loop (i::acc) (i+1)
+    else
+      List.rev acc
+  in
+  loop [] a
+
 let readline f =
   try
     Some (input_line f)

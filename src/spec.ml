@@ -66,22 +66,17 @@ let ckspec s =
 
 (* coq gen *)
 
-let typ_coq = function
-  | Num -> "num"
-  | Str -> "str"
-
 let msg_decl_coq mds =
   let fmt md =
-    let ts =
-      if md.payload = [] then
-        "msg"
-      else
-        md.payload
-          |> List.map typ_coq
-          |> String.concat " -> "
-          |> mkstr "%s -> msg"
+    let args =
+      let aux arg acc =
+        match arg with
+        | Num, _ -> "num -> " ^ acc
+        | Str, _ -> "str -> " ^ acc
+      in
+      List.fold_right aux md.payload "msg"
     in
-    mkstr "| %s : %s" md.tag ts
+    mkstr "| %s : %s" md.tag args
   in
   mds
     |> List.map fmt
@@ -94,24 +89,20 @@ Inductive msg : Set :=
 
 let recv_msg_spec_coq tag_map mds =
   let fmt md =
-    (* name each msg param *)
-    let nms =
-      md.payload
-        |> List.length
-        |> range 0
-        |> List.map (mkstr "p%d")
-    in
     let hdr =
-      mkstr "    | %s %s =>" md.tag (String.concat " " nms)
-    in
-    let recv_typ = function
-      | (Num, p) -> mkstr "      RecvNum c %s ++" p
-      | (Str, p) -> mkstr "      RecvStr c %s ++" p
+      mkstr "    | %s %s =>" md.tag
+        (md.payload
+          |> List.map snd
+          |> String.concat " ")
     in
     let recv_pay =
-      List.combine md.payload nms
+      let aux = function
+        | Num, p -> mkstr "      RecvNum c %s ++" p
+        | Str, p -> mkstr "      RecvStr c %s ++" p
+      in
+      md.payload
         |> List.rev
-        |> List.map recv_typ
+        |> List.map aux
         |> String.concat "\n"
     in
     let recv_tag =
@@ -137,24 +128,20 @@ Definition RecvMsg (c: chan) (m: msg) : Trace :=
 (* WARNING : copy/paste of recv_msg_spec_coq *)
 let send_msg_spec_coq tag_map mds =
   let fmt md =
-    (* name each msg param *)
-    let nms =
-      md.payload
-        |> List.length
-        |> range 0
-        |> List.map (mkstr "p%d")
-    in
     let hdr =
-      mkstr "    | %s %s =>" md.tag (String.concat " " nms)
-    in
-    let recv_typ = function
-      | (Num, p) -> mkstr "      SendNum c %s ++" p
-      | (Str, p) -> mkstr "      SendStr c %s ++" p
+      mkstr "    | %s %s =>" md.tag
+        (md.payload
+          |> List.map snd
+          |> String.concat " ")
     in
     let recv_pay =
-      List.combine md.payload nms
+      let aux = function
+        | Num, p -> mkstr "      SendNum c %s ++" p
+        | Str, p -> mkstr "      SendStr c %s ++" p
+      in
+      md.payload
         |> List.rev
-        |> List.map recv_typ
+        |> List.map aux
         |> String.concat "\n"
     in
     let recv_tag =
@@ -177,25 +164,160 @@ Definition SendMsg (c: chan) (m: msg) : Trace :=
   end.
 "
 
+let recv_msg_coq tag_map mds =
+  let fmt md =
+    let hdr =
+        mkstr "      | %d => (* %s *)"
+          (List.assoc md.tag tag_map) md.tag
+    in
+    let recv_pay =
+      let recv_typ = function
+        | Num -> "recvNum"
+        | Str -> "recvStr"
+      in
+      let recv_typ_trace = function
+        | Num -> "RecvNum"
+        | Str -> "RecvStr"
+      in
+      let aux (acc, tr) (t, p) =
+        ( (mkstr "        %s <- %s c\n" p (recv_typ t) ^
+           mkstr "          (tr ~~~ %s);" tr) :: acc
+        , mkstr "%s c %s ++ %s" (recv_typ_trace t) p tr
+        )
+      in
+      let tr =
+        mkstr "RecvNum c %d ++ tr"
+          (List.assoc md.tag tag_map)
+      in
+       md.payload
+        |> List.fold_left aux ([], tr)
+        |> fst
+        |> List.rev
+        |> String.concat "\n"
+    in
+    let ret =
+      mkstr "        {{ Return (%s %s) }}" md.tag
+        (md.payload
+          |> List.map snd
+          |> String.concat " ")
+    in
+    mkstr "%s\n%s\n%s"
+      hdr recv_pay ret
+  in
+  mds
+    |> List.map fmt
+    |> String.concat "\n"
+    |> mkstr "
+Definition recvMsg:
+  forall (c: chan) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (m: msg) => tr ~~ traced (RecvMsg c m ++ tr) * bound c).
+Proof.
+  intros; refine (
+    tag <- recvNum c
+      tr;
+    match tag with
+%s
+      (* special case for errors *)
+      | m =>
+        {{ Return (BadTag m) }}
+    end%%N
+  );
+  sep fail auto.
+Qed.
+"
+
+(* WARNING : partial copy/paste of recv_msg_coq *)
+let send_msg_coq tag_map mds =
+  let fmt md =
+    let hdr =
+      mkstr "      | %s %s =>\n" md.tag
+        (md.payload
+          |> List.map snd
+          |> String.concat " ") ^
+      mkstr "        sendNum c %d\n"
+        (List.assoc md.tag tag_map) ^
+      mkstr "          tr;;"
+    in
+    let send_pay =
+      let send_typ = function
+        | Num -> "sendNum"
+        | Str -> "sendStr"
+      in
+      let send_typ_trace = function
+        | Num -> "SendNum"
+        | Str -> "SendStr"
+      in
+      let aux (acc, tr) (t, p) =
+        ( (mkstr "        %s c %s\n" (send_typ t) p ^
+           mkstr "          (tr ~~~ %s);;" tr) :: acc
+        , mkstr "%s c %s ++ %s" (send_typ_trace t) p tr
+        )
+      in
+      let tr =
+        mkstr "SendNum c %d ++ tr"
+          (List.assoc md.tag tag_map)
+      in
+       md.payload
+        |> List.fold_left aux ([], tr)
+        |> fst
+        |> List.rev
+        |> String.concat "\n"
+    in
+    let ret =
+      "        {{ Return tt }}"
+    in
+    mkstr "%s\n%s\n%s"
+      hdr send_pay ret
+  in
+  mds
+    |> List.map fmt
+    |> String.concat "\n"
+    |> mkstr "
+Definition sendMsg:
+  forall (c: chan) (m: msg) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (_: unit) => tr ~~ traced (SendMsg c m ++ tr) * bound c).
+Proof.
+  intros; refine (
+    match m with
+%s
+      (* special case for errors *)
+      | BadTag _ =>
+        sendNum c 0
+          tr;;
+        {{ Return tt }}
+    end
+  );
+  sep fail auto.
+Qed.
+"
+
 let spec_coq s =
+  (* generate id number for each message tag *)
+  (* start at 1 so BadTag can always have id 0 *)
   let tag_map =
-    let tags =
-      List.map tag s.msg_decl
-    in
-    (* generate id number for each tag *)
-    (* start at 1 so BadTag can always have id 0 *)
-    let ids =
-      tags
-        |> List.length
-        |> range 0
-        |> List.map ((+) 1)
-    in
+    let tags = List.map tag s.msg_decl in
+    let ids = range 1 (List.length tags + 1) in
     List.combine tags ids
   in
-  mkstr "%s%s%s"
-    (msg_decl_coq s.msg_decl)
-    (recv_msg_spec_coq tag_map s.msg_decl)
-    (send_msg_spec_coq tag_map s.msg_decl)
+  (* name each param in a msg_decl *)
+  let name_params md =
+    let nms =
+      List.map (mkstr "p%d")
+        (range 0 (List.length md.payload))
+    in
+    msg md.tag (List.combine md.payload nms)
+  in
+  let mds =
+    List.map name_params s.msg_decl
+  in
+  mkstr "%s%s%s%s%s"
+    (msg_decl_coq mds)
+    (recv_msg_spec_coq tag_map mds)
+    (send_msg_spec_coq tag_map mds)
+    (recv_msg_coq tag_map mds)
+    (send_msg_coq tag_map mds)
 
 (* support lex/parse error reporting *)
 let line =

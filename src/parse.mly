@@ -23,7 +23,7 @@ spec :
   | MESSAGES LCURL msg_decls RCURL 
     PROTOCOL LCURL handlers RCURL
     EOF
-    { spec $3 [] }
+    { spec $3 $7 }
 ;;
 
 handlers :

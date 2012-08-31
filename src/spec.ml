@@ -62,6 +62,7 @@ let ckspec s =
   (* msg tags start with uppercase *)
   (* msg tags uniq *)
   (* BadTag not in msg tags *)
+  (* msg pat triggers have uniq ids *)
   ()
 
 (* coq gen *)
@@ -293,6 +294,123 @@ Proof.
 Qed.
 "
 
+let protocol_coq hands =
+  let fmt hand =
+    let pat =
+      let p = snd hand.trigger in
+      mkstr "  | %s %s =>" (p.tag)
+        (String.concat " " p.payload)
+    in
+    let body =
+      let rec sends = function
+        | Send (_, m) -> [m]
+        | Seq (p1, p2) -> sends p1 @ sends p2
+      in
+      let rec expr_coq = function
+        | NLit n ->
+            mkstr "%d" n
+        | SLit s ->
+            List.fold_right
+              (fun i acc -> mkstr "\"%c\" :: %s" s.[i] acc)
+              (range 1 (String.length s - 1))
+              "nil"
+        | Var id ->
+            id
+      in
+      let aux m =
+        mkstr "    %s %s ::" m.tag
+          (m.payload
+            |> List.map expr_coq
+            |> String.concat ") ("
+            |> mkstr "(%s)")
+      in
+      hand.respond
+        |> sends
+        |> List.map aux
+        |> String.concat "\n"
+        |> mkstr "%s\n    nil"
+    in
+    mkstr "%s\n%s" pat body
+  in
+  hands
+    |> List.map fmt
+    |> String.concat "\n"
+    |> mkstr "
+Definition protocol (m: msg) : list msg :=
+  match m with
+%s
+  | _ =>
+    nil
+  end%%char.
+"
+
+let includes_coq = "
+Require Import List.
+Require Import Ascii.
+Require Import BinNat.
+Require Import Nnat.
+Require Import Ynot.
+
+Require Import KrakenBase.
+
+Open Local Scope stsepi_scope.
+Open Local Scope hprop_scope.
+"
+
+let send_msgs_coq = "
+Fixpoint SendMsgs (c: chan) (ms: list msg) : Trace :=
+  match ms with
+    | nil =>
+      nil
+    | m::ms' =>
+      SendMsgs c ms' ++ SendMsg c m
+  end.
+
+Definition sendMsgs:
+  forall (c: chan) (ms: list msg) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (_: unit) => tr ~~ traced (SendMsgs c ms ++ tr) * bound c).
+Proof.
+  intros; refine (
+    Fix2
+      (fun ms tr => tr ~~ traced tr * bound c)
+      (fun ms tr (_: unit) => tr ~~ traced (SendMsgs c ms ++ tr) * bound c)
+      (fun self ms tr =>
+        match ms with
+          | m::ms' =>
+            sendMsg c m
+              tr;;
+            self ms'
+              (tr ~~~ SendMsg c m ++ tr);;
+            {{ Return tt }}
+          | nil =>
+            {{ Return tt }}
+        end)
+      ms tr
+  );
+  sep fail auto.
+  rewrite app_ass.
+  sep fail auto.
+Qed.
+"
+
+let turn_coq = "
+Definition turn:
+  forall (c: chan) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (req: msg) => tr ~~ traced (SendMsgs c (protocol req) ++ RecvMsg c req ++ tr) * bound c).
+Proof.
+  intros; refine (
+    req <- recvMsg c
+      tr;
+    sendMsgs c (protocol req)
+      (tr ~~~ RecvMsg c req ++ tr);;
+    {{ Return req }}
+  );
+  sep fail auto.
+Qed.
+"
+
 let spec_coq s =
   (* generate id number for each message tag *)
   (* start at 1 so BadTag can always have id 0 *)
@@ -312,12 +430,16 @@ let spec_coq s =
   let mds =
     List.map name_params s.msg_decl
   in
-  mkstr "%s%s%s%s%s"
+  mkstr "%s%s%s%s%s%s%s%s%s"
+    includes_coq
     (msg_decl_coq mds)
     (recv_msg_spec_coq tag_map mds)
     (send_msg_spec_coq tag_map mds)
     (recv_msg_coq tag_map mds)
     (send_msg_coq tag_map mds)
+    send_msgs_coq
+    (protocol_coq s.protocol)
+    turn_coq
 
 (* support lex/parse error reporting *)
 let line =

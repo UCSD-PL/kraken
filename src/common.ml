@@ -23,6 +23,15 @@ let range a b =
   in
   loop [] a
 
+let explode s =
+  let rec loop i l =
+    if i < 0 then
+      l
+    else
+      loop (i - 1) (s.[i] :: l)
+  in
+  loop (String.length s - 1) []
+
 let readline f =
   try
     Some (input_line f)

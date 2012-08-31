@@ -270,4 +270,210 @@ Proof.
   apply himp_pure'.
   constructor; auto.
 Qed.
-    
+
+
+
+
+
+Definition proto (m: msg) : list msg :=
+  match m with
+  | M1 p0 =>
+    M1 p0 :: nil
+  | _ =>
+    nil
+  end.
+
+Lemma flat_map_app:
+  forall A B (f: A -> list B) (l1 l2: list A),
+  flat_map f (l1 ++ l2) = flat_map f l1 ++ flat_map f l2.
+Proof.
+  induction l1; simpl; intros; auto.
+  rewrite IHl1; rewrite app_ass; auto.
+Qed.
+
+Fixpoint SendMsgs (c: chan) (ms: list msg) : Trace :=
+  match ms with
+    | nil =>
+      nil
+    | m::ms' =>
+      SendMsgs c ms' ++ SendMsg c m
+  end.
+
+Definition sendMsgs:
+  forall (c: chan) (ms: list msg) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (_: unit) => tr ~~ traced (SendMsgs c ms ++ tr) * bound c).
+Proof.
+  intros; refine (
+    Fix2
+     (fun ms tr => tr ~~ traced tr * bound c)
+     (fun ms tr (_: unit) => tr ~~ traced (SendMsgs c ms ++ tr) * bound c)
+     (fun self ms tr =>
+       match ms with
+         | m::ms' =>
+           sendMsg c m
+             tr;;
+           {{ self ms' (tr ~~~ SendMsg c m ++ tr) }}
+         | nil =>
+           {{ Return tt }}
+       end)
+     ms tr
+  );
+  sep fail auto.
+  rewrite app_ass.
+  sep fail auto.
+Qed.
+
+Definition turn:
+  forall (c: chan) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (req: msg) => tr ~~ traced (SendMsgs c (proto req) ++ RecvMsg c req ++ tr) * bound c).
+Proof.
+  intros; refine (
+    req <- recvMsg c
+      tr;
+    sendMsgs c (proto req)
+      (tr ~~~ RecvMsg c req ++ tr);;
+    {{ Return req }}
+  );
+  sep fail auto.
+Qed.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Definition sendMsgs:
+  forall (c: chan) (ms: list msg) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (_: unit) => tr ~~ traced (flat_map (SendMsg c) (rev ms) ++ tr) * bound c).
+Proof.
+  intros; refine (
+    Fix2
+     (fun ms tr => tr ~~ traced tr * bound c)
+     (fun ms tr (_: unit) => tr ~~ traced (flat_map (SendMsg c) (rev ms) ++ tr) * bound c)
+     (fun self ms tr =>
+       match ms with
+         | m::ms' =>
+           sendMsg c m
+             tr;;
+           {{ self ms' (tr ~~~ SendMsg c m ++ tr) }}
+         | nil =>
+           {{ Return tt }}
+       end)
+     ms tr
+  );
+  sep fail auto.
+  rewrite flat_map_app; simpl.
+  repeat rewrite app_ass.
+  sep fail auto.
+Qed.
+
+Definition turn:
+  forall (c: chan) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (req: msg) =>
+          tr ~~ traced (flat_map (SendMsg c) (rev (proto req)) ++ RecvMsg c req ++ tr) *
+          [Turn tr (RecvMsg c req) (SendOptMsg c (proto req))] *
+          bound c).
+Proof.
+  intros; refine (
+    req <- recvMsg c
+      tr;
+    let orsp :=
+      proto req
+    in
+    match orsp as orsp' return orsp = orsp' -> _ with
+      | Some rsp => fun _ =>
+        sendMsg c rsp
+          (tr ~~~ RecvMsg c req ++ tr);;
+        {{ Return req }}
+      | None => fun _ =>
+        {{ Return req }}
+    end (refl_equal orsp)
+  );
+  sep fail auto;
+  match goal with
+    | H: proto ?req = _ |- _ =>
+      rewrite H in *
+  end;
+  sep fail auto;
+  apply himp_pure';
+  constructor; auto.
+Qed.
+
+
+
+
+
+
+Inductive Turn : Trace -> Trace -> Trace -> Prop :=
+| Reply :
+  forall tr chan req rsp,
+  proto req = Some rsp ->
+  Turn tr
+    (RecvMsg chan req)
+    (SendMsg chan rsp)
+| Quiet :
+  forall tr chan req,
+  proto req = None ->
+  Turn tr
+    (RecvMsg chan req)
+    nil.
+
+Definition SendOptMsg (c: chan) (om: option msg) : Trace :=
+  match om with
+    | Some m => SendMsg c m
+    | None => nil
+  end.
+
+Definition turn:
+  forall (c: chan) (tr: [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (req: msg) =>
+          tr ~~ traced (SendOptMsg c (proto req) ++ RecvMsg c req ++ tr) *
+          [Turn tr (RecvMsg c req) (SendOptMsg c (proto req))] *
+          bound c).
+Proof.
+  intros; refine (
+    req <- recvMsg c
+      tr;
+    let orsp :=
+      proto req
+    in
+    match orsp as orsp' return orsp = orsp' -> _ with
+      | Some rsp => fun _ =>
+        sendMsg c rsp
+          (tr ~~~ RecvMsg c req ++ tr);;
+        {{ Return req }}
+      | None => fun _ =>
+        {{ Return req }}
+    end (refl_equal orsp)
+  );
+  sep fail auto;
+  match goal with
+    | H: proto ?req = _ |- _ =>
+      rewrite H in *
+  end;
+  sep fail auto;
+  apply himp_pure';
+  constructor; auto.
+Qed.

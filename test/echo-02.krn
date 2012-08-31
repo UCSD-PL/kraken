@@ -1,0 +1,10 @@
+Messages {
+  M(str, str, str, str);
+}
+
+Protocol {
+  x >> M(a, b, c, d) {
+    x << M(a, b, c, d);
+    x << M(d, "hello", "world", "");
+  }
+}

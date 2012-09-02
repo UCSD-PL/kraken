@@ -310,6 +310,7 @@ let protocol_coq hands =
         | NLit n ->
             mkstr "%d" n
         | SLit s ->
+            (* chop quote chars w/ range from 1 to length - 1 *)
             List.fold_right
               (fun i acc -> mkstr "\"%c\" :: %s" s.[i] acc)
               (range 1 (String.length s - 1))

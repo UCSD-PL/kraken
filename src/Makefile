@@ -5,7 +5,7 @@ FLAGS = \
   -libs unix,str \
   -cflag -g \
   -lflag -g \
-  -build-dir ../bin \
+  -build-dir ../bin
 
 all:
 	mkdir -p ../bin

@@ -44,8 +44,10 @@ Proof.
   constructor; auto.
 Qed.
 
+Axiom c : chan.
+
 Definition main:
-  forall (c: chan),
+  forall (_: unit),
   STsep (traced init * bound c)
         (fun (tr: [Trace]) => tr ~~ traced tr * bound c * [KTrace tr]).
 Proof.

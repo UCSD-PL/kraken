@@ -7,6 +7,9 @@ Require Import Ynot.
 Open Local Scope stsepi_scope.
 Open Local Scope hprop_scope.
 
+Definition num : Set :=
+  N.
+
 Definition str : Set :=
   list ascii.
 
@@ -24,11 +27,11 @@ Inductive Action : Set :=
 Definition Trace : Set :=
   list Action.
 
-Definition RecvNum (c: chan) (n: N) : Trace :=
+Definition RecvNum (c: chan) (n: num) : Trace :=
   RecvN c n ::
   nil.
 
-Definition SendNum (c: chan) (n: N) : Trace :=
+Definition SendNum (c: chan) (n: num) : Trace :=
   SendN c n ::
   nil.
 

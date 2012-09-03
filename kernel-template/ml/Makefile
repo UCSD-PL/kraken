@@ -10,8 +10,8 @@ FLAGS = \
 all:
 	mkdir -p ../bin
 	cp primitives/* .
-	$(BUILD) $(FLAGS) Kernel.byte
-	$(SLINK) ../bin/Kernel.byte ../bin/Kernel
+	$(BUILD) $(FLAGS) Main.byte
+	$(SLINK) ../bin/Main.byte ../bin/Main
   
 clean:
 	mkdir -p ../bin

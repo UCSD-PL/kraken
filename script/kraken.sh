@@ -41,7 +41,7 @@ while [ "$*" != "" ]; do
   shift
 done
 
-if [ ! -f $KRN ]; then
+if [ ! -f "$KRN" ]; then
   echo "Error: cannot find input '$KRN'"
   exit 1
 fi
@@ -57,7 +57,7 @@ elif [ -d $D ]; then
   echo "To overwrite, use the --force option."
   exit 1
 fi
-mkdir $D
-cd $D
+cp -r $KRAKEN/kernel-template $D
 
-$KRAKEN/bin/kraken $KRN > Turn.v
+$KRAKEN/bin/kraken $KRN > $D/coq/Turn.v
+make -C $D

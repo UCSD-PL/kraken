@@ -65,6 +65,10 @@ let ckspec s =
   (* msg pat triggers have uniq ids *)
   ()
 
+(* support lex/parse error reporting *)
+let line =
+  ref 1
+
 (* coq gen *)
 
 let msg_decl_coq mds =
@@ -85,7 +89,7 @@ let msg_decl_coq mds =
     |> mkstr "
 Inductive msg : Set :=
 %s
-| BadTag : N -> msg.
+| BadTag : num -> msg.
 "
 
 let recv_msg_spec_coq tag_map mds =
@@ -107,7 +111,7 @@ let recv_msg_spec_coq tag_map mds =
         |> String.concat "\n"
     in
     let recv_tag =
-      mkstr "      RecvNum c %d"
+      mkstr "      RecvNum c %s"
         (List.assoc md.tag tag_map)
     in
     mkstr "%s\n%s\n%s"
@@ -146,7 +150,7 @@ let send_msg_spec_coq tag_map mds =
         |> String.concat "\n"
     in
     let recv_tag =
-      mkstr "      SendNum c %d"
+      mkstr "      SendNum c %s"
         (List.assoc md.tag tag_map)
     in
     mkstr "%s\n%s\n%s"
@@ -161,14 +165,14 @@ Definition SendMsg (c: chan) (m: msg) : Trace :=
 %s
     (* special case for errors *)
     | BadTag p0 =>
-      SendNum c 0
+      SendNum c (Num (Ascii false false false false false false false false))
   end.
 "
 
 let recv_msg_coq tag_map mds =
   let fmt md =
     let hdr =
-        mkstr "      | %d => (* %s *)"
+        mkstr "      | %s => (* %s *)"
           (List.assoc md.tag tag_map) md.tag
     in
     let recv_pay =
@@ -187,7 +191,7 @@ let recv_msg_coq tag_map mds =
         )
       in
       let tr =
-        mkstr "RecvNum c %d ++ tr"
+        mkstr "RecvNum c %s ++ tr"
           (List.assoc md.tag tag_map)
       in
        md.payload
@@ -222,9 +226,11 @@ Proof.
       (* special case for errors *)
       | m =>
         {{ Return (BadTag m) }}
-    end%%N
+    end
   );
-  sep fail auto.
+  sep fail auto;
+    repeat rewrite app_ass; simpl;
+    sep fail auto.
 Qed.
 "
 
@@ -236,7 +242,7 @@ let send_msg_coq tag_map mds =
         (md.payload
           |> List.map snd
           |> String.concat " ") ^
-      mkstr "        sendNum c %d\n"
+      mkstr "        sendNum c %s\n"
         (List.assoc md.tag tag_map) ^
       mkstr "          tr;;"
     in
@@ -256,7 +262,7 @@ let send_msg_coq tag_map mds =
         )
       in
       let tr =
-        mkstr "SendNum c %d ++ tr"
+        mkstr "SendNum c %s ++ tr"
           (List.assoc md.tag tag_map)
       in
        md.payload
@@ -285,12 +291,14 @@ Proof.
 %s
       (* special case for errors *)
       | BadTag _ =>
-        sendNum c 0
+        sendNum c (Num (Ascii false false false false false false false false))
           tr;;
         {{ Return tt }}
     end
   );
-  sep fail auto.
+  sep fail auto;
+    repeat rewrite app_ass; simpl;
+    sep fail auto.
 Qed.
 "
 
@@ -348,14 +356,11 @@ Definition protocol (m: msg) : list msg :=
 let includes_coq = "
 Require Import List.
 Require Import Ascii.
-Require Import BinNat.
-Require Import Nnat.
 Require Import Ynot.
-
 Require Import KrakenBase.
 
-Open Local Scope stsepi_scope.
 Open Local Scope hprop_scope.
+Open Local Scope stsepi_scope.
 "
 
 let send_msgs_coq = "
@@ -389,9 +394,9 @@ Proof.
         end)
       ms tr
   );
-  sep fail auto.
-  rewrite app_ass.
-  sep fail auto.
+  sep fail auto;
+    repeat rewrite app_ass; simpl;
+    sep fail auto.
 Qed.
 "
 
@@ -411,6 +416,16 @@ Proof.
   sep fail auto.
 Qed.
 "
+let num_of_int i =
+  if i < 256 then
+    i |> bits
+      |> List.rev
+      |> take 8
+      |> List.map string_of_bool
+      |> String.concat " "
+      |> mkstr "(Num (Ascii %s))"
+  else
+    failwith "num_of_int"
 
 let spec_coq s =
   (* generate id number for each message tag *)
@@ -418,7 +433,7 @@ let spec_coq s =
   let tag_map =
     let tags = List.map tag s.msg_decl in
     let ids = range 1 (List.length tags + 1) in
-    List.combine tags ids
+    List.combine tags (List.map num_of_int ids)
   in
   (* name each param in a msg_decl *)
   let name_params md =
@@ -441,7 +456,3 @@ let spec_coq s =
     send_msgs_coq
     (protocol_coq s.protocol)
     turn_coq
-
-(* support lex/parse error reporting *)
-let line =
-  ref 1

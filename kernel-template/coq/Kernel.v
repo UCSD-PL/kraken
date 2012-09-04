@@ -10,11 +10,9 @@ Require Import Turn.
 Open Local Scope stsepi_scope.
 Open Local Scope hprop_scope.
 
-Axiom init : Trace.
-
 Inductive KTrace : Trace -> Prop :=
 | KT_init :
-  KTrace init
+  KTrace nil
 | KT_iter :
   forall tr c m,
   KTrace tr ->
@@ -48,12 +46,12 @@ Axiom c : chan.
 
 Definition main:
   forall (_: unit),
-  STsep (traced init * bound c)
+  STsep (traced nil * bound c)
         (fun (tr: [Trace]) => tr ~~ traced tr * bound c * [KTrace tr]).
 Proof.
   intros; refine (
     tr' <- kloop c
-      [init];
+      [nil];
     {{ Return tr' }}
   );
   sep fail auto.

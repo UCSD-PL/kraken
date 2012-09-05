@@ -1,1 +1,1 @@
-STImpl.exec Kernel.main
+STImpl.exec Kernel.main ()

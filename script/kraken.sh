@@ -6,7 +6,10 @@ function usage {
   echo "
 Usage: kraken.sh [OPTIONS] <input.krn>
 
-Options:
+Generate Coq code and proofs from a Kraken kernel spec.
+
+OPTIONS:
+  -h, --help        print this usage information
   -f, --force       overwrite any existing output
 "
   exit 1
@@ -59,5 +62,10 @@ elif [ -d $D ]; then
 fi
 cp -r $KRAKEN/kernel-template $D
 
-$KRAKEN/bin/kraken $KRN > $D/coq/Turn.v
+# generate code and proofs
+$KRAKEN/bin/kraken $KRN \
+  --turn $D/coq/Turn.v \
+  --pylib $D/py/kraken_msg_lib.py
+
+# build the monster
 make -C $D

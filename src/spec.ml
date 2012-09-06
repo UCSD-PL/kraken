@@ -1,5 +1,9 @@
 open Common
 
+(*
+ * AST
+ *)
+
 type id =
   string
 
@@ -56,8 +60,6 @@ let spec m p =
   ; protocol = p
   }
 
-(* sanity checks *)
-
 let ckspec s =
   (* TODO *)
   (* msg tags start with uppercase *)
@@ -66,7 +68,13 @@ let ckspec s =
   (* msg pat triggers have uniq ids *)
   ()
 
-(* coq gen *)
+(* support lex/parse error reporting *)
+let line =
+  ref 1
+
+(*
+ * GENERATE COQ CODE AND PROOFS
+ *)
 
 let msg_decl_coq mds =
   let fmt md =
@@ -456,6 +464,9 @@ let spec_coq s =
     (protocol_coq s.protocol)
     turn_coq
 
-(* support lex/parse error reporting *)
-let line =
-  ref 1
+(*
+ * GENERATE PYTHON MESSAGING LIBRARY
+ *)
+
+let spec_pylib s =
+  ""

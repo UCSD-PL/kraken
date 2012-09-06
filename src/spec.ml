@@ -59,15 +59,12 @@ let spec m p =
 (* sanity checks *)
 
 let ckspec s =
+  (* TODO *)
   (* msg tags start with uppercase *)
   (* msg tags uniq *)
   (* BadTag not in msg tags *)
   (* msg pat triggers have uniq ids *)
   ()
-
-(* support lex/parse error reporting *)
-let line =
-  ref 1
 
 (* coq gen *)
 
@@ -89,6 +86,7 @@ let msg_decl_coq mds =
     |> mkstr "
 Inductive msg : Set :=
 %s
+(* special case for errors *)
 | BadTag : num -> msg.
 "
 
@@ -121,7 +119,7 @@ let recv_msg_spec_coq tag_map mds =
     |> List.map fmt
     |> String.concat "\n"
     |> mkstr "
-Definition RecvMsg (c: chan) (m: msg) : Trace :=
+Definition RecvMsg (c : chan) (m : msg) : Trace :=
   match m with
 %s
     (* special case for errors *)
@@ -130,7 +128,7 @@ Definition RecvMsg (c: chan) (m: msg) : Trace :=
   end.
 "
 
-(* WARNING : copy/paste of recv_msg_spec_coq *)
+(* WARNING : partial copy/paste of recv_msg_spec_coq *)
 let send_msg_spec_coq tag_map mds =
   let fmt md =
     let hdr =
@@ -160,7 +158,7 @@ let send_msg_spec_coq tag_map mds =
     |> List.map fmt
     |> String.concat "\n"
     |> mkstr "
-Definition SendMsg (c: chan) (m: msg) : Trace :=
+Definition SendMsg (c : chan) (m : msg) : Trace :=
   match m with
 %s
     (* special case for errors *)
@@ -185,8 +183,8 @@ let recv_msg_coq tag_map mds =
         | Str -> "RecvStr"
       in
       let aux (acc, tr) (t, p) =
-        ( (mkstr "        %s <- %s c\n" p (recv_typ t) ^
-           mkstr "          (tr ~~~ %s);" tr) :: acc
+        ((mkstr "        %s <- %s c\n" p (recv_typ t) ^
+          mkstr "          (tr ~~~ %s);" tr) :: acc
         , mkstr "%s c %s ++ %s" (recv_typ_trace t) p tr
         )
       in
@@ -213,10 +211,10 @@ let recv_msg_coq tag_map mds =
     |> List.map fmt
     |> String.concat "\n"
     |> mkstr "
-Definition recvMsg:
-  forall (c: chan) (tr: [Trace]),
+Definition recvMsg :
+  forall (c : chan) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun (m: msg) => tr ~~ traced (RecvMsg c m ++ tr) * bound c).
+        (fun (m : msg) => tr ~~ traced (RecvMsg c m ++ tr) * bound c).
 Proof.
   intros; refine (
     tag <- recvNum c
@@ -256,8 +254,8 @@ let send_msg_coq tag_map mds =
         | Str -> "SendStr"
       in
       let aux (acc, tr) (t, p) =
-        ( (mkstr "        %s c %s\n" (send_typ t) p ^
-           mkstr "          (tr ~~~ %s);;" tr) :: acc
+        ((mkstr "        %s c %s\n" (send_typ t) p ^
+          mkstr "          (tr ~~~ %s);;" tr) :: acc
         , mkstr "%s c %s ++ %s" (send_typ_trace t) p tr
         )
       in
@@ -281,10 +279,10 @@ let send_msg_coq tag_map mds =
     |> List.map fmt
     |> String.concat "\n"
     |> mkstr "
-Definition sendMsg:
-  forall (c: chan) (m: msg) (tr: [Trace]),
+Definition sendMsg :
+  forall (c : chan) (m : msg) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun (_: unit) => tr ~~ traced (SendMsg c m ++ tr) * bound c).
+        (fun (_ : unit) => tr ~~ traced (SendMsg c m ++ tr) * bound c).
 Proof.
   intros; refine (
     match m with
@@ -345,7 +343,7 @@ let protocol_coq hands =
     |> List.map fmt
     |> String.concat "\n"
     |> mkstr "
-Definition protocol (m: msg) : list msg :=
+Definition protocol (m : msg) : list msg :=
   match m with
 %s
   | _ =>
@@ -364,26 +362,26 @@ Open Local Scope stsepi_scope.
 "
 
 let send_msgs_coq = "
-Fixpoint SendMsgs (c: chan) (ms: list msg) : Trace :=
+Fixpoint SendMsgs (c : chan) (ms : list msg) : Trace :=
   match ms with
     | nil =>
       nil
-    | m::ms' =>
+    | m :: ms' =>
       SendMsgs c ms' ++ SendMsg c m
   end.
 
-Definition sendMsgs:
-  forall (c: chan) (ms: list msg) (tr: [Trace]),
+Definition sendMsgs :
+  forall (c : chan) (ms : list msg) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun (_: unit) => tr ~~ traced (SendMsgs c ms ++ tr) * bound c).
+        (fun (_ : unit) => tr ~~ traced (SendMsgs c ms ++ tr) * bound c).
 Proof.
   intros; refine (
     Fix2
       (fun ms tr => tr ~~ traced tr * bound c)
-      (fun ms tr (_: unit) => tr ~~ traced (SendMsgs c ms ++ tr) * bound c)
+      (fun ms tr (_ : unit) => tr ~~ traced (SendMsgs c ms ++ tr) * bound c)
       (fun self ms tr =>
         match ms with
-          | m::ms' =>
+          | m :: ms' =>
             sendMsg c m
               tr;;
             self ms'
@@ -401,10 +399,10 @@ Qed.
 "
 
 let turn_coq = "
-Definition turn:
-  forall (c: chan) (tr: [Trace]),
+Definition turn :
+  forall (c : chan) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun (req: msg) => tr ~~ traced (SendMsgs c (protocol req) ++ RecvMsg c req ++ tr) * bound c).
+        (fun (req : msg) => tr ~~ traced (SendMsgs c (protocol req) ++ RecvMsg c req ++ tr) * bound c).
 Proof.
   intros; refine (
     req <- recvMsg c
@@ -416,8 +414,9 @@ Proof.
   sep fail auto.
 Qed.
 "
+
 let num_of_int i =
-  if i < 256 then
+  if 0 < i && i < 256 then
     i |> bits
       |> List.rev
       |> take 8
@@ -456,3 +455,7 @@ let spec_coq s =
     send_msgs_coq
     (protocol_coq s.protocol)
     turn_coq
+
+(* support lex/parse error reporting *)
+let line =
+  ref 1

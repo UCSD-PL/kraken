@@ -128,14 +128,8 @@ let mkchan () =
   in
   match Unix.fork () with
   | 0 -> (* child *)
-      let cmd =
-        "KRAKEN"
-          |> Sys.getenv
-          |> mkstr "%s/script/test-client.py"
-      in
-      Unix.execv
-        cmd
-        [|cmd; mkstr "%d" (int_of_file_descr c)|]
+      let cmd = Sys.getenv "KRAKEN_TEST" in
+      Unix.execv cmd [|cmd; mkstr "%d" (int_of_file_descr c)|]
   | x -> (* parent *)
       Printf.printf "%d" x;
       p

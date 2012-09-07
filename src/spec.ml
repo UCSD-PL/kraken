@@ -468,5 +468,89 @@ let spec_coq s =
  * GENERATE PYTHON MESSAGING LIBRARY
  *)
 
+let recv_send_pylib = "
+import socket, struct
+
+def recvNum(c):
+  s = c.recv(1)
+  n = struct.unpack('>B', s)[0]
+  print '<< %d' % n
+  return n
+
+def recvStr(c):
+  n = recvNum(c)
+  s = c.recv(n)
+  print '<< \"%s\"' % s
+  return s
+
+def sendNum(c, n):
+  s = struct.pack('>B', n)
+  c.send(s)
+  print '>> %d' % n
+
+def sendStr(c, s):
+  sendNum(c, len(s))
+  c.send(s)
+  print '>> \"%s\"' % s
+
+class Msg:
+  def __init__(self, tag, params):
+    self.tag = tag
+    self.params = params
+"
+
+let recv_msg_pylib tag_map mds =
+  let fmt md =
+    let recv_arg = function
+      | Num -> "recvNum(c)"
+      | Str -> "recvStr(c)"
+    in
+    mkstr "%2d : lambda x : Msg('%s', [%s])"
+      (List.assoc md.tag tag_map) md.tag
+      (md.payload
+        |> List.map recv_arg
+        |> String.concat ", ")
+  in
+  mds
+    |> List.map fmt
+    |> String.concat "\n        , "
+    |> mkstr "
+def recvMsg(c):
+  tag = recvNum(c)
+  msg = { %s
+        }[tag](0)
+  return msg
+"
+
+(* WARNING partial copy/past of recv_msg_pylib *)
+let send_msg_pylib tag_map mds =
+  let fmt md =
+    let send_arg i = function
+      | Num -> mkstr "sendNum(c, m.params[%d])" i
+      | Str -> mkstr "sendStr(c, m.params[%d])" i
+    in
+    mkstr "'%s' : lambda x : [sendNum(c, %d), %s])"
+      md.tag (List.assoc md.tag tag_map)
+      (md.payload
+        |> List.mapi send_arg
+        |> String.concat ", ")
+  in
+  mds
+    |> List.map fmt
+    |> String.concat "\n  , "
+    |> mkstr "
+def sendMsg(c, m):
+  { %s
+  }[m.tag](0)
+"
+
 let spec_pylib s =
-  ""
+  (* WARNING partial copy/paste from spec_coq *)
+  let tag_map =
+    let tags = List.map tag s.msg_decl in
+    List.combine tags (range 1 (List.length tags + 1))
+  in
+  mkstr "%s%s%s"
+    recv_send_pylib
+    (recv_msg_pylib tag_map s.msg_decl)
+    (send_msg_pylib tag_map s.msg_decl)

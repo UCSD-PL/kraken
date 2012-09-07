@@ -72,7 +72,7 @@ cp -r $KRAKEN/kernel-template $D
 # generate code and proofs
 $KRAKEN/bin/kraken $INPUT \
   --turn $D/coq/Turn.v \
-  --lib $D/lib \
+  --lib $D/client \
 || error "Kraken compiler failed."
 
 # build the monster

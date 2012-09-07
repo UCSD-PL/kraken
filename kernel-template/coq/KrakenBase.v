@@ -5,52 +5,73 @@ Require Import Ynot.
 Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
 
-Definition str : Set :=
-  list ascii.
+Definition str : Set := list ascii.
 
 Inductive num : Set :=
 | Num : ascii -> num.
 
-Definition nat_of_num (n: num) : nat :=
+Definition nat_of_num (n : num) : nat :=
   match n with
     | Num a1 => nat_of_ascii a1
   end.
 
+Definition num_of_nat (n : nat) : num :=
+  Num (ascii_of_nat n).
+
+Lemma num_nat_embedding :
+  forall (n : num), num_of_nat (nat_of_num n) = n.
+Proof.
+  destruct n; simpl.
+  unfold num_of_nat, nat_of_num.
+  rewrite ascii_nat_embedding; auto.
+Qed.
+
+(* prevent sep tactic from unfolding these *)
+Opaque nat_of_num.
+Opaque num_of_nat.
+
+Definition num_0 : num := Num Ascii.zero.
+Definition num_1 : num := Num Ascii.one.
+
 Axiom chan : Set.
 
 Inductive Action : Set :=
+| Exec : str -> chan -> Action
 | Recv : chan -> str -> Action
 | Send : chan -> str -> Action.
 
-Definition Trace : Set :=
-  list Action.
+Definition Trace : Set := list Action.
 
 Axiom traced : Trace -> hprop.
-
 Axiom bound : chan -> hprop.
 
-Axiom recv:
-  forall (c: chan) (n: num) (tr: [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (s: str) => tr ~~ traced (Recv c s :: tr) * bound c * [nat_of_num n = length s]).
+Axiom exec :
+  forall (s : str) (tr : [Trace]),
+  STsep (tr ~~ traced tr)
+        (fun (c : chan) => tr ~~ traced (Exec s c :: tr)).
 
-Axiom send:
-  forall (c: chan) (s: str) (tr: [Trace]),
+Axiom recv :
+  forall (c : chan) (n : num) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun (_: unit) => tr ~~ traced (Send c s :: tr) * bound c).
+        (fun (s : str) => tr ~~ traced (Recv c s :: tr) * bound c * [nat_of_num n = length s]).
 
-Definition RecvNum (c: chan) (n: num) : Trace :=
+Axiom send :
+  forall (c : chan) (s : str) (tr : [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (_ : unit) => tr ~~ traced (Send c s :: tr) * bound c).
+
+Definition RecvNum (c : chan) (n : num) : Trace :=
   match n with
     | Num a1 => Recv c (a1 :: nil) :: nil
   end.
 
 Definition recvNum:
-  forall (c: chan) (tr: [Trace]),
+  forall (c : chan) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun n => tr ~~ traced (RecvNum c n ++ tr) * bound c).
+        (fun (n : num) => tr ~~ traced (RecvNum c n ++ tr) * bound c).
 Proof.
   intros; refine (
-    s <- recv c (Num one)
+    s <- recv c num_1
       tr;
     match s with
       | a1 :: nil =>
@@ -64,15 +85,15 @@ Proof.
   compute in H; discriminate.
 Qed.
 
-Definition SendNum (c: chan) (n: num) : Trace :=
+Definition SendNum (c : chan) (n : num) : Trace :=
   match n with
     | Num a1 => Send c (a1 :: nil) :: nil
   end.
 
 Definition sendNum:
-  forall (c: chan) (n: num) (tr: [Trace]),
+  forall (c : chan) (n : num) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun (_: unit) => tr ~~ traced (SendNum c n ++ tr) * bound c).
+        (fun (_ : unit) => tr ~~ traced (SendNum c n ++ tr) * bound c).
 Proof.
   intros; refine (
     match n with
@@ -85,13 +106,13 @@ Proof.
   sep fail auto.
 Qed.
 
-Definition RecvStr (c: chan) (s: str) : Trace :=
-  Recv c s :: RecvNum c (Num (ascii_of_nat (length s))).
+Definition RecvStr (c : chan) (s : str) : Trace :=
+  Recv c s :: RecvNum c (num_of_nat (length s)).
 
 Definition recvStr:
-  forall (c: chan) (tr: [Trace]),
+  forall (c : chan) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun s => tr ~~ traced (RecvStr c s ++ tr) * bound c).
+        (fun (s : str) => tr ~~ traced (RecvStr c s ++ tr) * bound c).
 Proof.
   intros; refine (
     n <- recvNum c
@@ -101,21 +122,21 @@ Proof.
     {{ Return s }}
   );
   sep fail auto.
-  destruct n; simpl in *.
-  rewrite <- H. rewrite ascii_nat_embedding.
+  rewrite <- H.
+  rewrite num_nat_embedding.
   sep fail auto.
 Qed.
 
-Definition SendStr (c: chan) (s: str) : Trace :=
-  Send c s :: SendNum c (Num (ascii_of_nat (length s))).
+Definition SendStr (c : chan) (s : str) : Trace :=
+  Send c s :: SendNum c (num_of_nat (length s)).
 
 Definition sendStr:
-  forall (c: chan) (s: str) (tr: [Trace]),
+  forall (c : chan) (s : str) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
-        (fun (_: unit) => tr ~~ traced (SendStr c s ++ tr) * bound c).
+        (fun (_ : unit) => tr ~~ traced (SendStr c s ++ tr) * bound c).
 Proof.
   intros; refine (
-    let n := Num (ascii_of_nat (length s)) in
+    let n := num_of_nat (length s) in
     sendNum c n
       tr;;
     send c s

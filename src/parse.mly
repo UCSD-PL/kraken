@@ -4,14 +4,16 @@
 
   let parse_error s =
     failwith (mkstr "Parse: error on line %d" !line)
+
+  (* NOTE to get commas right, we special case empty arg lists *)
 %}
 
 %token MESSAGES PROTOCOL NUM STR
 %token SENDS RECVS LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF
 
-%token <int> NLIT
-%token <string> SLIT
+%token <int> NUMLIT
+%token <string> STRLIT
 %token <string> ID
 
 %start spec
@@ -66,8 +68,8 @@ exprs :
 ;;
 
 expr :
-  | NLIT { NLit $1 }
-  | SLIT { SLit $1 }
+  | NUMLIT { NumLit $1 }
+  | STRLIT { StrLit $1 }
   | ID { Var $1 }
 ;;
 

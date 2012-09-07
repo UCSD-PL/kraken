@@ -1,59 +1,68 @@
-let (|>) x f =
-  f x
+let (|>) x f = f x
 
-let tick =
-  ref 0
+let tick = ref 0
+let tock = incr tick; !tick
 
-let tock =
-  incr tick;
-  !tick
+let print = Printf.printf
+let mkstr = Printf.sprintf
 
-let print =
-  Printf.printf
-
-let mkstr =
-  Printf.sprintf
-
-let range a b =
-  let rec loop acc i =
-    if i < b then
-      loop (i::acc) (i+1)
-    else
-      List.rev acc
-  in
-  loop [] a
+let rec range a b =
+  if a < b then
+    a :: range (a + 1) b
+  else
+    []
 
 let explode s =
-  let rec loop i l =
+  let rec loop i cs =
     if i < 0 then
-      l
+      cs
     else
-      loop (i - 1) (s.[i] :: l)
+      loop (i - 1) (s.[i] :: cs)
   in
   loop (String.length s - 1) []
 
-let bits n =
-  let rec loop i acc n =
-    if i = 0 then
-      acc
-    else if n land 1 = 0 then
-      loop (i - 1) (false :: acc) (n lsr 1)
-    else
-      loop (i - 1) (true :: acc) (n lsr 1)
+let implode cs =
+  let s = String.create (List.length cs) in
+  let rec loop i = function
+    | c :: cs' ->
+        s.[i] <- c;
+        loop (i + 1) cs'
+    | [] -> s
   in
-  loop 32 [] n
+  loop 0 cs
+
+let last_bits k n =
+  let rec loop k bits n =
+    if k <= 0 then
+      bits
+    else if n land 1 = 0 then
+      loop (k - 1) (false :: bits) (n lsr 1)
+    else
+      loop (k - 1) (true :: bits) (n lsr 1)
+  in
+  loop k [] n
 
 let rec take n l =
-  match n, l with
-  | 0, _ -> []
-  | _, [] -> failwith "take"
-  | n, x :: xs -> x :: take (n - 1) xs
+  if n = 0 then
+    []
+  else
+    match l with
+    | [] -> failwith "take"
+    | x::xs -> x :: take (n - 1) xs
 
 let rec drop n l =
-  match n, l with
-  | 0, l -> l
-  | _, [] -> failwith "drop"
-  | n, x :: xs -> drop (n - 1) xs
+  if n = 0 then
+    l
+  else
+    match l with
+    | [] -> failwith "drop"
+    | x::xs -> drop (n - 1) xs
+
+let curry (f: 'a * 'b -> 'c) : 'a -> 'b -> 'c =
+  fun a b -> f (a, b)
+
+let uncurry (f: 'a -> 'b -> 'c) : 'a * 'b -> 'c =
+  fun (a, b) -> f a b
 
 let readline f =
   try
@@ -73,10 +82,13 @@ let readlines file =
   in
   loop []
 
-let file_str f =
+let readfile f =
   String.concat "\n" (readlines f)
 
-let str_file file s =
+let writefile file s =
   let f = open_out file in
   output_string f s;
   close_out f
+
+let writelines f ls =
+  writefile f (String.concat "\n" ls)

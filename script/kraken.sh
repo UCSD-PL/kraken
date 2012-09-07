@@ -4,7 +4,7 @@ function usage {
   echo "
 Usage: kraken.sh [options] input.krn
 
-Generate Coq code and proofs from a Kraken kernel spec.
+Generate Coq kernel and client libraries from a Kraken spec.
 
 OPTIONS:
   -h, --help        print this usage information
@@ -37,11 +37,11 @@ if [ "$*" = "" ]; then
 fi
 while [ "$*" != "" ]; do
   case $1 in
-    "-f" | "--force")
-      FORCE=true
-      ;;
     "-h" | "-help" | "--help")
       usage
+      ;;
+    "-f" | "--force")
+      FORCE=true
       ;;
     *.krn)
       INPUT=$1
@@ -72,7 +72,8 @@ cp -r $KRAKEN/kernel-template $D
 # generate code and proofs
 $KRAKEN/bin/kraken $INPUT \
   --turn $D/coq/Turn.v \
-  --pylib $D/py/kraken_msg_lib.py
+  --lib $D/lib \
+|| error "Kraken compiler failed."
 
 # build the monster
 make -C $D

@@ -2,6 +2,7 @@ Require Import List.
 Require Import Ascii.
 Require Import Ynot.
 
+Open Local Scope char_scope.
 Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
 
@@ -26,12 +27,8 @@ Proof.
   rewrite ascii_nat_embedding; auto.
 Qed.
 
-(* prevent sep tactic from unfolding these *)
-Opaque nat_of_num.
-Opaque num_of_nat.
-
-Definition num_0 : num := Num Ascii.zero.
-Definition num_1 : num := Num Ascii.one.
+(* prevent sep tactic from unfolding *)
+Opaque nat_of_num num_of_nat.
 
 Axiom chan : Set.
 
@@ -71,7 +68,7 @@ Definition recvNum:
         (fun (n : num) => tr ~~ traced (RecvNum c n ++ tr) * bound c).
 Proof.
   intros; refine (
-    s <- recv c num_1
+    s <- recv c (Num "001")
       tr;
     match s with
       | a1 :: nil =>

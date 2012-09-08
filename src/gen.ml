@@ -167,9 +167,9 @@ let proto hand =
       | NumLit n -> mkstr "%d" n
       | StrLit s ->
           s |> explode
-            |> List.map (mkstr "\"%c\"")
-            |> String.concat " :: "
-            |> mkstr "%s :: nil"
+            |> List.map (mkstr "\"%c\" :: ")
+            |> String.concat ""
+            |> mkstr "%snil"
     in
     let aux m =
       mkstr "    %s %s ::" m.tag
@@ -195,7 +195,6 @@ let proto hand =
  *  5. sendMsg cases
  *  6. protocol cases
  *)
-
 let turn_template = format_of_string "
 Require Import List.
 Require Import Ascii.
@@ -336,99 +335,92 @@ let turn s =
     (s.protocol |> fmt_concat "\n" proto)
 
 (*
- * C MESSAGING LIBRARY
- *)
-
-let clib s =
-  ""
-
-(*
  * PYTHON MESSAGING LIBRARY
  *)
 
-let recv_send_pylib = "
+let recv tag_map md =
+  let args =
+    md.payload
+      |> List.map (function Num -> "recvNum(c)"
+                          | Str -> "recvStr(c)")
+      |> String.concat ", "
+  in
+  mkstr "    %2d : lambda x : Msg('%s', [%s]),"
+    (List.assoc md.tag tag_map) md.tag args
+;;
+
+(* WARNING copy/paste of recv *)
+let send tag_map md =
+  let args =
+    md.payload
+      |> List.mapi (fun i ->
+          function Num -> mkstr "sendNum(c, m.params[%d])" i
+                 | Str -> mkstr "sendStr(c, m.params[%d])" i)
+      |> String.concat ", "
+  in
+  mkstr "    '%s' : lambda x : [sendNum(c, %d), %s],"
+    md.tag (List.assoc md.tag tag_map) args
+;;
+
+(* py lib template has string holes for
+ *  1. recvMsg cases
+ *  2. sendMsg cases
+ *)
+let py_lib_template = format_of_string "
 import socket, struct
 
 def recvNum(c):
   s = c.recv(1)
   n = struct.unpack('>B', s)[0]
-  print '<< %d' % n
   return n
 
 def recvStr(c):
   n = recvNum(c)
   s = c.recv(n)
-  print '<< \"%s\"' % s
   return s
 
 def sendNum(c, n):
   s = struct.pack('>B', n)
   c.send(s)
-  print '>> %d' % n
 
 def sendStr(c, s):
   sendNum(c, len(s))
   c.send(s)
-  print '>> \"%s\"' % s
 
 class Msg:
   def __init__(self, tag, params):
     self.tag = tag
     self.params = params
-"
 
-let recv_msg_pylib tag_map mds =
-  let fmt md =
-    let recv_arg = function
-      | Num -> "recvNum(c)"
-      | Str -> "recvStr(c)"
-    in
-    mkstr "%2d : lambda x : Msg('%s', [%s])"
-      (List.assoc md.tag tag_map) md.tag
-      (md.payload
-        |> List.map recv_arg
-        |> String.concat ", ")
-  in
-  mds
-    |> List.map fmt
-    |> String.concat "\n        , "
-    |> mkstr "
 def recvMsg(c):
   tag = recvNum(c)
-  msg = { %s
-        }[tag](0)
+  msg = {
+%s
+  }[tag](0)
   return msg
-"
 
-(* WARNING partial copy/past of recv_msg_pylib *)
-let send_msg_pylib tag_map mds =
-  let fmt md =
-    let send_arg i = function
-      | Num -> mkstr "sendNum(c, m.params[%d])" i
-      | Str -> mkstr "sendStr(c, m.params[%d])" i
-    in
-    mkstr "'%s' : lambda x : [sendNum(c, %d), %s])"
-      md.tag (List.assoc md.tag tag_map)
-      (md.payload
-        |> List.mapi send_arg
-        |> String.concat ", ")
-  in
-  mds
-    |> List.map fmt
-    |> String.concat "\n  , "
-    |> mkstr "
 def sendMsg(c, m):
-  { %s
+  {
+%s
   }[m.tag](0)
 "
 
-let pylib s =
-  (* WARNING partial copy/paste from spec_coq *)
-  let tag_map =
-    let tags = List.map tag s.msg_decl in
-    List.combine tags (range 1 (List.length tags + 1))
-  in
-  mkstr "%s%s%s"
-    recv_send_pylib
-    (recv_msg_pylib tag_map s.msg_decl)
-    (send_msg_pylib tag_map s.msg_decl)
+let py_lib s =
+  let m = gen_tag_map s in
+  mkstr py_lib_template
+    (s.msg_decl |> fmt_concat "\n" (recv m))
+    (s.msg_decl |> fmt_concat "\n" (send m))
+
+(*
+ * C MESSAGING LIBRARY
+ *)
+
+let c_lib s =
+  ""
+
+(*
+ * ML MESSAGING LIBRARY
+ *)
+
+let ml_lib s =
+  ""

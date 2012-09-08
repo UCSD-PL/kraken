@@ -79,8 +79,9 @@ let main () =
   in
   List.iter (uncurry writefile)
     [ get_flag "turn"   , Gen.turn s
-    ; lib_path "msg.c"  , Gen.clib s
-    ; lib_path "msg.py" , Gen.pylib s
+    ; lib_path "msg.py" , Gen.py_lib s
+    ; lib_path "msg.c"  , Gen.c_lib s
+    ; lib_path "msg.ml" , Gen.ml_lib s
     ]
 
 let _ =

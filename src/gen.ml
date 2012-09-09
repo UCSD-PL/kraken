@@ -268,10 +268,8 @@ Qed.
 
 Fixpoint SendMsgs (c : chan) (ms : list msg) : Trace :=
   match ms with
-    | nil =>
-      nil
-    | m :: ms' =>
-      SendMsgs c ms' ++ SendMsg c m
+    | m :: ms' => SendMsgs c ms' ++ SendMsg c m
+    | nil => nil
   end.
 
 Definition sendMsgs :

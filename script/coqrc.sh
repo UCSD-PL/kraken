@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 
+if [ ! -f $KRAKEN/.kraken-root ]; then
+  error "\$KRAKEN must point to root of Kraken repository."
+fi
+
 cat > ~/.coqrc <<EOF
-Add LoadPath "$PWD/ynot/src/coq" as Ynot.
-Add LoadPath "$PWD/ynot/examples/IO" as IO.
-Add LoadPath "$PWD/ynot/examples/servers".
+Add LoadPath "$KRAKEN/ynot/src/coq" as Ynot.
+Add LoadPath "$KRAKEN/ynot/examples/IO" as IO.
+Add LoadPath "$KRAKEN/ynot/examples/servers".
 EOF

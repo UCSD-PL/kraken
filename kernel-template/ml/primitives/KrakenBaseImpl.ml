@@ -104,6 +104,10 @@ let send c s _ =
     log (mkstr "send '%s'" (String.escaped s))
   end
 
+(* TODO *)
+let exec s _ =
+  Unix.stdin
+
 (*
  * TEMPORARY FOR TESTING
  *)

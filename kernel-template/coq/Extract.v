@@ -5,6 +5,7 @@ Require Import Kernel.
 Extract Constant KrakenBase.chan => "KrakenBaseImpl.chan".
 Extract Constant KrakenBase.recv => "KrakenBaseImpl.recv".
 Extract Constant KrakenBase.send => "KrakenBaseImpl.send".
+Extract Constant KrakenBase.exec => "KrakenBaseImpl.exec".
 
 Extract Constant Kernel.c => "KrakenBaseImpl.mkchan ()".
 

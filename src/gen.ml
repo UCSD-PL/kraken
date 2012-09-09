@@ -339,11 +339,11 @@ let turn s =
 let recv tag_map md =
   let args =
     md.payload
-      |> List.map (function Num -> "recvNum(c)"
-                          | Str -> "recvStr(c)")
+      |> List.map (function Num -> "recvNum()"
+                          | Str -> "recvStr()")
       |> String.concat ", "
   in
-  mkstr "    %2d : lambda x : Msg('%s', [%s]),"
+  mkstr "    %2d : lambda x : ['%s', %s],"
     (List.assoc md.tag tag_map) md.tag args
 ;;
 
@@ -352,11 +352,11 @@ let send tag_map md =
   let args =
     md.payload
       |> List.mapi (fun i ->
-          function Num -> mkstr "sendNum(c, m.params[%d])" i
-                 | Str -> mkstr "sendStr(c, m.params[%d])" i)
+          function Num -> mkstr "sendNum(m[%d])" (i + 1)
+                 | Str -> mkstr "sendStr(m[%d])" (i + 1))
       |> String.concat ", "
   in
-  mkstr "    '%s' : lambda x : [sendNum(c, %d), %s],"
+  mkstr "    '%s' : lambda x : [sendNum(%d), %s],"
     md.tag (List.assoc md.tag tag_map) args
 ;;
 
@@ -365,42 +365,44 @@ let send tag_map md =
  *  2. sendMsg cases
  *)
 let py_lib_template = format_of_string "
-import socket, struct
+import socket, struct, sys
 
-def recvNum(c):
-  s = c.recv(1)
+KCHAN = None
+
+def init():
+  global KCHAN
+  fd = int(sys.argv[1])
+  KCHAN = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+
+def recvNum():
+  s = KCHAN.recv(1)
   n = struct.unpack('>B', s)[0]
   return n
 
-def recvStr(c):
-  n = recvNum(c)
-  s = c.recv(n)
+def recvStr():
+  n = recvNum()
+  s = KCHAN.recv(n)
   return s
 
-def sendNum(c, n):
+def sendNum(n):
   s = struct.pack('>B', n)
-  c.send(s)
+  KCHAN.send(s)
 
-def sendStr(c, s):
-  sendNum(c, len(s))
-  c.send(s)
+def sendStr(s):
+  sendNum(len(s))
+  KCHAN.send(s)
 
-class Msg:
-  def __init__(self, tag, params):
-    self.tag = tag
-    self.params = params
-
-def recvMsg(c):
-  tag = recvNum(c)
-  msg = {
+def recvMsg():
+  tag = recvNum()
+  return {
 %s
   }[tag](0)
-  return msg
 
-def sendMsg(c, m):
+def sendMsg(*m):
+  tag = m[0]
   {
 %s
-  }[m.tag](0)
+  }[tag](0)
 "
 
 let py_lib s =

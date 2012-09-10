@@ -34,14 +34,14 @@ let char_of_ascii = function
 let ascii_of_char c =
   let c = Char.code c in
   MlCoq.Ascii
-    ( c land   1 = 0
-    , c land   2 = 0
-    , c land   4 = 0
-    , c land   8 = 0
-    , c land  16 = 0
-    , c land  32 = 0
-    , c land  64 = 0
-    , c land 128 = 0
+    ( c land   1 <> 0
+    , c land   2 <> 0
+    , c land   4 <> 0
+    , c land   8 <> 0
+    , c land  16 <> 0
+    , c land  32 <> 0
+    , c land  64 <> 0
+    , c land 128 <> 0
     )
 
 let string_of_str s =
@@ -101,10 +101,10 @@ let int_of_file_descr : Unix.file_descr -> int =
   Obj.magic
 
 let mkchan () =
-  let (p, c) = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
+  let p, c = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   match Unix.fork () with
   | 0 -> (* child *)
       let cmd = Sys.getenv "KRAKEN_TEST" in
       Unix.execv cmd [|cmd; string_of_int (int_of_file_descr c)|]
-  | x -> (* parent *)
+  | cpid -> (* parent *)
       p

@@ -7,7 +7,7 @@ Extract Constant KrakenBase.recv => "KrakenBaseImpl.recv".
 Extract Constant KrakenBase.send => "KrakenBaseImpl.send".
 Extract Constant KrakenBase.exec => "KrakenBaseImpl.exec".
 
-Extract Constant Kernel.c => "KrakenBaseImpl.mkchan ()".
+Extract Constant Kernel.dummy => "KrakenBaseImpl.mkchan ()".
 
 Cd "../ml".
 Recursive Extraction Library Kernel.

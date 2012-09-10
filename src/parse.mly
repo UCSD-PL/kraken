@@ -8,8 +8,8 @@
   (* NOTE to get commas right, we special case empty arg lists *)
 %}
 
-%token MESSAGES PROTOCOL NUM STR
-%token SENDS RECVS LCURL RCURL LPAREN RPAREN
+%token MESSAGES PROTOCOL NUM STR FDESC CALL
+%token SENDS RECVS EQ LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF
 
 %token <int> NUMLIT
@@ -42,13 +42,15 @@ handler :
 ;;
 
 prog :
-  | cmd
-    { $1 }
+  | /* empty */
+    { Nop }
   | cmd prog
     { Seq ($1, $2) }
 ;;
 
 cmd :
+  | ID EQ CALL LPAREN STRLIT COMMA expr RPAREN SEMI
+    { Call ($1, $5, $7) }
   | ID RECVS msg_expr SEMI
     { Send ($1, $3) }
 ;;
@@ -111,4 +113,5 @@ typs :
 typ :
   | NUM { Num }
   | STR { Str }
+  | FDESC { Fdesc }
 ;;

@@ -1,0 +1,11 @@
+Messages {
+  Wget(str);
+  HTML(str, fdesc);
+}
+
+Protocol {
+  x >> Wget(url) {
+    f = call("/Users/ztatlock/wget.py", url);
+    x << HTML(url, f);
+  }
+}

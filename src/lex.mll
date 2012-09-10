@@ -19,8 +19,11 @@ rule token = parse
   | "Protocol" { PROTOCOL }
   | "num" { NUM }
   | "str" { STR }
+  | "fdesc" { FDESC }
+  | "call" { CALL }
   | ">>" { SENDS }
   | "<<" { RECVS }
+  | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }
   | "(" { LPAREN }

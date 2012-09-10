@@ -6,6 +6,7 @@ type chan = string
 type typ =
   | Num
   | Str
+  | Fdesc
 
 type expr =
   | NumLit of int
@@ -29,9 +30,13 @@ type msg_pat = id msg
 type msg_decl = typ msg
 type msg_expr = expr msg
 
-type prog =
+type cmd =
   | Send of chan * msg_expr
-  | Seq of prog * prog
+  | Call of id * string * expr
+
+type prog =
+  | Nop
+  | Seq of cmd * prog
 
 type handler =
   { trigger : chan * msg_pat

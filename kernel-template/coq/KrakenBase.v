@@ -28,14 +28,18 @@ Proof.
 Qed.
 
 (* prevent sep tactic from unfolding *)
-Opaque nat_of_num num_of_nat.
+Global Opaque nat_of_num num_of_nat.
 
 Axiom chan : Set.
+Axiom fdesc : Set.
 
 Inductive Action : Set :=
 | Exec : str -> chan -> Action
+| Call : str -> fdesc -> Action
 | Recv : chan -> str -> Action
-| Send : chan -> str -> Action.
+| Send : chan -> str -> Action
+| RecvFD : chan -> fdesc -> Action
+| SendFD : chan -> fdesc -> Action.
 
 Definition Trace : Set := list Action.
 
@@ -47,6 +51,11 @@ Axiom exec :
   STsep (tr ~~ traced tr)
         (fun (c : chan) => tr ~~ traced (Exec s c :: tr)).
 
+Axiom call :
+  forall (s : str) (tr : [Trace]),
+  STsep (tr ~~ traced tr)
+        (fun (f : fdesc) => tr ~~ traced (Call s f :: tr)).
+
 Axiom recv :
   forall (c : chan) (n : num) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
@@ -57,12 +66,22 @@ Axiom send :
   STsep (tr ~~ traced tr * bound c)
         (fun (_ : unit) => tr ~~ traced (Send c s :: tr) * bound c).
 
+Axiom recv_fd :
+  forall (c : chan) (tr : [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (f : fdesc) => tr ~~ traced (RecvFD c f :: tr) * bound c).
+
+Axiom send_fd :
+  forall (c : chan) (f : fdesc) (tr : [Trace]),
+  STsep (tr ~~ traced tr * bound c)
+        (fun (_ : unit) => tr ~~ traced (SendFD c f :: tr) * bound c).
+
 Definition RecvNum (c : chan) (n : num) : Trace :=
   match n with
     | Num a1 => Recv c (a1 :: nil) :: nil
   end.
 
-Definition recvNum:
+Definition recv_num:
   forall (c : chan) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
         (fun (n : num) => tr ~~ traced (RecvNum c n ++ tr) * bound c).
@@ -87,7 +106,7 @@ Definition SendNum (c : chan) (n : num) : Trace :=
     | Num a1 => Send c (a1 :: nil) :: nil
   end.
 
-Definition sendNum:
+Definition send_num:
   forall (c : chan) (n : num) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
         (fun (_ : unit) => tr ~~ traced (SendNum c n ++ tr) * bound c).
@@ -106,13 +125,13 @@ Qed.
 Definition RecvStr (c : chan) (s : str) : Trace :=
   Recv c s :: RecvNum c (num_of_nat (length s)).
 
-Definition recvStr:
+Definition recv_str:
   forall (c : chan) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
         (fun (s : str) => tr ~~ traced (RecvStr c s ++ tr) * bound c).
 Proof.
   intros; refine (
-    n <- recvNum c
+    n <- recv_num c
       tr;
     s <- recv c n
       (tr ~~~ RecvNum c n ++ tr);
@@ -127,14 +146,14 @@ Qed.
 Definition SendStr (c : chan) (s : str) : Trace :=
   Send c s :: SendNum c (num_of_nat (length s)).
 
-Definition sendStr:
+Definition send_str:
   forall (c : chan) (s : str) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
         (fun (_ : unit) => tr ~~ traced (SendStr c s ++ tr) * bound c).
 Proof.
   intros; refine (
     let n := num_of_nat (length s) in
-    sendNum c n
+    send_num c n
       tr;;
     send c s
       (tr ~~~ SendNum c n ++ tr);;

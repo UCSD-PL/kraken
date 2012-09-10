@@ -19,7 +19,8 @@ let decl md =
   let args =
     List.fold_right
       (function Num -> mkstr "num -> %s"
-              | Str -> mkstr "str -> %s")
+              | Str -> mkstr "str -> %s"
+              | Fdesc -> mkstr "fdesc -> %s")
       md.payload
       "msg"
   in
@@ -39,8 +40,9 @@ let recv_trace tag_map md =
   let pay =
     md.payload
       |> List.mapi (fun i ->
-          function Num -> mkstr "      RecvNum c p%d ++" i
-                 | Str -> mkstr "      RecvStr c p%d ++" i)
+          function Num   -> mkstr "      RecvNum c p%d ++" i
+                 | Str   -> mkstr "      RecvStr c p%d ++" i
+                 | Fdesc -> mkstr "      RecvFD  c p%d ::" i)
       |> List.rev
       |> String.concat "\n"
   in
@@ -60,8 +62,9 @@ let send_trace tag_map md =
   let pay =
     md.payload
       |> List.mapi (fun i ->
-          function Num -> mkstr "      SendNum c p%d ++" i
-                 | Str -> mkstr "      SendStr c p%d ++" i)
+          function Num   -> mkstr "      SendNum c p%d ++" i
+                 | Str   -> mkstr "      SendStr c p%d ++" i 
+                 | Fdesc -> mkstr "      SendFD  c p%d ::" i)
       |> List.rev
       |> String.concat "\n"
   in
@@ -79,19 +82,16 @@ let recv tag_map md =
       (List.assoc md.tag tag_map) md.tag
   in
   let pay =
-    let recv_typ = function
-      | Num -> "recvNum"
-      | Str -> "recvStr"
+    let typ_handlers = function
+      | Num -> "recv_num", "RecvNum", "++"
+      | Str -> "recv_str", "RecvStr", "++"
+      | Fdesc -> "recv_fd", "RecvFD", "::"
     in
-    let recv_typ_trace = function
-      | Num -> "RecvNum"
-      | Str -> "RecvStr"
-    in
-    let aux (acc, tr, i) t =
-      ((mkstr "        p%d <- %s c\n" i (recv_typ t) ^
-        mkstr "          (tr ~~~ %s);" tr) :: acc
-      , mkstr "%s c p%d ++ %s" (recv_typ_trace t) i tr
-      , i + 1
+    let aux (i, acc, tr) t =
+      let recvF, recvT, conn = typ_handlers t in
+      ( i + 1
+      , mkstr "%8sp%d <- %s c\n%10s(tr ~~~ %s);" "" i recvF "" tr :: acc
+      , mkstr "%s c p%d %s %s" recvT i conn tr
       )
     in
     let tr =
@@ -99,8 +99,8 @@ let recv tag_map md =
         (List.assoc md.tag tag_map)
     in
     md.payload
-      |> List.fold_left aux ([], tr, 0)
-      |> fun (x, _, _) -> x
+      |> List.fold_left aux (0, [], tr)
+      |> fun (_, x, _) -> x
       |> List.rev
       |> String.concat "\n"
   in
@@ -115,23 +115,20 @@ let recv tag_map md =
 let send tag_map md =
   let hdr =
     mkstr "      | %s %s =>\n" md.tag (args_str md) ^
-    mkstr "        sendNum c (Num \"%03d\")\n" (List.assoc md.tag tag_map) ^
+    mkstr "        send_num c (Num \"%03d\")\n" (List.assoc md.tag tag_map) ^
     mkstr "          tr;;"
   in
   let pay =
-    let send_typ = function
-      | Num -> "sendNum"
-      | Str -> "sendStr"
+    let typ_handlers = function
+      | Num -> "send_num", "SendNum", "++"
+      | Str -> "send_str", "SendStr", "++"
+      | Fdesc -> "send_fd", "SendFD", "::"
     in
-    let send_typ_trace = function
-      | Num -> "SendNum"
-      | Str -> "SendStr"
-    in
-    let aux (acc, tr, i) t =
-      ((mkstr "        %s c p%d\n" (send_typ t) i ^
-        mkstr "          (tr ~~~ %s);;" tr) :: acc
-      , mkstr "%s c p%d ++ %s" (send_typ_trace t) i tr
-      , i + 1
+    let aux (i, acc, tr) t =
+      let sendF, sendT, conn = typ_handlers t in
+      ( i + 1
+      , mkstr "%8s%s c p%d\n%10s(tr ~~~ %s);;" "" sendF i "" tr :: acc
+      , mkstr "%s c p%d %s %s" sendT i conn tr
       )
     in
     let tr =
@@ -139,8 +136,8 @@ let send tag_map md =
         (List.assoc md.tag tag_map)
     in
     md.payload
-      |> List.fold_left aux ([], tr, 0)
-      |> fun (x, _, _) -> x
+      |> List.fold_left aux (0, [], tr)
+      |> fun (_, x, _) -> x
       |> List.rev
       |> String.concat "\n"
   in
@@ -152,6 +149,8 @@ let send tag_map md =
 ;;
 
 let proto hand =
+  ""
+(*
   let pat =
     let p = snd hand.trigger in
     mkstr "  | %s %s =>"
@@ -186,6 +185,7 @@ let proto hand =
   in
   mkstr "%s\n%s" pat body
 ;;
+*)
 
 (* turn template has string holes for
  *  1. declaring msg
@@ -232,7 +232,7 @@ Definition recvMsg :
         (fun (m : msg) => tr ~~ traced (RecvMsg c m ++ tr) * bound c).
 Proof.
   intros; refine (
-    tag <- recvNum c
+    tag <- recv_num c
       tr;
     match tag with
 %s
@@ -256,7 +256,7 @@ Proof.
 %s
       (* special case for errors *)
       | BadTag _ =>
-        sendNum c (Num \"000\")
+        send_num c (Num \"000\")
           tr;;
         {{ Return tt }}
     end
@@ -306,6 +306,9 @@ Definition protocol (m : msg) : list msg :=
     nil
   end.
 
+(* prevent sep tactic from unfolding *)
+Global Opaque protocol.
+
 Definition turn :
   forall (c : chan) (tr : [Trace]),
   STsep (tr ~~ traced tr * bound c)
@@ -340,7 +343,9 @@ let recv tag_map md =
   let args =
     md.payload
       |> List.map (function Num -> "recvNum()"
-                          | Str -> "recvStr()")
+                          | Str -> "recvStr()"
+                          | Fdesc -> "recvFD()")
+
       |> String.concat ", "
   in
   mkstr "    %2d : lambda x : ['%s', %s],"
@@ -353,7 +358,8 @@ let send tag_map md =
     md.payload
       |> List.mapi (fun i ->
           function Num -> mkstr "sendNum(m[%d])" (i + 1)
-                 | Str -> mkstr "sendStr(m[%d])" (i + 1))
+                 | Str -> mkstr "sendStr(m[%d])" (i + 1)
+                 | Fdesc -> mkstr "sendFD(m[%d])" (i + 1))
       |> String.concat ", "
   in
   mkstr "    '%s' : lambda x : [sendNum(%d), %s],"

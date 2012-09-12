@@ -35,7 +35,7 @@ Axiom fdesc : Set.
 
 Inductive Action : Set :=
 | Exec : str -> chan -> Action
-| Call : str -> fdesc -> Action
+| Call : str -> str -> fdesc -> Action
 | Recv : chan -> str -> Action
 | Send : chan -> str -> Action
 | RecvFD : chan -> fdesc -> Action
@@ -47,14 +47,14 @@ Axiom traced : Trace -> hprop.
 Axiom bound : chan -> hprop.
 
 Axiom exec :
-  forall (s : str) (tr : [Trace]),
+  forall (prog : str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
-        (fun (c : chan) => tr ~~ traced (Exec s c :: tr)).
+        (fun (c : chan) => tr ~~ traced (Exec prog c :: tr)).
 
 Axiom call :
-  forall (s : str) (tr : [Trace]),
+  forall (prog arg : str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
-        (fun (f : fdesc) => tr ~~ traced (Call s f :: tr)).
+        (fun (f : fdesc) => tr ~~ traced (Call prog arg f :: tr)).
 
 Axiom recv :
   forall (c : chan) (n : num) (tr : [Trace]),

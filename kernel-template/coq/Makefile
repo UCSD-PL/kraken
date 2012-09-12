@@ -1,9 +1,9 @@
-INCLUDES := -I $(KRAKEN)/ynot/src/coq -I .
-COQC     := coqc $(INCLUDES)
-COQDEP   := coqdep $(INCLUDES)
-FILES    := $(filter-out Extract.v, $(wildcard *.v))
-
+include ../Makefile.config
 include .depend
+
+# TODO make ynot path part of Makefile.config
+INCLUDES := -I $(KRAKEN)/ynot/src/coq -I .
+FILES    := $(filter-out Extract.v,$(wildcard *.v))
 
 all:
 	$(MAKE) depend
@@ -11,15 +11,17 @@ all:
 	$(MAKE) extract
 
 depend: $(FILES)
-	$(COQDEP) $^ > .depend
+	$(COQDEP) $(INCLUDES) $^ > .depend
 
 coq: $(FILES:.v=.vo)
 
 %.vo: %.v
-	$(COQC) $*.v
+	$(COQC) $(INCLUDES) $*.v
 
 extract: Extract.vo
 
 clean:
 	rm -f *.vo *.glob
 	rm -f ../ml/*.vo ../ml/*.ml ../ml/*.mli
+
+.PHONY: all depend coq extract clean

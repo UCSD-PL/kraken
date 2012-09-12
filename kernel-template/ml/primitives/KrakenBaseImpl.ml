@@ -82,6 +82,8 @@ let exec s _ =
   Unix.stdin
 
 let call prog arg _ =
+  let prog = string_of_str prog in
+  let arg = string_of_str arg in
   let r, w = Unix.pipe () in
   match Unix.fork () with
   | 0 -> (* child *)
@@ -107,11 +109,11 @@ let send c s _ =
   else
     ()
 
-external recv_fd_native : chan -> fdesc = "recvfd"
-let recv_fd c _ = recvfd_native c
+external recv_fd_native : chan -> fdesc = "recv_fd_native"
+let recv_fd c _ = recv_fd_native c
 
-external send_fd_native : chan -> fdesc -> unit = "sendfd"
-let send_fd c fd _ = sendfd_native c fd
+external send_fd_native : chan -> fdesc -> unit = "send_fd_native"
+let send_fd c fd _ = send_fd_native c fd
 
 (*
  * TEMPORARY FOR TESTING

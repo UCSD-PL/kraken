@@ -1,8 +1,12 @@
 all:
 	$(MAKE) -C coq
+	$(MAKE) -C c-stubs
 	$(MAKE) -C ml
 
 clean:
 	# clean in reverse order
 	$(MAKE) -C ml clean
+	$(MAKE) -C c-stubs clean
 	$(MAKE) -C coq clean
+
+.PHONY: all clean

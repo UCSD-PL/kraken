@@ -1,5 +1,21 @@
 #!/usr/bin/env bash
 
+function error {
+  echo "ERROR : $1"
+  exit 1
+}
+
+# ensure KRAKEN environment variable is valid
+if [ ! -f $KRAKEN/.kraken-root ]; then
+  error "\$KRAKEN must point to root of Kraken repository."
+fi
+
+# arg defaults
+BUILD=false
+FORCE=false
+OUTDIR="$KRAKEN/scratch"
+INPUT=""
+
 function usage {
   echo "
 Usage: kraken.sh [options] input.krn
@@ -7,29 +23,18 @@ Usage: kraken.sh [options] input.krn
 Generate Coq kernel and client libraries from a Kraken spec.
 
 OPTIONS:
-  -h, --help        print this usage information
-  -f, --force       overwrite existing output
+  -h, --help          print this usage information
+  -b, --build         build generated kernel
+  -f, --force         overwrite existing output
+  -o, --outdir DIR    where to generate kernel tree (default: \$KRAKEN/scratch)
 "
   exit 1
 }
-
-function error {
-  echo "ERROR : $1"
-  exit 1
-}
-
-if [ ! -f $KRAKEN/.kraken-root ]; then
-  error "\$KRAKEN must point to root of Kraken repository."
-fi
 
 # http://snipplr.com/view/18026/canonical-absolute-path/
 function canonpath () { 
   echo $(cd -P $(dirname "$1"); pwd -P)/$(basename "$1")
 }
-
-# arg defaults
-FORCE=false
-INPUT=""
 
 # process args
 if [ "$*" = "" ]; then
@@ -42,6 +47,13 @@ while [ "$*" != "" ]; do
       ;;
     "-f" | "--force")
       FORCE=true
+      ;;
+    "-b" | "--build")
+      BUILD=true
+      ;;
+    "-o" | "--outdir")
+      shift
+      OUTDIR=$1
       ;;
     *.krn)
       INPUT=$1
@@ -59,9 +71,8 @@ if [ ! -f "$INPUT" ]; then
 fi
 INPUT=$(canonpath "$INPUT")
 
-# setup output dir
-cd $KRAKEN/scratch
-D=$(basename $INPUT .krn)
+# setup kernel tree dir
+D="$OUTDIR/$(basename $INPUT .krn)"
 if $FORCE; then
   rm -rf $D
 elif [ -d $D ]; then
@@ -75,5 +86,12 @@ $KRAKEN/bin/kraken $INPUT \
   --lib $D/client \
 || error "Kraken compiler failed."
 
-# build the monster
-make -C $D
+# tell Makefile where it lives
+echo "
+# path to root of generated kernel
+KROOT := $D
+" >> $D/Makefile.config
+
+if $BUILD; then
+  make -C $D
+fi

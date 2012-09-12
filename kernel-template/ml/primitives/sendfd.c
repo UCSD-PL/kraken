@@ -49,6 +49,6 @@ void _send_fd(int sock, int fd) {
 
 /* ocaml wrapper */
 CAMLprim value send_fd_native(value v0, value v1) {
-  _sendfd(Int_val(v0), Int_val(v1));
+  _send_fd(Int_val(v0), Int_val(v1));
   return Val_unit;
 }

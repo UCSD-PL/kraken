@@ -53,16 +53,41 @@ let str_of_string s =
 let int_of_num n =
   Char.code (char_of_ascii n)
 
+(* Forked components need to know which file descriptor to use for
+ * communicating with the kernel.
+ *
+ * Unfortunately, Unix.file_descr is declared as an abstract type in the
+ * Unix module signature, which hides its implementation and thus prevents
+ * sending some representation of a file descriptor to a forked component.
+ *
+ * This function exposes the implementation of Unix.file_descr as an int,
+ * which in turn enables passing a representation of a file descriptor to
+ * forked components.
+ *)
+let int_of_fd : Unix.file_descr -> int =
+  Obj.magic
+
+let str_of_fd fd =
+  string_of_int (int_of_fd fd)
+
 (*
  * PRIMITIVES
  *)
 
-type chan =
-  Unix.file_descr
+type chan = Unix.file_descr
+type fdesc = Unix.file_descr
 
 (* TODO *)
 let exec s _ =
   Unix.stdin
+
+let call prog arg _ =
+  let r, w = Unix.pipe () in
+  match Unix.fork () with
+  | 0 -> (* child *)
+      Unix.execv prog [|prog; arg; str_of_fd w|]
+  | cpid -> (* parent *)
+      r
 
 let recv c n _ =
   let n = int_of_num n in
@@ -82,29 +107,21 @@ let send c s _ =
   else
     ()
 
+external recv_fd_native : chan -> fdesc = "recvfd"
+let recv_fd c _ = recvfd_native c
+
+external send_fd_native : chan -> fdesc -> unit = "sendfd"
+let send_fd c fd _ = sendfd_native c fd
+
 (*
  * TEMPORARY FOR TESTING
  *)
-
-(* Forked components need to know which file descriptor to use for
- * communicating with the kernel.
- *
- * Unfortunately, Unix.file_descr is declared as an abstract type in the
- * Unix module signature, which hides its implementation and thus prevents
- * sending some representation of a file descriptor to a forked component.
- *
- * This function exposes the implementation of Unix.file_descr as an int,
- * which in turn enables passing a representation of a file descriptor to
- * forked components.
- *)
-let int_of_file_descr : Unix.file_descr -> int =
-  Obj.magic
 
 let mkchan () =
   let p, c = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   match Unix.fork () with
   | 0 -> (* child *)
       let cmd = Sys.getenv "KRAKEN_TEST" in
-      Unix.execv cmd [|cmd; string_of_int (int_of_file_descr c)|]
+      Unix.execv cmd [|cmd; str_of_fd c|]
   | cpid -> (* parent *)
       p

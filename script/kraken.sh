@@ -6,14 +6,14 @@ function error {
 }
 
 # ensure KRAKEN environment variable is valid
-if [ ! -f $KRAKEN/.kraken-root ]; then
+if [ "$KRAKEN" = "" ] || [ ! -f $KRAKEN/.kraken-root ]; then
   error "\$KRAKEN must point to root of Kraken repository."
 fi
 
-# arg defaults
+# default arguments
 BUILD=false
 FORCE=false
-OUTDIR="$KRAKEN/scratch"
+OUTDIR="/tmp"
 INPUT=""
 
 function usage {
@@ -26,7 +26,7 @@ OPTIONS:
   -h, --help          print this usage information
   -b, --build         build generated kernel
   -f, --force         overwrite existing output
-  -o, --outdir DIR    where to generate kernel tree (default: \$KRAKEN/scratch)
+  -o, --outdir DIR    generate output in DIR (default: $OUTDIR)
 "
   exit 1
 }
@@ -71,6 +71,10 @@ if [ ! -f "$INPUT" ]; then
 fi
 INPUT=$(canonpath "$INPUT")
 
+if [ ! -d "$OUTDIR" ]; then
+  error "cannot generate output in '$OUTDIR'"
+fi
+
 # setup kernel tree dir
 D="$OUTDIR/$(basename $INPUT .krn)"
 if $FORCE; then
@@ -93,5 +97,8 @@ KROOT := $D
 " >> $D/Makefile.config
 
 if $BUILD; then
+  echo
+  echo ">>> BUILDING $D <<<"
+  echo
   make -C $D
 fi

@@ -64,6 +64,18 @@ let curry (f: 'a * 'b -> 'c) : 'a -> 'b -> 'c =
 let uncurry (f: 'a -> 'b -> 'c) : 'a * 'b -> 'c =
   fun (a, b) -> f a b
 
+let rec rm_rep = function
+  | x :: y :: l ->
+      if x = y then
+        rm_rep (y :: l)
+      else
+        x :: rm_rep (y :: l)
+  | _ as l -> l
+
+let uniq l =
+  l |> List.sort compare
+    |> rm_rep
+
 let readline f =
   try
     Some (input_line f)

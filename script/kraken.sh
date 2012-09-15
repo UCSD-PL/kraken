@@ -13,7 +13,7 @@ fi
 # default arguments
 BUILD=false
 FORCE=false
-OUTDIR="/tmp"
+OUTDIR="."
 INPUT=""
 
 function usage {
@@ -26,7 +26,7 @@ OPTIONS:
   -h, --help          print this usage information
   -b, --build         build generated kernel
   -f, --force         overwrite existing output
-  -o, --outdir DIR    generate output in DIR (default: $OUTDIR)
+  -o, --outdir DIR    generate output in DIR
 "
   exit 1
 }

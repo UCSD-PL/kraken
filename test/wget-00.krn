@@ -4,8 +4,11 @@ Messages {
 }
 
 Protocol {
-  x >> Wget(url) {
+  c >> Wget(url) {
     f = call("/Users/ztatlock/wget.py", url);
-    x << HTML(url, f);
+    c << HTML(url, f);
+  }
+
+  c >> HTML(url, html) {
   }
 }

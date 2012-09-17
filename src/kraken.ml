@@ -17,7 +17,7 @@ kraken.sh driver script.
 
 OPTIONS:
   -h, --help        print this usage information
-  --turn TURN       write Coq Turn module to file TURN
+  --exchange EXCH   write Coq Exchange module to file EXCH
   --lib LIB         write client libraries to directory LIB
 ";
   exit 1
@@ -38,8 +38,8 @@ let parse_args () =
   let rec loop = function
     | "-h" :: t | "-help" :: t | "--help" :: t ->
         usage ()
-    | "--turn" :: f :: t ->
-        set_flag "turn" f;
+    | "--exchange" :: f :: t ->
+        set_flag "exchange" f;
         loop t
     | "--lib" :: f :: t ->
         set_flag "lib" f;
@@ -78,10 +78,10 @@ let main () =
     parse_spec (get_flag "input")
   in
   List.iter (uncurry writefile)
-    [ get_flag "turn"   , Gen.turn s
-    ; lib_path "msg.py" , Gen.py_lib s
-    ; lib_path "msg.c"  , Gen.c_lib s
-    ; lib_path "msg.ml" , Gen.ml_lib s
+    [ get_flag "exchange" , GenCoq.coq_of_spec s
+    ; lib_path "msg.py"   , Gen.py_lib s
+    ; lib_path "msg.c"    , Gen.c_lib s
+    ; lib_path "msg.ml"   , Gen.ml_lib s
     ]
 
 let _ =

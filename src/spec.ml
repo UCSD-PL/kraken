@@ -9,9 +9,9 @@ type typ =
   | Fdesc
 
 type expr =
+  | Var of id
   | NumLit of int
   | StrLit of string
-  | Var of id
 
 type 'a msg =
   { tag : string
@@ -65,6 +65,12 @@ let ckspec s =
   (* BadTag not in msg tags *)
   (* msg pat triggers have uniq ids *)
   ()
+
+(* generate unique id # for each message tag *)
+(* start at 1 so BadTag can always have id 0 *)
+let gen_tag_map spec =
+  let tags = List.map tag spec.msg_decl in
+  List.combine tags (range 1 (List.length tags + 1))
 
 (* support lex/parse error reporting *)
 let line = ref 1

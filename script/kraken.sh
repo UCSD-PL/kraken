@@ -86,14 +86,14 @@ cp -r $KRAKEN/kernel-template $D
 
 # generate code and proofs
 $KRAKEN/bin/kraken $INPUT \
-  --turn $D/coq/Turn.v \
+  --exchange $D/coq/Exchange.v \
   --lib $D/client \
 || error "Kraken compiler failed."
 
 # tell Makefile where it lives
 echo "
 # path to root of generated kernel
-KROOT := $D
+KROOT := $(canonpath $D)
 " >> $D/Makefile.config
 
 if $BUILD; then

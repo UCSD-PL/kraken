@@ -87,8 +87,7 @@ Definition recv_num:
         (fun (n : num) => tr ~~ traced (RecvNum c n ++ tr) * bound c).
 Proof.
   intros; refine (
-    s <- recv c (Num "001")
-      tr;
+    s <- recv c (Num "001") tr;
     match s with
       | a1 :: nil =>
         {{ Return (Num a1) }}
@@ -114,8 +113,7 @@ Proof.
   intros; refine (
     match n with
       | Num a1 =>
-        send c (a1 :: nil)
-          tr;;
+        send c (a1 :: nil) tr;;
         {{ Return tt }}
     end
   );
@@ -131,10 +129,8 @@ Definition recv_str:
         (fun (s : str) => tr ~~ traced (RecvStr c s ++ tr) * bound c).
 Proof.
   intros; refine (
-    n <- recv_num c
-      tr;
-    s <- recv c n
-      (tr ~~~ RecvNum c n ++ tr);
+    n <- recv_num c tr;
+    s <- recv c n (tr ~~~ RecvNum c n ++ tr);
     {{ Return s }}
   );
   sep fail auto.
@@ -153,11 +149,23 @@ Definition send_str:
 Proof.
   intros; refine (
     let n := num_of_nat (length s) in
-    send_num c n
-      tr;;
-    send c s
-      (tr ~~~ SendNum c n ++ tr);;
+    send_num c n tr;;
+    send c s (tr ~~~ SendNum c n ++ tr);;
     {{ Return tt }}
   );
   sep fail auto.  
 Qed.
+
+(* trace versions of basic actions so we can always use app (++) *)
+
+Definition Call_t (prog arg : str) (f : fdesc) : Trace :=
+  Call prog arg f :: nil.
+
+Definition RecvFD_t (c : chan) (f : fdesc) : Trace :=
+  RecvFD c f :: nil.
+
+Definition SendFD_t (c : chan) (f : fdesc) : Trace :=
+  SendFD c f :: nil.
+
+(* prevent sep tactic from unfolding *)
+Global Opaque RecvStr SendStr Call_t RecvFD_t SendFD_t.

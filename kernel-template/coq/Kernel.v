@@ -2,7 +2,7 @@ Require Import List.
 Require Import Ascii.
 Require Import Ynot.
 Require Import KrakenBase.
-Require Import Turn.
+Require Import Exchange.
 
 Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
@@ -16,9 +16,10 @@ Inductive KTrace : Trace -> Prop :=
 | KT_init :
   KTrace nil
 | KT_iter :
-  forall tr c m,
-  KTrace tr ->
-  KTrace (SendMsgs c (protocol m) ++ RecvMsg c m ++ tr).
+  forall tr1 tr2,
+  KTrace tr1 ->
+  AddedValidExchange tr1 tr2 ->
+  KTrace tr2.
 
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in
@@ -31,13 +32,12 @@ Definition kbody:
 Proof.
   unfold kstate_inv; intros [c tr];
   refine (
-    req <- turn c
-      tr <@>
-      (tr ~~ [KTrace tr]);
-    {{ Return (mkst c (tr ~~~ SendMsgs c (protocol req) ++ RecvMsg c req ++ tr)) }}
+    tr' <- exchange c tr <@> (tr ~~ [KTrace tr]);
+    {{ Return (mkst c tr') }}
   );
-  sep fail auto.
-  apply himp_pure'; constructor; auto.
+  sep fail auto;
+  apply himp_pure';
+  econstructor; eauto.
 Qed.
 
 Definition kloop:

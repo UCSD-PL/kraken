@@ -64,17 +64,27 @@ let curry (f: 'a * 'b -> 'c) : 'a -> 'b -> 'c =
 let uncurry (f: 'a -> 'b -> 'c) : 'a * 'b -> 'c =
   fun (a, b) -> f a b
 
-let rec rm_rep = function
+let rec remove_repeats = function
   | x :: y :: l ->
       if x = y then
-        rm_rep (y :: l)
+        remove_repeats (y :: l)
       else
-        x :: rm_rep (y :: l)
+        x :: remove_repeats (y :: l)
   | _ as l -> l
 
+(* WARNING does not maintain order *)
 let uniq l =
   l |> List.sort compare
-    |> rm_rep
+    |> remove_repeats
+
+let rec remove a = function
+  | [] ->
+      failwith "remove"
+  | x :: l' ->
+      if x = a then
+        l'
+      else
+        x :: remove a l'
 
 let readline f =
   try

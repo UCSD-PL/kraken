@@ -79,9 +79,8 @@ let main () =
   in
   List.iter (uncurry writefile)
     [ get_flag "exchange" , GenCoq.coq_of_spec s
-    ; lib_path "msg.py"   , Gen.py_lib s
-    ; lib_path "msg.c"    , Gen.c_lib s
-    ; lib_path "msg.ml"   , Gen.ml_lib s
+    ; lib_path "msg.py"   , GenPy.py_lib s
+    ; lib_path "test.py"  , GenPy.py_test s
     ]
 
 let _ =

@@ -1,3 +1,4 @@
-bin
 *.vo
 *.glob
+src/_build
+bin/kraken

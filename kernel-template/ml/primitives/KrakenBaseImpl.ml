@@ -124,6 +124,7 @@ let mkchan () =
   match Unix.fork () with
   | 0 -> (* child *)
       let cmd = Sys.getenv "KRAKEN_TEST" in
-      Unix.execv cmd [|cmd; str_of_fd c|]
+      Unix.handle_unix_error (fun _ ->
+        Unix.execv cmd [|cmd; str_of_fd c|]) ()
   | cpid -> (* parent *)
       p

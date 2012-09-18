@@ -1,16 +1,15 @@
-BUILD = ocamlbuild
-SLINK = ln -s -f
+BUILD := ocamlbuild
+SLINK := ln -s -f
 
 FLAGS = \
-  -libs unix,str \
+  -lib unix \
   -cflag -g \
   -lflag -g \
-  -build-dir ../bin
+	-no-links
 
 all:
-	mkdir -p ../bin
 	$(BUILD) $(FLAGS) kraken.byte
-	$(SLINK) ../bin/kraken.byte ../bin/kraken
+	$(SLINK) $(PWD)/_build/kraken.byte ../bin/kraken
   
 clean:
 	$(BUILD) $(FLAGS) -clean

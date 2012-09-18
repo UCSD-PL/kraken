@@ -8,14 +8,13 @@ FLAGS := \
   -lib unix \
   $(CLIBS) \
   -cflags -g,-I,$(KROOT)/c-stubs \
-  -lflags -g,-I,$(KROOT)/c-stubs \
-  -build-dir ../bin
+  -lflags -g,-I,$(KROOT)/c-stubs
 
 all:
 	mkdir -p ../bin
 	cp primitives/* .
 	$(OCAMLBUILD) $(FLAGS) Main.byte
-	$(SLINK) ../bin/Main.byte ../bin/Main
+	$(SLINK) ./_build/Main.byte ../bin/Main
   
 clean:
 	mkdir -p ../bin

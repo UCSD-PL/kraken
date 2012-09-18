@@ -14,7 +14,7 @@ let py_send_typ = function
 let py_recv_msg tag_map m =
   let args =
     m.payload
-      |> List.map py_recv_typ
+      |> List.map (fun t -> mkstr "%s()" (py_recv_typ t))
       |> String.concat ", "
   in
   mkstr "%d : lambda _ : ['%s', %s],"
@@ -43,31 +43,31 @@ def init():
   fd = int(sys.argv[1])
   KCHAN = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
 
-def recvNum():
+def recv_num():
   s = KCHAN.recv(1)
   n = struct.unpack('>B', s)[0]
   return n
 
-def recvStr():
-  n = recvNum()
+def recv_str():
+  n = recv_num()
   s = KCHAN.recv(n)
   return s
 
-def sendNum(n):
+def send_num(n):
   s = struct.pack('>B', n)
   KCHAN.send(s)
 
-def sendStr(s):
-  sendNum(len(s))
+def send_str(s):
+  send_num(len(s))
   KCHAN.send(s)
 
-def recvMsg():
-  tag = recvNum()
+def recv_msg():
+  tag = recv_num()
   return {
 %s
   }[tag](0)
 
-def sendMsg(*m):
+def send_msg(*m):
   tag = m[0]
   {
 %s
@@ -83,5 +83,19 @@ let py_lib s =
     (fmt s.msg_decl (py_recv_msg tm))
     (fmt s.msg_decl (py_send_msg tm))
 
+let py_test_template = "#!/usr/bin/env python
+
+import msg, time
+
+def main():
+  msg.init()
+  while True:
+    msg.send_msg(['Wget', 'http://www.google.com'])
+    print msg.recv_msg()
+    time.sleep(1)
+
+main()
+"
+
 let py_test s =
-  ""
+  py_test_template

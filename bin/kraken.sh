@@ -88,6 +88,8 @@ if [ -d "$D" ]; then
     error "'$D' already exists. To overwrite use --force."
   fi
 fi
+
+# copy template to kernel tree
 cp -r $KRAKEN/kernel-template "$D"
 
 # generate code and proofs

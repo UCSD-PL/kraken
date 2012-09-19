@@ -34,7 +34,7 @@ let py_send_msg tag_map m =
  *  2. send_msg cases
  *)
 let py_template = format_of_string "
-import socket, struct, sys
+import socket, struct, passfd, os, sys
 
 KCHAN = None
 
@@ -53,6 +53,11 @@ def recv_str():
   s = KCHAN.recv(n)
   return s
 
+def recv_fd():
+  fd, _ = passfd.recvfd(KCHAN)
+  f = os.fdopen(fd, 'r')
+  return f
+
 def send_num(n):
   s = struct.pack('>B', n)
   KCHAN.send(s)
@@ -60,6 +65,10 @@ def send_num(n):
 def send_str(s):
   send_num(len(s))
   KCHAN.send(s)
+
+def send_fd(f):
+  fd = f.fileno()
+  passfd.sendfd(KCHAN, fd)
 
 def recv_msg():
   tag = recv_num()
@@ -90,7 +99,7 @@ import msg, time
 def main():
   msg.init()
   while True:
-    msg.send_msg(['Wget', 'http://www.google.com'])
+    msg.send_msg('Wget', 'http://www.google.com')
     print msg.recv_msg()
     time.sleep(1)
 

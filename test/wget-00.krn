@@ -5,7 +5,7 @@ Messages {
 
 Protocol {
   c >> Wget(url) {
-    f = call("/Users/ztatlock/wget.py", url);
+    f = call("wget.py", url);
     c << HTML(url, f);
   }
 

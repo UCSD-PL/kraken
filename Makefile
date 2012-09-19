@@ -9,6 +9,9 @@ all: $(YNOT) $(PY_PASSFD)
 clean:
 	$(MAKE) -C src clean
 
+dist-clean: clean
+	rm -rf ynot $(YNOT) $(PY_PASSFD)
+
 $(YNOT):
 	wget -O $(YNOT) $(YNOT_URL)
 	tar xvf $(YNOT)
@@ -17,4 +20,4 @@ $(YNOT):
 $(PY_PASSFD):
 	wget -O $(PY_PASSFD) $(PY_PASSFD_URL)
 
-.PHONY: all clean
+.PHONY: all clean dist-clean

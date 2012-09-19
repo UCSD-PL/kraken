@@ -87,7 +87,7 @@ void _send_fd_native(int sock, int fd) {
   ((int *)CMSG_DATA(h))[0] = fd;
 
   /* send file descriptor, checking for errors */
-  assert(sendmsg(sock, &hdr, 0) == 1);
+  assert(sendmsg(sock, &hdr, 0) == 0);
 
   return;
 }

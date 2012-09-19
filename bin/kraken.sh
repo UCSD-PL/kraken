@@ -104,7 +104,13 @@ echo "
 KROOT := $(canonpath "$D")
 " >> "$D/Makefile.config"
 
-# make test drivers executable
+# tell kernel.sh where it lives
+sed "s;__KROOT__;$D;" \
+  < $KRAKEN/kernel-template/bin/kernel.sh \
+  > $D/bin/kernel.sh
+
+# make scripts executable
+chmod +x "$D/bin/kernel.sh"
 chmod +x "$D/client/test.py"
 
 if $BUILD; then

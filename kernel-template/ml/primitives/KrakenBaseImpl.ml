@@ -67,7 +67,7 @@ let int_of_num n =
 let int_of_fd : Unix.file_descr -> int =
   Obj.magic
 
-let str_of_fd fd =
+let string_of_fd fd =
   string_of_int (int_of_fd fd)
 
 (*
@@ -86,10 +86,23 @@ let call prog arg _ =
   let arg = string_of_str arg in
   let r, w = Unix.pipe () in
   match Unix.fork () with
-  | 0 -> (* child *)
-      Unix.execv prog [|prog; arg; str_of_fd w|]
-  | cpid -> (* parent *)
-      r
+  | 0 -> (* child *) begin
+      Unix.close r;
+      let pfx = try
+        Sys.getenv "KROOT"
+      with Not_found ->
+        failwith "KROOT env var not set"
+      in
+      let prog =
+        List.fold_left Filename.concat "" [pfx; "client"; prog]
+      in
+      Unix.handle_unix_error (fun _ ->
+        Unix.execv prog [|prog; arg; string_of_fd w|]) ()
+  end
+  | cpid -> (* parent *) begin
+      Unix.close w;
+      r (* TODO who closes r ? *)
+  end
 
 let recv c n _ =
   let n = int_of_num n in
@@ -122,9 +135,14 @@ let send_fd c fd _ = send_fd_native c fd
 let mkchan () =
   let p, c = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   match Unix.fork () with
-  | 0 -> (* child *)
-      let cmd = Sys.getenv "KRAKEN_TEST" in
+  | 0 -> (* child *) begin
+      let cmd = try
+        Sys.getenv "KRAKEN_TEST"
+      with Not_found ->
+        failwith "must set KRAKEN_TEST environment variable"
+      in
       Unix.handle_unix_error (fun _ ->
-        Unix.execv cmd [|cmd; str_of_fd c|]) ()
+        Unix.execv cmd [|cmd; string_of_fd c|]) ()
+  end
   | cpid -> (* parent *)
       p

@@ -1,9 +1,0 @@
-You need the OCaml lib header files. On Debian/Ubuntu, these seem to get
-set up correctly on install. In Homebrew on OS X, I had to add a symlink,
-something like:
-  $ cd /usr/local/include
-  $ ln -s ../Cellar/objective-caml/4.00.0/lib/ocaml/caml .
-
-These header files are used to create OCaml bindings to the sendmsg and
-recvmsg system calls which are necessary for sending file descriptors
-between processes.

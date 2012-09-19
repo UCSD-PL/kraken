@@ -1,0 +1,19 @@
+* Building
+
+  $ make
+
+* Running
+
+  $ ./bin/kernel.sh
+
+* Dependencies
+
+You need the OCaml header files. On Debian/Ubuntu, these seem to get set up
+correctly on install. Homebrew on OS X required a symlink, e.g.
+
+  $ cd /usr/local/include
+  $ ln -s ../Cellar/objective-caml/4.00.0/lib/ocaml/caml .
+
+These header files are used when we create OCaml bindings to primitives
+written in C, e.g. for the sendmsg and recvmsg system calls which are
+necessary for sending file descriptors between processes.

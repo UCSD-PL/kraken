@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
 function error {
-  echo "ERROR : $1"
+  echo ERROR : $*
   exit 1
 }
 
-# ensure KRAKEN environment variable is valid
-if [ "$KRAKEN" = "" ] || [ ! -f $KRAKEN/.kraken-root ]; then
+if [ ! -f $KRAKEN/.kraken-root ]; then
   error "\$KRAKEN must point to root of Kraken repository."
 fi
+COMPILER=$KRAKEN/compiler
 
 # default arguments
 BUILD=false
@@ -33,7 +33,7 @@ OPTIONS:
 
 # http://snipplr.com/view/18026/canonical-absolute-path/
 function canonpath () { 
-  echo $(cd -P $(dirname "$1"); pwd -P)/$(basename "$1")
+  echo $(cd $(dirname $1); pwd -P)/$(basename $1)
 }
 
 # process args
@@ -42,16 +42,16 @@ if [ "$*" = "" ]; then
 fi
 while [ "$*" != "" ]; do
   case $1 in
-    "-h" | "-help" | "--help")
+    -h | -help | --help)
       usage
       ;;
-    "-f" | "--force")
+    -f | --force)
       FORCE=true
       ;;
-    "-b" | "--build")
+    -b | --build)
       BUILD=true
       ;;
-    "-o" | "--outdir")
+    -o | --outdir)
       shift
       OUTDIR=$1
       ;;
@@ -90,10 +90,10 @@ if [ -d "$D" ]; then
 fi
 
 # copy template to kernel tree
-cp -r $KRAKEN/kernel-template "$D"
+cp -r "$COMPILER/kernel-template" "$D"
 
 # generate code and proofs
-$KRAKEN/bin/kraken $INPUT \
+$COMPILER/bin/kraken $INPUT \
   --exchange "$D/coq/Exchange.v" \
   --lib "$D/client" \
 || error "Kraken compiler failed."
@@ -106,8 +106,8 @@ KROOT := $(canonpath "$D")
 
 # tell kernel.sh where it lives
 sed "s;__KROOT__;$D;" \
-  < $KRAKEN/kernel-template/bin/kernel.sh \
-  > $D/bin/kernel.sh
+  < "$COMPILER/kernel-template/bin/kernel.sh" \
+  > "$D/bin/kernel.sh"
 
 # make scripts executable
 chmod +x "$D/bin/kernel.sh"
@@ -117,5 +117,5 @@ if $BUILD; then
   echo
   echo ">>> BUILDING $D <<<"
   echo
-  make -C $D
+  make -C "$D"
 fi

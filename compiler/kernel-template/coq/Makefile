@@ -1,7 +1,6 @@
 include ../Makefile.config
 
-# TODO make ynot path part of Makefile.config
-INCLUDES := -I $(KRAKEN)/ynot/src/coq -I .
+INCLUDES := -I $(YNOT) -I .
 FILES    := $(filter-out Extract.v,$(wildcard *.v))
 
 all:

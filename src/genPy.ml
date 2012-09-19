@@ -100,7 +100,9 @@ def main():
   msg.init()
   while True:
     msg.send_msg('Wget', 'http://www.google.com')
-    print msg.recv_msg()
+    m = msg.recv_msg()
+    print m
+    print m[2].read()
     time.sleep(1)
 
 main()

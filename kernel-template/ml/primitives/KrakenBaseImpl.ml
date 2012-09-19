@@ -53,6 +53,12 @@ let str_of_string s =
 let int_of_num n =
   Char.code (char_of_ascii n)
 
+let kroot =
+  try
+    Sys.getenv "KROOT"
+  with Not_found ->
+    failwith "KROOT environment variable is not set"
+
 (* Forked components need to know which file descriptor to use for
  * communicating with the kernel.
  *
@@ -81,6 +87,7 @@ type fdesc = Unix.file_descr
 let exec s _ =
   Unix.stdin
 
+(* prog path is relative to $KROOT/client *)
 let call prog arg _ =
   let prog = string_of_str prog in
   let arg = string_of_str arg in
@@ -88,13 +95,8 @@ let call prog arg _ =
   match Unix.fork () with
   | 0 -> (* child *) begin
       Unix.close r;
-      let pfx = try
-        Sys.getenv "KROOT"
-      with Not_found ->
-        failwith "KROOT env var not set"
-      in
       let prog =
-        List.fold_left Filename.concat "" [pfx; "client"; prog]
+        List.fold_left Filename.concat "" [kroot; "client"; prog]
       in
       Unix.handle_unix_error (fun _ ->
         Unix.execv prog [|prog; arg; string_of_fd w|]) ()
@@ -136,13 +138,14 @@ let mkchan () =
   let p, c = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   match Unix.fork () with
   | 0 -> (* child *) begin
-      let cmd = try
-        Sys.getenv "KRAKEN_TEST"
-      with Not_found ->
-        failwith "must set KRAKEN_TEST environment variable"
+      Unix.close p;
+      let prog =
+        List.fold_left Filename.concat "" [kroot; "client"; "test.py"]
       in
       Unix.handle_unix_error (fun _ ->
-        Unix.execv cmd [|cmd; string_of_fd c|]) ()
+        Unix.execv prog [|prog; string_of_fd c|]) ()
   end
-  | cpid -> (* parent *)
+  | cpid -> (* parent *) begin
+      Unix.close c;
       p
+  end

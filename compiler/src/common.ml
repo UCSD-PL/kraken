@@ -72,6 +72,12 @@ let rec remove_repeats = function
         x :: remove_repeats (y :: l)
   | _ as l -> l
 
+let rec mapi_aux f i = function
+  | [] -> []
+  | x :: l -> f i x :: mapi_aux f (i + 1) l
+
+let mapi f = mapi_aux f 0
+
 (* WARNING does not maintain order *)
 let uniq l =
   l |> List.sort compare

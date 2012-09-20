@@ -37,7 +37,7 @@ let coq_of_msg_decl m =
 
 let str_of_args m =
   m.payload
-    |> List.mapi (fun i _ -> mkstr "p%d" i)
+    |> mapi (fun i _ -> mkstr "p%d" i)
     |> String.concat " "
 
 let coq_trace_recv_msg tag_map m =
@@ -46,7 +46,7 @@ let coq_trace_recv_msg tag_map m =
   in
   let pay =
     m.payload
-      |> List.mapi (fun i t ->
+      |> mapi (fun i t ->
           let rF, rT = coq_recv_typ t in
           mkstr "%s c p%d ++" rT i)
       |> List.rev
@@ -65,7 +65,7 @@ let coq_trace_send_msg tag_map m =
   in
   let pay =
     m.payload
-      |> List.mapi (fun i t ->
+      |> mapi (fun i t ->
           let sF, sT = coq_send_typ t in
           mkstr "%s c p%d ++" sT i)
       |> List.rev

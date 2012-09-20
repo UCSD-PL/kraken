@@ -23,7 +23,7 @@ let py_recv_msg tag_map m =
 let py_send_msg tag_map m =
   let args =
     m.payload
-      |> List.mapi (fun i t -> mkstr "%s(m[%d])" (py_send_typ t) (i + 1))
+      |> mapi (fun i t -> mkstr "%s(m[%d])" (py_send_typ t) (i + 1))
       |> String.concat ", "
   in
   mkstr "'%s' : lambda _ : [send_num(%d), %s],"

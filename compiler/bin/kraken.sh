@@ -88,6 +88,7 @@ if [ -d "$D" ]; then
     error "'$D' already exists. To overwrite use --force."
   fi
 fi
+D=$(canonpath "$D")
 
 # copy template to kernel tree
 cp -r "$COMPILER/kernel-template" "$D"
@@ -101,7 +102,7 @@ $COMPILER/bin/kraken $INPUT \
 # tell Makefile where it lives
 echo "
 # path to root of generated kernel
-KROOT := $(canonpath "$D")
+KROOT := "$D"
 " >> "$D/Makefile.config"
 
 # tell kernel.sh where it lives

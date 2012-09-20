@@ -1,6 +1,6 @@
 include ../Makefile.config
 
-INCLUDES := -I $(YNOT) -I .
+INCLUDES := -R $(YNOT) Ynot -I .
 FILES    := $(filter-out Extract.v,$(wildcard *.v))
 
 all:

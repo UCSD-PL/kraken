@@ -14,17 +14,17 @@ int _recv_fd_native(int sock) {
   struct cmsghdr *h;
   int n, fd;
 
-  /* must recv some msg, single byte will do */
-  char dummy    = '\0';
-  data.iov_base = &dummy;
-  data.iov_len  = sizeof(dummy);
-
   /* init everything to 0 */
   memset(&hdr, 0, sizeof(struct msghdr));
   memset(&data, 0, sizeof(struct iovec));
   memset(buf, 0, FD_CMSG_SPACE);
 
-  /* set header values */ 
+  /* must recv some msg, single byte will do */
+  char dummy    = '\0';
+  data.iov_base = &dummy;
+  data.iov_len  = sizeof(dummy);
+
+  /* set header values */
   hdr.msg_name       = NULL;
   hdr.msg_namelen    = 0;
   hdr.msg_iov        = &data;
@@ -32,7 +32,7 @@ int _recv_fd_native(int sock) {
   hdr.msg_control    = buf;
   hdr.msg_controllen = FD_CMSG_SPACE;
   hdr.msg_flags      = 0;
-      
+
   /* recv file descriptor */
   n = recvmsg(sock, &hdr, 0);
 
@@ -58,15 +58,15 @@ void _send_fd_native(int sock, int fd) {
   char buf[FD_CMSG_SPACE];
   struct cmsghdr *h;
 
-  /* must send some msg, single byte will do */
-  char dummy    = '\0';
-  data.iov_base = &dummy;
-  data.iov_len  = sizeof(dummy);
-
   /* init everything to 0 */
   memset(&hdr, 0, sizeof(struct msghdr));
   memset(&data, 0, sizeof(struct iovec));
   memset(buf, 0, FD_CMSG_SPACE);
+
+  /* must send some msg, single byte will do */
+  char dummy    = '\0';
+  data.iov_base = &dummy;
+  data.iov_len  = sizeof(dummy);
 
   /* set header values */
   hdr.msg_name       = NULL;
@@ -87,7 +87,7 @@ void _send_fd_native(int sock, int fd) {
   ((int *)CMSG_DATA(h))[0] = fd;
 
   /* send file descriptor, checking for errors */
-  assert(sendmsg(sock, &hdr, 0) == 0);
+  assert(sendmsg(sock, &hdr, 0) == 1);
 
   return;
 }

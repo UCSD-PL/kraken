@@ -3,17 +3,21 @@
 # start proof general with necessary coq options
 # adapted from "pg" script in CompCert
 
-if [ $# -ne 1 ]; then
-  echo Usage : $0 FILE.v
-  exit 1
-fi
-
 function quote {
-  printf "\"%s\" " $*
+  printf "\"%s\" " $@
 }
 
-function canonpath () { 
+function canonpath {
   echo $(cd $(dirname $1); pwd -P)/$(basename $1)
+}
+
+function setup_paths {
+  for p in $@; do
+    if [ ! -f $p ]; then
+      touch $p
+    fi
+    canonpath $p
+  done
 }
 
 if [ "$(uname)" = "Darwin" ]; then
@@ -30,4 +34,4 @@ COQARGS=$(quote -R $YNOT Ynot)
 $EMACS \
   -eval "(setq coq-prog-name \"$COQTOP\")" \
   -eval "(setq coq-prog-args '($COQARGS))" \
-  $(canonpath $1)
+  $(setup_paths $@)

@@ -2,8 +2,8 @@ Messages {
   M(str);
 }
 
-Protocol {
-  x >> M(y) {
-    x << M(y);
+Exchange(c) {
+  M(y) {
+    send(c, M(y));
   }
 }

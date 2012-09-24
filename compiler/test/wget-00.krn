@@ -6,7 +6,7 @@ Messages {
 Exchange(c) {
   Wget(url) {
     f = call("wget.py", url);
-    c << HTML(url, f);
+    send(c, HTML(url, f));
   }
 
   HTML(url, html) {

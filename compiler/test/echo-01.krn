@@ -3,12 +3,12 @@ Messages {
   M2(str);
 }
 
-Protocol {
-  x >> M1(y) {
-    x << M1(y);
+Exchange(c) {
+  M1(y) {
+    send(c, M1(y));
   }
 
-  x >> M2(y) {
-    x << M2(y);
+  M2(y) {
+    send(c, M2(y));
   }
 }

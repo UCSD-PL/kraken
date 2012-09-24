@@ -21,8 +21,7 @@ rule token = parse
   | "str" { STR }
   | "fdesc" { FDESC }
   | "call" { CALL }
-  | ">>" { SENDS }
-  | "<<" { RECVS }
+  | "send" { SEND }
   | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }

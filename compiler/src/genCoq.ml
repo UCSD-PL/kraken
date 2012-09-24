@@ -287,9 +287,6 @@ Definition RecvMsg (c : chan) (m : msg) : Trace :=
       RecvNum c p0
   end.
 
-(* prevent sep tactic from unfolding *)
-Global Opaque RecvMsg.
-
 Definition SendMsg (c : chan) (m : msg) : Trace :=
   match m with
 %s
@@ -297,9 +294,6 @@ Definition SendMsg (c : chan) (m : msg) : Trace :=
     | BadTag p0 =>
       SendNum c (Num \"000\")
   end.
-
-(* prevent sep tactic from unfolding *)
-Global Opaque SendMsg.
 
 Definition recv_msg :
   forall (c : chan) (tr : [Trace]),
@@ -339,6 +333,9 @@ Proof.
   sep fail auto.
 Qed.
 
+(* prevent sep tactic from unfolding *)
+Global Opaque RecvMsg SendMsg.
+
 Inductive ValidExchange : Trace -> Prop :=
 %s
 (* special case for errors *)
@@ -377,7 +374,7 @@ Proof.
 Qed.
 "
 
-let coq_of_spec s =
+let coq_of_kernel s =
   let m = gen_tag_map s in
   let fmt l f =
     String.concat "\n" (List.map f l)

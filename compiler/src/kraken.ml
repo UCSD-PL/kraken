@@ -68,7 +68,7 @@ let parse_args () =
   else
     loop args
 
-let parse_spec f =
+let parse_kernel f =
   f |> readfile
     |> Lexing.from_string
     |> Parse.kernel Lex.token
@@ -79,10 +79,10 @@ let lib_path f =
 let main () =
   parse_args ();
   let s =
-    parse_spec (get_flag "input")
+    parse_kernel (get_flag "input")
   in
   List.iter (uncurry writefile)
-    [ get_flag "exchange" , GenCoq.coq_of_spec s
+    [ get_flag "exchange" , GenCoq.coq_of_kernel s
     ; lib_path "msg.py"   , GenPy.py_lib s
     ; lib_path "test.py"  , GenPy.py_test s
     ]

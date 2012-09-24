@@ -94,7 +94,7 @@ D=$(canonpath "$D")
 cp -r "$COMPILER/kernel-template" "$D"
 
 # generate code and proofs
-$COMPILER/bin/kraken $INPUT \
+$COMPILER/bin/.kraken $INPUT \
   --exchange "$D/coq/Exchange.v" \
   --lib "$D/client" \
 || error "Kraken compiler failed."

@@ -83,6 +83,9 @@ let string_of_fd fd =
 type chan = Unix.file_descr
 type fdesc = Unix.file_descr
 
+let chan_eq c1 c2 =
+  c1 = c2
+
 (* TODO *)
 let exec s _ =
   Unix.stdin
@@ -105,6 +108,10 @@ let call prog arg _ =
       Unix.close w;
       r (* TODO who closes r ? *)
   end
+
+let select chans _ =
+  let r, _, _ = Unix.select chans [] [] (-1.0) in
+  List.hd r
 
 let recv c n _ =
   let n = int_of_num n in

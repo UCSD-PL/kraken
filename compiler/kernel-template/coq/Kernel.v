@@ -8,36 +8,90 @@ Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
 
 Record kstate : Set :=
-  mkst { c : chan
+  mkst { components : list chan
        ; ktr : [Trace]
        }.
 
 Inductive KTrace : Trace -> Prop :=
 | KT_init :
   KTrace nil
-| KT_iter :
+| KT_select :
+  forall tr cs c,
+  KTrace tr ->
+  KTrace (Select cs c :: tr)
+| KT_exchange :
   forall tr1 tr2,
   KTrace tr1 ->
   AddedValidExchange tr1 tr2 ->
   KTrace tr2.
 
+Fixpoint all_bound (cs : list chan) : hprop :=
+  match cs with
+    | nil => emp
+    | c :: cs' => bound c * all_bound cs'
+  end.
+
+(* all cs bound except _first_ occurrence of drop *)
+Fixpoint all_bound_drop (cs : list chan) (drop : chan) : hprop :=
+  match cs with
+    | nil => emp
+    | c :: cs' =>
+      if chan_eq c drop then
+        all_bound cs'
+      else
+        bound c * all_bound_drop cs' drop
+  end.
+
+Lemma unpack_all_bound :
+  forall cs c,
+  In c cs ->
+  all_bound cs ==> bound c * all_bound_drop cs c.
+Proof.
+  induction cs; simpl; intros. contradiction.
+  destruct H; subst. rewrite chan_eq_true. apply himp_refl.
+  case (chan_eq a c); intros; subst. apply himp_refl.
+  apply himp_comm_conc. apply himp_assoc_conc1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_conc; auto.
+Qed.
+
+Lemma repack_all_bound :
+  forall cs c,
+  In c cs ->
+  bound c * all_bound_drop cs c ==> all_bound cs.
+Proof.
+  induction cs; simpl; intros. contradiction.
+  destruct H; subst. rewrite chan_eq_true. apply himp_refl.
+  case (chan_eq a c); intros; subst. apply himp_refl.
+  apply himp_comm_prem. apply himp_assoc_prem1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_prem; auto.
+Qed.
+
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in
-  traced tr * [KTrace tr] * bound (c s).
+  traced tr * [KTrace tr] * all_bound (components s).
 
 Definition kbody:
   forall s,
   STsep (kstate_inv s)
         (fun s' => kstate_inv s').
 Proof.
-  unfold kstate_inv; intros [c tr];
+  unfold kstate_inv; intros [comps tr];
   refine (
-    tr' <- exchange c tr <@> (tr ~~ [KTrace tr]);
-    {{ Return (mkst c tr') }}
+    comp <- select comps
+      tr <@>
+      (tr ~~ [KTrace tr] * all_bound comps);
+    tr' <- exchange comp
+      (tr ~~~ Select comps comp :: tr) <@>
+      (tr ~~ [KTrace tr] * all_bound_drop comps comp * [In comp comps]);
+    {{ Return (mkst comps tr') }}
   );
-  sep fail auto;
-  apply himp_pure';
-  econstructor; eauto.
+  sep fail auto.
+  apply unpack_all_bound; auto.
+  apply himp_comm_conc; apply himp_prop_conc.
+  apply KT_exchange in H; auto. constructor; auto.
+  apply repack_all_bound; auto.
 Qed.
 
 Definition kloop:
@@ -67,7 +121,7 @@ Definition main:
         (fun s' => kstate_inv s').
 Proof.
   intros; refine (
-    s' <- kloop (mkst dummy [nil]);
+    s' <- kloop (mkst (dummy :: nil) [nil]);
     {{ Return s' }}
   );
   unfold kstate_inv;

@@ -31,11 +31,32 @@ Qed.
 Global Opaque nat_of_num num_of_nat.
 
 Axiom chan : Set.
+
+Axiom chan_eq :
+  forall (c1 c2 : chan),
+  { c1 = c2 } + { c1 <> c2 }.
+
+Lemma chan_eq_true :
+  forall (c : chan) (A : Type) (vT vF : A),
+  (if chan_eq c c then vT else vF) = vT.
+Proof.
+  intros; case (chan_eq c c); auto. congruence.
+Qed.
+
+Lemma chan_eq_false :
+  forall (c1 c2 : chan) (A : Type) (vT vF : A),
+  c1 <> c2 ->
+  (if chan_eq c1 c2 then vT else vF) = vF.
+Proof.
+  intros; case (chan_eq c1 c2); auto. congruence.
+Qed.
+
 Axiom fdesc : Set.
 
 Inductive Action : Set :=
 | Exec : str -> chan -> Action
 | Call : str -> str -> fdesc -> Action
+| Select : list chan -> chan -> Action
 | Recv : chan -> str -> Action
 | Send : chan -> str -> Action
 | RecvFD : chan -> fdesc -> Action
@@ -55,6 +76,12 @@ Axiom call :
   forall (prog arg : str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
         (fun (f : fdesc) => tr ~~ traced (Call prog arg f :: tr)).
+
+(* TODO add non-empty precondition *)
+Axiom select :
+  forall (chans : list chan) (tr : [Trace]),
+  STsep (tr ~~ traced tr)
+        (fun (c : chan) => tr ~~ traced (Select chans c :: tr) * [In c chans]).
 
 Axiom recv :
   forall (c : chan) (n : num) (tr : [Trace]),

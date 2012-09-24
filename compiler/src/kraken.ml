@@ -2,6 +2,10 @@ open Common
 
 let usage () =
   print "
+
+*** DO NOT RUN KRAKEN DIRECTLY ***
+***  USE THE KRAKEN.SH SCRIPT  ***
+
 Usage: kraken [options] input.krn
 
 Compile a Kraken kernel spec to Coq code and proofs and additionally produce

@@ -18,7 +18,7 @@ type 'a msg =
   ; payload : 'a list
   }
 
-let msg t p =
+let mk_msg t p =
   { tag = t
   ; payload = p
   }
@@ -39,26 +39,26 @@ type prog =
   | Seq of cmd * prog
 
 type handler =
-  { trigger : chan * msg_pat
+  { trigger : msg_pat
   ; respond : prog
   }
 
-let handler t r =
+let mk_handler t r =
   { trigger = t
   ; respond = r
   }
 
-type spec =
-  { msg_decl : msg_decl list
-  ; protocol : handler list
+type kernel =
+  { msg_decls : msg_decl list
+  ; exchange : chan * handler list
   }
 
-let spec m p =
-  { msg_decl = m
-  ; protocol = p
+let mk_kernel ms xch =
+  { msg_decls = ms
+  ; exchange = xch
   }
 
-let ckspec s =
+let ck_kernel s =
   (* TODO *)
   (* msg tags start with uppercase *)
   (* msg tags uniq *)
@@ -68,8 +68,8 @@ let ckspec s =
 
 (* generate unique id # for each message tag *)
 (* start at 1 so BadTag can always have id 0 *)
-let gen_tag_map spec =
-  let tags = List.map tag spec.msg_decl in
+let gen_tag_map kernel =
+  let tags = List.map tag kernel.msg_decls in
   List.combine tags (range 1 (List.length tags + 1))
 
 (* support lex/parse error reporting *)

@@ -71,7 +71,7 @@ let parse_args () =
 let parse_spec f =
   f |> readfile
     |> Lexing.from_string
-    |> Parse.spec Lex.token
+    |> Parse.kernel Lex.token
 
 let lib_path f =
   Filename.concat (get_flag "lib") f

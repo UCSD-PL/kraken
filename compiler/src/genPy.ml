@@ -1,5 +1,5 @@
 open Common
-open Spec
+open Kernel
 
 let py_recv_typ = function
   | Num -> "recv_num"
@@ -89,8 +89,8 @@ let py_lib s =
     String.concat "\n" (List.map f l)
   in
   mkstr py_template
-    (fmt s.msg_decl (py_recv_msg tm))
-    (fmt s.msg_decl (py_send_msg tm))
+    (fmt s.msg_decls (py_recv_msg tm))
+    (fmt s.msg_decls (py_send_msg tm))
 
 let py_test_template = "#!/usr/bin/env python
 

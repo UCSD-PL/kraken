@@ -1,6 +1,6 @@
 {
   open Common
-  open Spec
+  open Kernel
   open Parse
 
   let chop_quotes s =
@@ -16,7 +16,7 @@ let line = '\n'
 
 rule token = parse
   | "Messages" { MESSAGES }
-  | "Protocol" { PROTOCOL }
+  | "Exchange" { EXCHANGE }
   | "num" { NUM }
   | "str" { STR }
   | "fdesc" { FDESC }

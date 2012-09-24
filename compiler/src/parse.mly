@@ -1,6 +1,6 @@
 %{
   open Common
-  open Spec
+  open Kernel
 
   let parse_error s =
     failwith (mkstr "Parse: error on line %d" !line)
@@ -8,7 +8,7 @@
   (* NOTE to get commas right, we special case empty arg lists *)
 %}
 
-%token MESSAGES PROTOCOL NUM STR FDESC CALL
+%token MESSAGES EXCHANGE NUM STR FDESC CALL
 %token SENDS RECVS EQ LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF
 
@@ -16,16 +16,16 @@
 %token <string> STRLIT
 %token <string> ID
 
-%start spec
-%type <Spec.spec> spec
+%start kernel
+%type <Kernel.kernel> kernel
 
 %%
 
-spec :
+kernel :
   | MESSAGES LCURL msg_decls RCURL 
-    PROTOCOL LCURL handlers RCURL
+    EXCHANGE LPAREN ID RPAREN LCURL handlers RCURL
     EOF
-    { spec $3 $7 }
+    { mk_kernel $3 ($7, $10) }
 ;;
 
 handlers :
@@ -36,9 +36,8 @@ handlers :
 ;;
 
 handler :
-  | ID SENDS msg_pat
-    LCURL prog RCURL
-    { handler ($1, $3) $5 }
+  | msg_pat LCURL prog RCURL
+    { mk_handler $1 $3 }
 ;;
 
 prog :
@@ -57,9 +56,9 @@ cmd :
 
 msg_expr :
   | ID LPAREN RPAREN
-    { msg $1 [] }
+    { mk_msg $1 [] }
   | ID LPAREN exprs RPAREN
-    { msg $1 $3 }
+    { mk_msg $1 $3 }
 ;;
 
 exprs :
@@ -77,9 +76,9 @@ expr :
 
 msg_pat :
   | ID LPAREN RPAREN
-    { msg $1 [] }
+    { mk_msg $1 [] }
   | ID LPAREN ids RPAREN
-    { msg $1 $3 }
+    { mk_msg $1 $3 }
 ;;
 
 ids :
@@ -98,9 +97,9 @@ msg_decls :
 
 msg_decl :
   | ID LPAREN RPAREN SEMI
-    { msg $1 [] }
+    { mk_msg $1 [] }
   | ID LPAREN typs RPAREN SEMI
-    { msg $1 $3 }
+    { mk_msg $1 $3 }
 ;;
 
 typs :

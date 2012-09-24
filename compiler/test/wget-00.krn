@@ -3,12 +3,12 @@ Messages {
   HTML(str, fdesc);
 }
 
-Protocol {
-  c >> Wget(url) {
+Exchange(c) {
+  Wget(url) {
     f = call("wget.py", url);
     c << HTML(url, f);
   }
 
-  c >> HTML(url, html) {
+  HTML(url, html) {
   }
 }

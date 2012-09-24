@@ -25,7 +25,7 @@ fi
 YNOT="$KRAKEN/compiler/ynot/src/coq"
 
 COQTOP="coqtop"
-COQARGS=$(quote -I $YNOT -R $YNOT Ynot)
+COQARGS=$(quote -R $YNOT Ynot)
 
 $EMACS \
   -eval "(setq coq-prog-name \"$COQTOP\")" \

@@ -3,12 +3,29 @@
 # start proof general with necessary coq options
 # adapted from "pg" script in CompCert
 
-function quote {
-  printf "\"%s\" " $@
+function error {
+  echo ERROR : $*
+  exit 1
 }
+
+if [ ! -f $KRAKEN/.kraken-root ]; then
+  error "\$KRAKEN must point to root of Kraken repository."
+fi
+
+YNOT=$COMPILER/ynot/src/coq
+
+if [ "$(uname)" = "Darwin" ]; then
+  EMACS="open -a /Applications/Emacs.app --args"
+else
+  EMACS=emacs
+fi
 
 function canonpath {
   echo $(cd $(dirname $1); pwd -P)/$(basename $1)
+}
+
+function quote {
+  printf "\"%s\" " $@
 }
 
 function setup_paths {
@@ -19,14 +36,6 @@ function setup_paths {
     canonpath $p
   done
 }
-
-if [ "$(uname)" = "Darwin" ]; then
-  EMACS="open -a /Applications/Emacs.app --args"
-else
-  EMACS=emacs
-fi
-
-YNOT="$KRAKEN/compiler/ynot/src/coq"
 
 COQTOP="coqtop"
 COQARGS=$(quote -R $YNOT Ynot)

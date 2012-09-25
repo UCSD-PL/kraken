@@ -8,12 +8,19 @@ function error {
 if [ ! -f $KRAKEN/.kraken-root ]; then
   error "\$KRAKEN must point to root of Kraken repository."
 fi
-COMPILER=$KRAKEN/compiler
+
+KBASE=$KRAKEN/compiler/kernel-template
+KBIN=$KRAKEN/compiler/bin
+
+function canonpath {
+  echo $(cd $(dirname $1); pwd -P)/$(basename $1)
+}
 
 # default arguments
+OUTDIR="."
 BUILD=false
 FORCE=false
-OUTDIR="."
+PRETTY=false
 INPUT=""
 
 function usage {
@@ -24,16 +31,12 @@ Generate Coq kernel and client libraries from a Kraken spec.
 
 OPTIONS:
   -h, --help          print this usage information
+  -o, --outdir DIR    generate output in DIR
   -b, --build         build generated kernel
   -f, --force         overwrite existing output
-  -o, --outdir DIR    generate output in DIR
+  -p, --pretty        prettify generated Coq code (requires ProofGeneral)
 "
   exit 1
-}
-
-# http://snipplr.com/view/18026/canonical-absolute-path/
-function canonpath () { 
-  echo $(cd $(dirname $1); pwd -P)/$(basename $1)
 }
 
 # process args
@@ -45,15 +48,18 @@ while [ "$*" != "" ]; do
     -h | -help | --help)
       usage
       ;;
-    -f | --force)
-      FORCE=true
+    -o | --outdir)
+      shift
+      OUTDIR=$1
       ;;
     -b | --build)
       BUILD=true
       ;;
-    -o | --outdir)
-      shift
-      OUTDIR=$1
+    -f | --force)
+      FORCE=true
+      ;;
+    -p | --pretty)
+      PRETTY=true
       ;;
     *.krn)
       INPUT=$1
@@ -91,10 +97,10 @@ fi
 D=$(canonpath "$D")
 
 # copy template to kernel tree
-cp -r "$COMPILER/kernel-template" "$D"
+cp -r "$KBASE" "$D"
 
 # generate code and proofs
-$COMPILER/bin/.kraken $INPUT \
+$KBIN/.kraken $INPUT \
   --exchange "$D/coq/Exchange.v" \
   --lib "$D/client" \
 || error "Kraken compiler failed."
@@ -107,12 +113,16 @@ KROOT := "$D"
 
 # tell kernel.sh where it lives
 sed "s;__KROOT__;$D;" \
-  < "$COMPILER/kernel-template/bin/kernel.sh" \
+  < "$KBASE/bin/kernel.sh" \
   > "$D/bin/kernel.sh"
 
 # make scripts executable
 chmod +x "$D/bin/kernel.sh"
 chmod +x "$D/client/test.py"
+
+if $PRETTY; then
+  $KBIN/coq-prettify.sh "$D/coq/Exchange.v"
+fi
 
 if $BUILD; then
   echo

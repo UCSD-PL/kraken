@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+function error {
+  echo ERROR : $*
+  exit 1
+}
+
 if [ ! -f $KRAKEN/.kraken-root ]; then
   error "\$KRAKEN must point to root of Kraken repository."
 fi

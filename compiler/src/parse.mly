@@ -22,10 +22,18 @@
 %%
 
 kernel :
-  | MESSAGES LCURL msg_decls RCURL 
+  | constants
+    MESSAGES LCURL msg_decls RCURL 
     EXCHANGE LPAREN ID RPAREN LCURL handlers RCURL
     EOF
-    { mk_kernel $3 ($7, $10) }
+    { mk_kernel $1 $4 ($8, $11) }
+;;
+
+constants :
+  | /* empty */
+    { [] }
+  | ID EQ expr SEMI constants
+    { ($1, $3) :: $5 }
 ;;
 
 handlers :
@@ -48,7 +56,7 @@ prog :
 ;;
 
 cmd :
-  | ID EQ CALL LPAREN STRLIT COMMA expr RPAREN SEMI
+  | ID EQ CALL LPAREN expr COMMA expr RPAREN SEMI
     { Call ($1, $5, $7) }
   | SEND LPAREN ID COMMA msg_expr RPAREN SEMI
     { Send ($3, $5) }

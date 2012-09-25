@@ -1,3 +1,5 @@
+WGET = "wget.py";
+
 Messages {
   Wget(str);
   HTML(str, fdesc);
@@ -5,7 +7,7 @@ Messages {
 
 Exchange(c) {
   Wget(url) {
-    f = call("wget.py", url);
+    f = call(WGET, url);
     send(c, HTML(url, f));
   }
 

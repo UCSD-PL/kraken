@@ -30,6 +30,9 @@ let coq_of_expr = function
   | NumLit i -> coq_of_num i
   | StrLit s -> coq_of_string s
 
+let coq_of_constant_decl (id, e) =
+  mkstr "Definition %s := %s." id (coq_of_expr e)
+
 let coq_of_msg_decl m =
   mkstr "| %s : %s" m.tag
     (m.payload
@@ -166,7 +169,7 @@ let coq_of_cmd tr fr = function
         c (coq_of_msg_expr m) tr (coq_of_frame fr')
   | Call (res, f, arg) ->
       mkstr "%s <- call %s %s\n(tr ~~~ %s)\n<@> %s;"
-        res (coq_of_string f) (coq_of_expr arg) tr (coq_of_frame fr)
+        res (coq_of_expr f) (coq_of_expr arg) tr (coq_of_frame fr)
 
 let coq_trace_of_cmd = function
   | Send (c, m) ->
@@ -174,7 +177,7 @@ let coq_trace_of_cmd = function
         c (coq_of_msg_expr m)
   | Call (res, f, arg) ->
       mkstr "Call_t %s %s %s ++ "
-        (coq_of_string f) (coq_of_expr arg) res
+        (coq_of_expr f) (coq_of_expr arg) res
 
 let coq_of_prog tr fr p =
   let rec loop code tr = function
@@ -255,6 +258,7 @@ let coq_of_handler xch_chan h =
     ]
 
 (* coq template has string holes for
+ *  0. constants
  *  1. declaring msg
  *  2. RecvMsg cases
  *  3. SendMsg cases
@@ -273,6 +277,9 @@ Require Import KrakenBase.
 Open Local Scope char_scope.
 Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
+
+(* constants *)
+%s
 
 Inductive msg : Set :=
 %s
@@ -381,6 +388,7 @@ let coq_of_kernel s =
   in
   let xch_chan, handlers = s.exchange in
   mkstr coq_template
+    (fmt s.constants coq_of_constant_decl)
     (fmt s.msg_decls coq_of_msg_decl)
     (fmt s.msg_decls (coq_trace_recv_msg m))
     (fmt s.msg_decls (coq_trace_send_msg m))

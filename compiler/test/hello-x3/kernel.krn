@@ -1,0 +1,11 @@
+Messages {
+  M(str, str);
+}
+
+Exchange(c) {
+  M(a, b) {
+    send(c, M("1", "a"));
+    send(c, M("2", "b"));
+    send(c, M("3", "c"));
+  }
+}

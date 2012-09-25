@@ -21,11 +21,11 @@ echo "Output written to $D"
 
 date > $D/timestamp.txt
 
-for t in $TEST/*.krn; do
-  NAME=$(basename $t .krn)
+for t in $TEST/*; do
+  NAME=$(basename $t)
   LOG=$D/$NAME-log
   printf "%-15s" $NAME
-  $KBIN/kraken.sh $t -o $D --build > $LOG 2>&1
+  $KBIN/kraken.sh $t --outdir $D --build > $LOG 2>&1
   if [ $? -eq 0 ]; then
     echo $PASS
   else

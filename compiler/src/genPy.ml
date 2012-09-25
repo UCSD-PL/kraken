@@ -91,23 +91,3 @@ let py_lib s =
   mkstr py_template
     (fmt s.msg_decls (py_recv_msg tm))
     (fmt s.msg_decls (py_send_msg tm))
-
-let py_test_template = "#!/usr/bin/env python
-
-import msg, time
-
-def main():
-  msg.init()
-  while True:
-    msg.send_msg('Wget', 'http://www.google.com')
-    m = msg.recv_msg()
-    print(m)
-    print(m[2].read())
-    m[2].close()
-    time.sleep(1)
-
-main()
-"
-
-let py_test s =
-  py_test_template

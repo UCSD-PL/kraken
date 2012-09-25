@@ -21,13 +21,17 @@ OUTDIR="."
 BUILD=false
 FORCE=false
 PRETTY=false
-INPUT=""
+INDIR=""
 
 function usage {
   echo "
-Usage: kraken.sh [options] input.krn
+Usage: kraken.sh [options] <input-dir>
 
 Generate Coq kernel and client libraries from a Kraken spec.
+
+<input-dir> should contain a Kraken spec 'kernel.krn' which will be used to
+generate the kernel. Any client scripts in <input-dir> will be copied into
+the client dir of the generated kernel.
 
 OPTIONS:
   -h, --help          print this usage information
@@ -61,28 +65,29 @@ while [ "$*" != "" ]; do
     -p | --pretty)
       PRETTY=true
       ;;
-    *.krn)
-      INPUT=$1
-      ;;
     *)
-      echo "Unrecognized option '$1'"
-      usage
+      INDIR=$1
       ;;
   esac
   shift
 done
 
-if [ ! -f "$INPUT" ]; then
-  error "cannot find input '$INPUT'"
+if [ ! -d "$INDIR" ]; then
+  error "cannot find input dir '$INDIR'"
 fi
-INPUT=$(canonpath "$INPUT")
+
+if [ ! -f "$INDIR/kernel.krn" ]; then
+  error "cannot find kernel spec '$INDIR/kernel.krn'"
+fi
 
 if [ ! -d "$OUTDIR" ]; then
   error "cannot generate output in '$OUTDIR'"
 fi
 
+INDIR=$(canonpath "$INDIR")
+
 # setup kernel tree dir
-D="$OUTDIR/$(basename $INPUT .krn)"
+D="$OUTDIR/$(basename $INDIR)"
 if [ -d "$D" ]; then
   if $FORCE; then
     if [ -f "$D/.kraken-generated" ]; then
@@ -94,13 +99,17 @@ if [ -d "$D" ]; then
     error "'$D' already exists. To overwrite use --force."
   fi
 fi
+
 D=$(canonpath "$D")
 
 # copy template to kernel tree
 cp -r "$KBASE" "$D"
 
+# copy client scripts over
+cp $INDIR/*.py $D/client/
+
 # generate code and proofs
-$KBIN/.kraken $INPUT \
+$KBIN/.kraken $INDIR/kernel.krn \
   --exchange "$D/coq/Exchange.v" \
   --lib "$D/client" \
 || error "Kraken compiler failed."
@@ -115,10 +124,6 @@ KROOT := "$D"
 sed "s;__KROOT__;$D;" \
   < "$KBASE/bin/kernel.sh" \
   > "$D/bin/kernel.sh"
-
-# make scripts executable
-chmod +x "$D/bin/kernel.sh"
-chmod +x "$D/client/test.py"
 
 if $PRETTY; then
   $KBIN/coq-prettify.sh "$D/coq/Exchange.v"

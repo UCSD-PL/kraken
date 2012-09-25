@@ -246,7 +246,11 @@ let coq_of_handler xch_chan h =
       (String.concat " " h.trigger.payload)
   in
   let fr =
-    [ mkstr "bound %s" xch_chan ]
+    [ mkstr "[In %s comps]" xch_chan
+    ; mkstr "bound %s" xch_chan
+    ; mkstr "all_bound_drop comps %s" xch_chan
+    ; "(tr ~~ [KTrace tr])"
+    ]
   in
   let code, tr =
     coq_of_prog tr fr h.respond
@@ -254,7 +258,7 @@ let coq_of_handler xch_chan h =
   String.concat "\n\n"
     [ coq_of_msg_pat h.trigger
     ; if code = "" then "        (* no code *)" else code
-    ; mkstr "{{ Return (tr ~~~ %s) }}\n" tr
+    ; mkstr "{{ Return (mkst comps (tr ~~~ %s)) }}" tr
     ]
 
 (* coq template has string holes for
@@ -357,27 +361,103 @@ Inductive AddedValidExchange : Trace -> Trace -> Prop :=
   ValidExchange tr2 ->
   AddedValidExchange tr1 (tr2 ++ tr1).
 
-Definition exchange :
-  forall (%s : chan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (tr' : [Trace]) => tr' ~~ tr ~~ traced tr' * [AddedValidExchange tr tr'] * bound c).
+Inductive KTrace : Trace -> Prop :=
+| KT_init :
+  forall c,
+  KTrace (Exec (\"t\" :: \"e\" :: \"s\" :: \"t\" :: \".\" :: \"p\" :: \"y\" :: nil) c :: nil)
+| KT_select :
+  forall tr cs c,
+  KTrace tr ->
+  KTrace (Select cs c :: tr)
+| KT_exchange :
+  forall tr1 tr2,
+  KTrace tr1 ->
+  AddedValidExchange tr1 tr2 ->
+  KTrace tr2.
+
+Fixpoint all_bound (cs : list chan) : hprop :=
+  match cs with
+    | nil => emp
+    | c :: cs' => bound c * all_bound cs'
+  end.
+
+(* all cs bound except _first_ occurrence of drop *)
+Fixpoint all_bound_drop (cs : list chan) (drop : chan) : hprop :=
+  match cs with
+    | nil => emp
+    | c :: cs' =>
+      if chan_eq c drop then
+        all_bound cs'
+      else
+        bound c * all_bound_drop cs' drop
+  end.
+
+Lemma unpack_all_bound :
+  forall cs c,
+  In c cs ->
+  all_bound cs ==> bound c * all_bound_drop cs c.
 Proof.
-  intros; refine (
-    req <- recv_msg c tr;
+  induction cs; simpl; intros. contradiction.
+  destruct H; subst. rewrite chan_eq_true. apply himp_refl.
+  case (chan_eq a c); intros; subst. apply himp_refl.
+  apply himp_comm_conc. apply himp_assoc_conc1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_conc; auto.
+Qed.
+
+Lemma repack_all_bound :
+  forall cs c,
+  In c cs ->
+  bound c * all_bound_drop cs c ==> all_bound cs.
+Proof.
+  induction cs; simpl; intros. contradiction.
+  destruct H; subst. rewrite chan_eq_true. apply himp_refl.
+  case (chan_eq a c); intros; subst. apply himp_refl.
+  apply himp_comm_prem. apply himp_assoc_prem1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_prem; auto.
+Qed.
+
+Definition kstate_inv s : hprop :=
+  tr :~~ ktr s in
+  traced tr * [KTrace tr] * all_bound (components s).
+
+Ltac unfoldr := unfold kstate_inv.
+
+Ltac simplr_fail :=
+  match goal with
+  | [ |- all_bound ?comps ==> bound ?c * all_bound_drop ?comps ?c ] =>
+    apply unpack_all_bound
+  | [ |- bound ?c * all_bound_drop ?comps ?c ==> all_bound ?comps ] =>
+    apply repack_all_bound
+  | [ |- bound ?c * all_bound_drop ?comps ?c ==> all_bound ?comps * _ ] =>
+    apply himp_comm_conc; apply himp_prop_conc
+  | [ _: KTrace ?x |- KTrace (_ ++ ?x) ] => econstructor; [eauto|]
+  | [ _: KTrace ?x |- KTrace ?t ] =>
+    match t with context [x] => repeat (rewrite app_assoc) end
+  | [ |- AddedValidExchange _ _ ] => constructor
+  | [ |- ValidExchange ((_ ++ _) ++ _) ] => repeat (rewrite <- app_assoc)
+  | [ |- ValidExchange _ ] => constructor
+  end.
+
+Ltac simplr := try simplr_fail; auto.
+
+Definition exchange :
+  forall (%s : chan) (kst : kstate),
+  STsep (kstate_inv kst * [In c (components kst)])
+        (fun (kst' : kstate) => kstate_inv kst').
+Proof.
+  intros ? [comps tr]; refine (
+    req <- recv_msg c tr <@> [In c comps] * all_bound_drop comps c * (tr ~~
+    [KTrace tr]);
     match req with
 %s
       (* special case for errors *)
       | BadTag tag =>
-        {{ Return (tr ~~~ RecvMsg c (BadTag tag) ++ tr) }}
+        {{ Return (mkst comps (tr ~~~ RecvMsg c (BadTag tag) ++ tr)) }}
     end
-
   );
-  sep fail auto;
-    apply himp_pure';
-    repeat rewrite -> app_assoc;
-    constructor; auto;
-    repeat rewrite <- app_assoc;
-    constructor; auto.
+  sep unfoldr simplr.
 Qed.
 "
 

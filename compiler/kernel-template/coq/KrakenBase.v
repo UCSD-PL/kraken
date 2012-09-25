@@ -196,3 +196,8 @@ Definition SendFD_t (c : chan) (f : fdesc) : Trace :=
 
 (* prevent sep tactic from unfolding *)
 Global Opaque RecvStr SendStr Call_t RecvFD_t SendFD_t.
+
+Record kstate : Set :=
+  mkst { components : list chan
+       ; ktr : [Trace]
+       }.

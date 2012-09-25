@@ -111,15 +111,15 @@ let coq_recv_msg tag_map m =
       |> String.concat "\n\n"
   in
   let ret =
-    mkstr "{{ Return (%s %s) }}" m.tag (str_of_args m)
+    mkstr "{{ Return (%s %s) }}\n" m.tag (str_of_args m)
   in
-  String.concat "\n" [hdr; pay; ret]
+  String.concat "\n\n" [hdr; pay; ret]
 
 (* send msg on bound chan "c" *)
 (* WARNING copy/paste of coq_recv_msg *)
 let coq_send_msg tag_map m =
   let hdr =
-    String.concat "\n"
+    String.concat "\n\n"
       [ mkstr "| %s %s =>" m.tag (str_of_args m)
       ; mkstr "send_num c (Num \"%03d\") tr;;" (List.assoc m.tag tag_map)
       ]
@@ -143,9 +143,9 @@ let coq_send_msg tag_map m =
       |> String.concat "\n\n"
   in
   let ret =
-    "{{ Return tt }}"
+    "{{ Return tt }}\n"
   in
-  String.concat "\n" [hdr; pay; ret]
+  String.concat "\n\n" [hdr; pay; ret]
 
 let coq_of_msg_expr m =
   mkstr "(%s %s)" m.tag
@@ -220,7 +220,7 @@ let coq_spec_of_handler xch_chan h =
   in
   let bdy =
     if h.respond = Nop then
-      "(* no response *)"
+      "      (* no response *)"
     else
       h.respond
         |> coq_trace_of_prog
@@ -250,8 +250,8 @@ let coq_of_handler xch_chan h =
   in
   String.concat "\n\n"
     [ coq_of_msg_pat h.trigger
-    ; code
-    ; mkstr "{{ Return (tr ~~~ %s) }}" tr
+    ; if code = "" then "        (* no code *)" else code
+    ; mkstr "{{ Return (tr ~~~ %s) }}\n" tr
     ]
 
 (* coq template has string holes for

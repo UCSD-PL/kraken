@@ -4,6 +4,7 @@ Require Import Ynot.
 Require Import KrakenBase.
 Require Import Exchange.
 
+Open Local Scope char_scope.
 Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
 
@@ -14,7 +15,8 @@ Record kstate : Set :=
 
 Inductive KTrace : Trace -> Prop :=
 | KT_init :
-  KTrace nil
+  forall c,
+  KTrace (Exec ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) c :: nil)
 | KT_select :
   forall tr cs c,
   KTrace tr ->
@@ -113,18 +115,36 @@ Proof.
   sep fail auto.
 Qed.
 
-Axiom dummy : chan.
+Definition kinit :
+  forall (_ : unit),
+  STsep (traced nil)
+        (fun s => kstate_inv s).
+Proof.
+  intros; refine (
+
+    c <- exec ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil)
+    (inhabits nil);
+
+    {{ Return (mkst (c :: nil) (inhabits (Exec ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) c :: nil))) }}
+
+  );
+  sep fail auto.
+  unfold kstate_inv.
+  sep fail auto.
+  apply himp_pure'.
+  constructor; auto.
+Qed.
 
 Definition main:
   forall (_ : unit),
-  STsep (traced nil * bound dummy)
+  STsep (traced nil)
         (fun s' => kstate_inv s').
 Proof.
   intros; refine (
-    s' <- kloop (mkst (dummy :: nil) [nil]);
-    {{ Return s' }}
+    s0 <- kinit tt;
+    sN <- kloop s0;
+    {{ Return sN }}
   );
   unfold kstate_inv;
   sep fail auto.
-  apply himp_pure'; constructor; auto.
 Qed.

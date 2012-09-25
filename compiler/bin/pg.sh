@@ -12,7 +12,7 @@ if [ ! -f $KRAKEN/.kraken-root ]; then
   error "\$KRAKEN must point to root of Kraken repository."
 fi
 
-YNOT=$COMPILER/ynot/src/coq
+YNOT=$KRAKEN/compiler/ynot/src/coq
 
 if [ "$(uname)" = "Darwin" ]; then
   EMACS="open -a /Applications/Emacs.app --args"

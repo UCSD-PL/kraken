@@ -70,7 +70,7 @@ Axiom bound : chan -> hprop.
 Axiom exec :
   forall (prog : str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
-        (fun (c : chan) => tr ~~ traced (Exec prog c :: tr)).
+        (fun (c : chan) => tr ~~ bound c * traced (Exec prog c :: tr)).
 
 Axiom call :
   forall (prog arg : str) (tr : [Trace]),

@@ -15,7 +15,7 @@ all:
 	mkdir -p ../bin
 	cp primitives/* .
 	$(OCAMLBUILD) $(FLAGS) Main.byte
-	$(SLINK) $(CURDIR)/_build/Main.byte ../bin/Main
+	$(SLINK) $(CURDIR)/_build/Main.byte ../bin/.Main
   
 clean:
 	mkdir -p ../bin

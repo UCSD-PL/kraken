@@ -1,0 +1,12 @@
+TEST = "test.py";
+
+Messages {
+  M(str);
+}
+
+Exchange(c) {
+  M(y) {
+    send(c, M("HELLO"));
+    spawn(TEST);
+  }
+}

@@ -31,6 +31,7 @@ type msg_decl = typ msg
 type msg_expr = expr msg
 
 type cmd =
+  | Spawn of expr
   | Send of chan * msg_expr
   | Call of id * expr * expr
 

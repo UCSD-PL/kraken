@@ -8,6 +8,8 @@
 
 >>> Dependencies
 
-You need Coq 8.3, OCaml, a C compiler, and Python. Makefile.config points
-to typical values for these; you may need to update it if your installation
-is different.
+You need Coq 8.3, OCaml, a C compiler, and Python 2.7. Makefile.config
+points to typical values for these; you may need to update it if your
+installation is different.
+
+Python 3.X will not work.

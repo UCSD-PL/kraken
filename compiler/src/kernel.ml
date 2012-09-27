@@ -31,9 +31,9 @@ type msg_decl = typ msg
 type msg_expr = expr msg
 
 type cmd =
-  | Spawn of expr
   | Send of chan * msg_expr
   | Call of id * expr * expr
+  | Spawn of id * expr
 
 type prog =
   | Nop
@@ -52,12 +52,14 @@ let mk_handler t r =
 type kernel =
   { constants : (id * expr) list
   ; msg_decls : msg_decl list
+  ; init : prog
   ; exchange : chan * handler list
   }
 
-let mk_kernel cs ms xch =
+let mk_kernel cs ms i xch =
   { constants = cs
   ; msg_decls = ms
+  ; init = i
   ; exchange = xch
   }
 

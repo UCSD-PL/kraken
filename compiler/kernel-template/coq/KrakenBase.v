@@ -185,6 +185,9 @@ Qed.
 
 (* trace versions of basic actions so we can always use app (++) *)
 
+Definition Exec_t (prog : str) (c : chan) : Trace :=
+  Exec prog c :: nil.
+
 Definition Call_t (prog arg : str) (f : fdesc) : Trace :=
   Call prog arg f :: nil.
 
@@ -195,7 +198,7 @@ Definition SendFD_t (c : chan) (f : fdesc) : Trace :=
   SendFD c f :: nil.
 
 (* prevent sep tactic from unfolding *)
-Global Opaque RecvStr SendStr Call_t RecvFD_t SendFD_t.
+Global Opaque RecvStr SendStr Exec_t Call_t RecvFD_t SendFD_t.
 
 Record kstate : Set :=
   mkst { components : list chan

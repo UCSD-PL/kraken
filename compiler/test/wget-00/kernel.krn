@@ -5,6 +5,10 @@ Messages {
   HTML(str, fdesc);
 }
 
+Init {
+
+}
+
 Exchange(c) {
   Wget(url) {
     f = call(WGET, url);

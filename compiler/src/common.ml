@@ -1,7 +1,7 @@
 let (|>) x f = f x
 
 let tick = ref 0
-let tock = incr tick; !tick
+let tock () = incr tick; !tick
 
 let print = Printf.printf
 let mkstr = Printf.sprintf

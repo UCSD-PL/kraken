@@ -21,6 +21,7 @@ OUTDIR="."
 BUILD=false
 FORCE=false
 PRETTY=false
+DEBUG=false
 INDIR=""
 
 function usage {
@@ -39,6 +40,7 @@ OPTIONS:
   -b, --build         build generated kernel
   -f, --force         overwrite existing output
   -p, --pretty        prettify generated Coq code (requires ProofGeneral)
+  -d, --debug         trace script and start Kraken in debugger
 "
   exit 1
 }
@@ -65,12 +67,20 @@ while [ "$*" != "" ]; do
     -p | --pretty)
       PRETTY=true
       ;;
+    -d | --debug)
+      DEBUG=true
+      ;;
     *)
       INDIR=$1
       ;;
   esac
   shift
 done
+
+if $DEBUG; then
+  # echo commands as we run them
+  set -x
+fi
 
 if [ ! -d "$INDIR" ]; then
   error "cannot find input dir '$INDIR'"
@@ -109,10 +119,14 @@ cp -r "$KBASE" "$D"
 cp $INDIR/*.py $D/client/
 
 # generate code and proofs
-$KBIN/.kraken $INDIR/kernel.krn \
+EXEC="$KBIN/.kraken"
+if $DEBUG; then
+  EXEC="ocamldebug -I $KRAKEN/compiler/src/_build $EXEC"
+fi
+$EXEC $INDIR/kernel.krn \
   --exchange "$D/coq/Exchange.v" \
   --lib "$D/client" \
-|| error "Kraken compiler failed."
+  || error "Kraken compiler failed."
 
 # tell Makefile where it lives
 echo "

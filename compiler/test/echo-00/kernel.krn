@@ -4,9 +4,9 @@ Messages {
   M(str);
 }
 
-# Init {
-#  spawn(TEST);
-# }
+Init {
+  spawn(TEST);
+}
 
 Exchange(c) {
   M(y) {

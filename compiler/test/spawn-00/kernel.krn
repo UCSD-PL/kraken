@@ -4,6 +4,10 @@ Messages {
   M(str);
 }
 
+Init {
+
+}
+
 Exchange(c) {
   M(y) {
     send(c, M("HELLO"));

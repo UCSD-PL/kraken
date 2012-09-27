@@ -162,37 +162,59 @@ let coq_of_frame fr =
      |> String.concat ""
      |> mkstr "%semp"
 
-let coq_of_cmd tr fr = function
-  | Send (c, m) ->
-      let fr' = remove (mkstr "bound %s" c) fr in
-      mkstr "send_msg %s %s\n(tr ~~~ %s)\n<@> %s;;"
-        c (coq_of_msg_expr m) tr (coq_of_frame fr')
-  | Call (res, f, arg) ->
-      mkstr "%s <- call %s %s\n(tr ~~~ %s)\n<@> %s;"
-        res (coq_of_expr f) (coq_of_expr arg) tr (coq_of_frame fr)
+type prog_acc =
+  { code  : string
+  ; trace : string
+  ; frame : string list
+  ; comps : string list
+  }
 
-let coq_trace_of_cmd = function
-  | Send (c, m) ->
-      mkstr "SendMsg %s %s ++ "
-        c (coq_of_msg_expr m)
-  | Call (res, f, arg) ->
-      mkstr "Call_t %s %s %s ++ "
-        (coq_of_expr f) (coq_of_expr arg) res
+let fresh_chan_id () =
+  mkstr "c%d" (tock ())
 
-let coq_of_prog tr fr p =
-  let rec loop code tr = function
-    | Nop ->
-        (String.concat "\n\n" (List.rev code), tr)
-    | Seq (c, p') ->
-        let cd' = coq_of_cmd tr fr c :: code in
-        let tr' = coq_trace_of_cmd c ^ tr in
-        loop cd' tr' p'
+let coq_of_cmd pacc = function
+  | Send (c, m) ->
+      { pacc with code = pacc.code ^ "\n\n" ^
+          (let fr' = remove (mkstr "bound %s" c) pacc.frame in
+          mkstr "send_msg %s %s\n(tr ~~~ %s)\n<@> %s;;"
+            c (coq_of_msg_expr m)
+            pacc.trace (coq_of_frame fr'))
+      ; trace =
+          mkstr "SendMsg %s %s ++ %s"
+            c (coq_of_msg_expr m) pacc.trace
+      }
+  | Call (res, f, arg) ->
+      { pacc with code = pacc.code ^ "\n\n" ^
+          mkstr "%s <- call %s %s\n(tr ~~~ %s)\n<@> %s;"
+            res (coq_of_expr f) (coq_of_expr arg)
+            pacc.trace (coq_of_frame pacc.frame)
+      ; trace =
+          mkstr "Call_t %s %s %s ++ %s"
+            (coq_of_expr f) (coq_of_expr arg) res pacc.trace
+      }
+  | Spawn (res, path) ->
+      { code = pacc.code ^ "\n\n" ^
+          mkstr "%s <- exec %s\n(tr ~~~ %s)\n<@> %s;"
+            res (coq_of_expr path)
+            pacc.trace (coq_of_frame pacc.frame)
+      ; trace =
+          mkstr "Exec_t %s %s ++ %s"
+            (coq_of_expr path) res pacc.trace
+      ; frame =
+          mkstr "bound %s" res :: pacc.frame
+      ; comps =
+          res :: pacc.comps
+      }
+
+let coq_of_prog tr0 fr0 p =
+  let rec loop pacc = function
+    | Nop -> pacc
+    | Seq (c, p') -> loop (coq_of_cmd pacc c) p'
   in
-  loop [] tr p
+  loop {code = ""; trace = tr0; frame = fr0; comps = []} p
 
-let rec coq_trace_of_prog = function
-  | Nop -> []
-  | Seq (c, p') -> coq_trace_of_cmd c :: coq_trace_of_prog p'
+let coq_trace_of_prog fr p =
+  (coq_of_prog "" fr p).trace
 
 let expr_vars = function
   | Var id -> [id]
@@ -203,6 +225,8 @@ let cmd_vars = function
       c :: List.flatten (List.map expr_vars m.payload)
   | Call (var, func, arg) ->
       var :: expr_vars arg
+  | Spawn (res, path) ->
+      [res]
 
 let rec prog_vars = function
   | Nop -> []
@@ -225,10 +249,8 @@ let coq_spec_of_handler xch_chan h =
     if h.respond = Nop then
       "      (* no response *)"
     else
-      h.respond
-        |> coq_trace_of_prog
-        |> List.rev
-        |> String.concat "\n"
+      let fr = [ mkstr "bound %s" xch_chan ] in
+      coq_trace_of_prog fr h.respond
   in
   let ftr =
     mkstr "RecvMsg %s (%s %s))"
@@ -252,13 +274,16 @@ let coq_of_handler xch_chan h =
     ; "(tr ~~ [KTrace tr])"
     ]
   in
-  let code, tr =
-    coq_of_prog tr fr h.respond
-  in
+  let pacc = coq_of_prog tr fr h.respond in
   String.concat "\n\n"
     [ coq_of_msg_pat h.trigger
-    ; if code = "" then "        (* no code *)" else code
-    ; mkstr "{{ Return (mkst comps (tr ~~~ %s)) }}" tr
+    ; if pacc.code = "" then
+        "        (* no code *)"
+      else
+        pacc.code
+    ; mkstr "{{ Return (mkst (%scomps) (tr ~~~ %s)) }}"
+        (pacc.comps |> List.map (mkstr "%s :: ") |> String.concat "")
+        pacc.trace
     ]
 
 (* coq template has string holes for
@@ -432,6 +457,8 @@ Ltac simplr_fail :=
     apply repack_all_bound
   | [ |- bound ?c * all_bound_drop ?comps ?c ==> all_bound ?comps * _ ] =>
     apply himp_comm_conc; apply himp_prop_conc
+  | [ |- all_bound_drop ?comps ?c * bound ?c ==> all_bound ?comps ] =>
+    apply himp_comm_prem
   | [ _: KTrace ?x |- KTrace (_ ++ ?x) ] => econstructor; [eauto|]
   | [ _: KTrace ?x |- KTrace ?t ] =>
     match t with context [x] => repeat (rewrite app_assoc) end

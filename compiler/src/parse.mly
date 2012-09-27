@@ -8,7 +8,7 @@
   (* NOTE to get commas right, we special case empty arg lists *)
 %}
 
-%token MESSAGES EXCHANGE NUM STR FDESC CALL SEND
+%token MESSAGES INIT EXCHANGE NUM STR FDESC CALL SEND SPAWN
 %token EQ LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF
 
@@ -24,9 +24,10 @@
 kernel :
   | constants
     MESSAGES LCURL msg_decls RCURL 
+    INIT LCURL prog RCURL
     EXCHANGE LPAREN ID RPAREN LCURL handlers RCURL
     EOF
-    { mk_kernel $1 $4 ($8, $11) }
+    { mk_kernel $1 $4 $8 ($12, $15) }
 ;;
 
 constants :
@@ -51,15 +52,17 @@ handler :
 prog :
   | /* empty */
     { Nop }
-  | cmd prog
-    { Seq ($1, $2) }
+  | cmd SEMI prog
+    { Seq ($1, $3) }
 ;;
 
 cmd :
-  | ID EQ CALL LPAREN expr COMMA expr RPAREN SEMI
+  | ID EQ CALL LPAREN expr COMMA expr RPAREN
     { Call ($1, $5, $7) }
-  | SEND LPAREN ID COMMA msg_expr RPAREN SEMI
+  | SEND LPAREN ID COMMA msg_expr RPAREN
     { Send ($3, $5) }
+  | SPAWN LPAREN expr RPAREN
+    { Spawn (mkstr "c%d" (tock ()), $3) }
 ;;
 
 msg_expr :

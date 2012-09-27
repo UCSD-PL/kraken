@@ -16,12 +16,14 @@ let line = '\n'
 
 rule token = parse
   | "Messages" { MESSAGES }
+  | "Init" { INIT }
   | "Exchange" { EXCHANGE }
   | "num" { NUM }
   | "str" { STR }
   | "fdesc" { FDESC }
   | "call" { CALL }
   | "send" { SEND }
+  | "spawn" { SPAWN }
   | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }

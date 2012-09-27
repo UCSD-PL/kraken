@@ -3,6 +3,10 @@ Messages {
   M2(str);
 }
 
+Init {
+
+}
+
 Exchange(c) {
   M1(y) {
     send(c, M1(y));

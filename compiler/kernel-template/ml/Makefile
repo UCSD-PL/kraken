@@ -19,6 +19,6 @@ all:
   
 clean:
 	mkdir -p ../bin
-	$(BUILD) $(FLAGS) -clean
+	$(OCAMLBUILD) $(FLAGS) -clean
 
 .PHONY: all clean

@@ -16,7 +16,7 @@ PASS=$'\033[1;32mPASS\033[0m'
 FAIL=$'\033[1;31mFAIL\033[0m'
 
 D=$(mktemp -d /tmp/kraken-test-XXXXXX)
-rm -r    /tmp/kraken-last-test
+rm -f    /tmp/kraken-last-test
 ln -s $D /tmp/kraken-last-test
 
 echo "Output written to $D (symlinked /tmp/kraken-last-test)"

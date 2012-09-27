@@ -260,6 +260,17 @@ let coq_spec_of_handler xch_chan h =
   in
   String.concat "\n" [hdr; bdy; ftr]
 
+let coq_of_init init =
+  let cp = coq_of_prog "nil" [""] init in
+  String.concat "\n\n"
+  [ if cp.code = ""
+    then "        (* no code *)"
+    else cp.code
+  ; mkstr "{{ Return (mkst (%snil) (inhabits %s)) }}"
+      (cp.comps |> List.map (mkstr "%s :: ") |> String.concat "")
+      cp.trace
+  ]
+
 let coq_of_handler xch_chan h =
   let tr =
     mkstr "RecvMsg %s (%s %s) ++ tr"
@@ -388,8 +399,7 @@ Inductive AddedValidExchange : Trace -> Trace -> Prop :=
 
 Inductive KTrace : Trace -> Prop :=
 | KT_init :
-  forall c,
-  KTrace (Exec (\"t\" :: \"e\" :: \"s\" :: \"t\" :: \".\" :: \"p\" :: \"y\" :: nil) c :: nil)
+  KTrace (%s)
 | KT_select :
   forall tr cs c,
   KTrace tr ->
@@ -399,6 +409,8 @@ Inductive KTrace : Trace -> Prop :=
   KTrace tr1 ->
   AddedValidExchange tr1 tr2 ->
   KTrace tr2.
+
+Hint Constructors KTrace.
 
 Fixpoint all_bound (cs : list chan) : hprop :=
   match cs with
@@ -469,6 +481,17 @@ Ltac simplr_fail :=
 
 Ltac simplr := try simplr_fail; auto.
 
+Definition kinit :
+  forall (_ : unit),
+  STsep (traced nil)
+        (fun s => kstate_inv s).
+Proof.
+  intros; refine (
+    %s
+  );
+  sep unfoldr simplr.
+Qed.
+
 Definition exchange :
   forall (%s : chan) (kst : kstate),
   STsep (kstate_inv kst * [In c (components kst)])
@@ -502,5 +525,7 @@ let coq_of_kernel s =
     (fmt s.msg_decls (coq_recv_msg m))
     (fmt s.msg_decls (coq_send_msg m))
     (fmt handlers (coq_spec_of_handler xch_chan))
+    "nil"
+    (coq_of_init s.init) (* kinit *)
     xch_chan
     (fmt handlers (coq_of_handler xch_chan))

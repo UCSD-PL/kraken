@@ -50,26 +50,6 @@ Proof.
   sep fail auto.
 Qed.
 
-Definition kinit :
-  forall (_ : unit),
-  STsep (traced nil)
-        (fun s => kstate_inv s).
-Proof.
-  intros; refine (
-
-    c <- exec ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil)
-    (inhabits nil);
-
-    {{ Return (mkst (c :: nil) (inhabits (Exec ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) c :: nil))) }}
-
-  );
-  sep fail auto.
-  unfold kstate_inv.
-  sep fail auto.
-  apply himp_pure'.
-  constructor; auto.
-Qed.
-
 Definition main:
   forall (_ : unit),
   STsep (traced nil)

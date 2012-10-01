@@ -261,12 +261,13 @@ let coq_spec_of_handler xch_chan h =
   String.concat "\n" [hdr; bdy; ftr]
 
 let coq_of_init init =
-  let cp = coq_of_prog "nil" [""] init in
+  let cp = coq_of_prog "tr" [] init in
   String.concat "\n\n"
-  [ if cp.code = ""
+  [ "let tr := inhabits nil in"
+  ; if cp.code = ""
     then "        (* no code *)"
     else cp.code
-  ; mkstr "{{ Return (mkst (%snil) (inhabits %s)) }}"
+  ; mkstr "{{ Return (mkst (%snil) (tr ~~~ %s)) }}"
       (cp.comps |> List.map (mkstr "%s :: ") |> String.concat "")
       cp.trace
   ]
@@ -399,7 +400,7 @@ Inductive AddedValidExchange : Trace -> Trace -> Prop :=
 
 Inductive KTrace : Trace -> Prop :=
 | KT_init :
-  KTrace (%s)
+  %s
 | KT_select :
   forall tr cs c,
   KTrace tr ->
@@ -525,7 +526,15 @@ let coq_of_kernel s =
     (fmt s.msg_decls (coq_recv_msg m))
     (fmt s.msg_decls (coq_send_msg m))
     (fmt handlers (coq_spec_of_handler xch_chan))
-    "nil"
+    (
+      let t = coq_trace_of_prog [] s.init in
+      let v = prog_vars s.init in
+      match v with
+      | [] -> mkstr "KTrace (%snil)" t
+      | _  ->
+        mkstr "forall %s, KTrace (%snil)"
+          (String.concat " " v) t
+    )
     (coq_of_init s.init) (* kinit *)
     xch_chan
     (fmt handlers (coq_of_handler xch_chan))

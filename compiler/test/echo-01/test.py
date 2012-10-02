@@ -5,12 +5,12 @@ import msg, time
 def main():
   msg.init()
   while True:
-    msg.send_msg('M1', 42)
-    m = msg.recv_msg()
+    msg.send('M1', 42)
+    m = msg.recv()
     print(m)
     time.sleep(1)
-    msg.send_msg('M2', 'Hello world!')
-    m = msg.recv_msg()
+    msg.send('M2', 'Hello world!')
+    m = msg.recv()
     print(m)
     time.sleep(1)
 

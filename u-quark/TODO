@@ -1,0 +1,4 @@
+Build very simple version of Quark using Kraken.
+
+GOAL: figure out how trace specifications look in Kraken and if we can
+automate their proofs.

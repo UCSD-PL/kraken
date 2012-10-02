@@ -1,9 +1,10 @@
 Globals {
-  cur_tab : nat;
+  cur_tab : num;
 }
 
 Messages {
-  Nat(nat);
+  ReqCurTab();
+  CurTab(num);
 }
 
 Init {
@@ -11,8 +12,12 @@ Init {
 }
 
 Exchange(c) {
-  M() {
+  ReqCurTab() {
     cur_tab := cur_tab + 1;
-    send(c, Nat(cur_tab));
+    send(c, CurTab(cur_tab));
+  }
+
+  # ignore
+  CurTab(n) {
   }
 }

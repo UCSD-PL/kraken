@@ -1,0 +1,18 @@
+Globals {
+  cur_tab : nat;
+}
+
+Messages {
+  Nat(nat);
+}
+
+Init {
+  cur_tab := 0;
+}
+
+Exchange(c) {
+  M() {
+    cur_tab := cur_tab + 1;
+    send(c, Nat(cur_tab));
+  }
+}

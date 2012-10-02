@@ -5,8 +5,8 @@ import msg, time
 def main():
   msg.init()
   while True:
-    msg.send_msg('Wget', 'http://www.google.com')
-    m = msg.recv_msg()
+    msg.send('Wget', 'http://www.google.com')
+    m = msg.recv()
     print(m)
     print(m[2].read())
     m[2].close()

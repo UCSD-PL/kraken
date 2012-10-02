@@ -4,8 +4,8 @@ import msg, os, time
 
 def main():
   msg.init()
-  msg.send_msg('M', 'Hello world!')
-  m = msg.recv_msg()
+  msg.send('M', 'Hello world!')
+  m = msg.recv()
   print('%d : %s' % (os.getpid(), str(m)))
   time.sleep(1)
 

@@ -118,8 +118,8 @@ msg_decl :
 ;;
 
 var_decls :
-  | var_decl
-    { $1 :: [] }
+  | /* empty */
+    { [] }
   | var_decl var_decls
     { $1 :: $2 }
 ;;

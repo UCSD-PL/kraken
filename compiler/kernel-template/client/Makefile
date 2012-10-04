@@ -1,6 +1,6 @@
 include ../Makefile.config
 
-all: passfd
+all: passfd msg.o
 
 passfd:
 	tar xzf python-passfd-0.2.tar.gz
@@ -8,6 +8,9 @@ passfd:
 		&& patch < ../passfd-2.7.patch \
 		&& ./setup.py build --verbose \
 		&& ./setup.py install --verbose --prefix "$(KROOT)"
+
+%.o: %.c
+	$(CC) -c $*.c
 
 clean:
 	# only removes temporary build files, not installed passfd

@@ -152,7 +152,7 @@ mk_str_param(char *s, param *next) {
 
   p = alloc_param();
   p->ptyp = PTYP_STR;
-  p->pval.str = s;
+  p->pval.str = strdup(s);
   p->next = next;
   return p;
 }
@@ -210,6 +210,12 @@ free_msg(msg *m) {
   free(m);
 }
 
+char *
+string_of_msg(msg *m) {
+  // TODO
+  return strdup(\"MSG\");
+}
+
 // recv/send raw values
 
 uint32_t
@@ -218,11 +224,12 @@ recv_num(void) {
   char *buf;
   int n;
 
+  x = 0; // only some bytes of x get set, make rest 0
   buf = ((char *)&x) + sizeof(x) - NUM_SIZE;
   n = recv(KCHAN, buf, NUM_SIZE, 0);
   assert(n == NUM_SIZE);
   // convert to host endian
-  x = nltoh(x);
+  x = ntohl(x);
   return x;
 }
 

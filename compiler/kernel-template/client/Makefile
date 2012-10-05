@@ -1,6 +1,12 @@
 include ../Makefile.config
 
-all: passfd msg.o
+ifeq "$(wildcard Makefile.client)" ""
+client: # no client Makefile
+else
+include Makefile.client
+endif
+
+all: passfd msg.o client
 
 passfd:
 	tar xzf python-passfd-0.2.tar.gz

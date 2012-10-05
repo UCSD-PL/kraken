@@ -210,10 +210,61 @@ free_msg(msg *m) {
   free(m);
 }
 
+// TODO
+char *
+string_of_mtyp(int mtyp) {
+  return strdup(\"MTYP\");
+}
+
+char *
+string_of_params(param *p) {
+  char *s, *h, *t;
+  int n;
+
+  if(p == NULL) {
+    return strdup(\"\");
+  }
+  switch(p->ptyp) {
+    case PTYP_NUM:
+      n = asprintf(&h, \"%%d\", p->pval.num);
+      assert(n > 0);
+      break;
+    case PTYP_STR:
+      n = asprintf(&h, \"\\\"%%s\\\"\", p->pval.str);
+      assert(n > 0);
+      break;
+    case PTYP_FD:
+      n = asprintf(&h, \"fd(%%d)\", p->pval.fd);
+      assert(n > 0);
+      break;
+    default:
+      assert(FALSE);
+      break;
+  }
+  if(p->next == NULL) {
+    s = h;
+  } else {
+    t = string_of_params(p->next);
+    n = asprintf(&s, \"%%s, %%s\", h, t);
+    assert(n > 0);
+    free(t);
+    free(h);
+  }
+  return s;
+}
+
 char *
 string_of_msg(msg *m) {
-  // TODO
-  return strdup(\"MSG\");
+  char *s, *ms, *ps;
+  int n;
+
+  ms = string_of_mtyp(m->mtyp);
+  ps = string_of_params(m->payload);
+  n = asprintf(&s, \"%%s(%%s)\", ms, ps);
+  assert(n > 0);
+  free(ps);
+  free(ms);
+  return s;
 }
 
 // recv/send raw values

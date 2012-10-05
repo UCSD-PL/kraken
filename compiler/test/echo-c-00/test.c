@@ -5,6 +5,7 @@
 int
 main(int argc, char **argv) {
   msg *m;
+  char *s;
   
   msg_init(argv[1]);
   while(1) {
@@ -13,8 +14,9 @@ main(int argc, char **argv) {
     free_msg(m);
 
     m = recv_msg();
-    // TODO handle mem leak from string_of_msg
-    printf("%s\n", string_of_msg(m));
+    s = string_of_msg(m);
+    printf("%s\n", s);
+    free(s);
     free_msg(m);
 
     sleep(1);

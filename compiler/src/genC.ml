@@ -5,6 +5,12 @@ let c_mtyp tag_map m =
   mkstr "  MTYP_%s = %d,"
     m.tag (List.assoc m.tag tag_map)
 
+let c_mtyp_str m =
+  String.concat "\n"
+    [ mkstr "    case MTYP_%s:" m.tag
+    ; mkstr "      return strdup(\"%s\");" m.tag
+    ]
+
 let c_typ = function
   | Num -> "uint32_t"
   | Str -> "char *"
@@ -58,10 +64,12 @@ let c_recv_msg m =
 (* c msg lib template has string holes for
  *  1. mtyp enum cases
  *  2. ctor for each msg type
- *  3. recv cases
+ *  3. mtyp string cases
+ *  4. recv cases
  *)
 let c_template = format_of_string "
 #include <stdlib.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
 #include <arpa/inet.h>
@@ -210,10 +218,40 @@ free_msg(msg *m) {
   free(m);
 }
 
-// TODO
+param *
+get_param(msg *m, int i) {
+  param *it;
+
+  it = m->payload;
+  while(i > 0) {
+    assert(it != NULL);
+    it = it->next;
+    i--;
+  }
+  return it;
+}
+
+char *
+zsprintf(const char *fmt, ...) {
+  va_list args;
+  char *s;
+  int n;
+
+  va_start(args, fmt);
+  n = vasprintf(&s, fmt, args);
+  va_end(args);
+  assert(n >= 0);
+  return s;
+}
+
 char *
 string_of_mtyp(int mtyp) {
-  return strdup(\"MTYP\");
+  switch(mtyp) {
+%s
+    default:
+      assert(FALSE);
+      break;
+  }
 }
 
 char *
@@ -226,16 +264,13 @@ string_of_params(param *p) {
   }
   switch(p->ptyp) {
     case PTYP_NUM:
-      n = asprintf(&h, \"%%d\", p->pval.num);
-      assert(n > 0);
+      h = zsprintf(\"%%d\", p->pval.num);
       break;
     case PTYP_STR:
-      n = asprintf(&h, \"\\\"%%s\\\"\", p->pval.str);
-      assert(n > 0);
+      h = zsprintf(\"\\\"%%s\\\"\", p->pval.str);
       break;
     case PTYP_FD:
-      n = asprintf(&h, \"fd(%%d)\", p->pval.fd);
-      assert(n > 0);
+      h = zsprintf(\"fd(%%d)\", p->pval.fd);
       break;
     default:
       assert(FALSE);
@@ -245,8 +280,7 @@ string_of_params(param *p) {
     s = h;
   } else {
     t = string_of_params(p->next);
-    n = asprintf(&s, \"%%s, %%s\", h, t);
-    assert(n > 0);
+    s = zsprintf(\"%%s, %%s\", h, t);
     free(t);
     free(h);
   }
@@ -260,8 +294,7 @@ string_of_msg(msg *m) {
 
   ms = string_of_mtyp(m->mtyp);
   ps = string_of_params(m->payload);
-  n = asprintf(&s, \"%%s(%%s)\", ms, ps);
-  assert(n > 0);
+  s = zsprintf(\"%%s(%%s)\", ms, ps);
   free(ps);
   free(ms);
   return s;
@@ -489,4 +522,5 @@ let c_lib s =
   mkstr c_template
     (fmt s.msg_decls (c_mtyp tm))
     (fmt s.msg_decls c_msg_ctor)
+    (fmt s.msg_decls c_mtyp_str)
     (fmt s.msg_decls c_recv_msg)

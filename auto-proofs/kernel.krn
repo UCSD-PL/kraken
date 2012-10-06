@@ -1,0 +1,34 @@
+WGET = "wget.py";
+
+Messages {
+  Wget(str);
+  HTML(str, fdesc);
+}
+
+Components {
+  Tab "tab.py";
+}
+
+Init {
+  spawn(Tab);
+}
+
+Exchange(c) {
+  Tab {
+    Wget(url) {
+      f = call(WGET, url);
+      send(c, HTML(url, f));
+    }
+    HTML(url, html) {
+    }
+  }
+}
+
+Properties {
+
+  Theorem wget_correct_url:
+    forall tr pref post tab url f,
+    tr = pref ++ SendMsg tab (HTML url f) ++ post ->
+    exists pref2, pref = pref2 ++ RecvMsg tab (Wget url).
+
+}

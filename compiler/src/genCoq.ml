@@ -25,10 +25,13 @@ let coq_of_string s =
     |> String.concat ""
     |> mkstr "(%snil)"
 
-let coq_of_expr = function
+let rec coq_of_expr = function
   | Var id -> id
   | NumLit i -> coq_of_num i
   | StrLit s -> coq_of_string s
+  | Plus(a, b) ->
+    mkstr "(num_of_nat ((nat_of_num (%s)) + (nat_of_num (%s))))"
+      (coq_of_expr a) (coq_of_expr b)
 
 let coq_of_constant_decl (id, e) =
   mkstr "Definition %s := %s." id (coq_of_expr e)
@@ -205,6 +208,17 @@ let coq_of_cmd pacc = function
       ; comps =
           res :: pacc.comps
       }
+  | Assign (id, expr) ->
+      { pacc with
+        code = (
+          let b = Buffer.create 16 in
+          let cat = Buffer.add_string b in
+          cat pacc.code;
+          cat "\n";
+          cat (mkstr "let %s := %s in" id (coq_of_expr expr));
+          Buffer.contents b
+        )
+      }
 
 let coq_of_prog tr0 fr0 p =
   let rec loop pacc = function
@@ -227,6 +241,8 @@ let cmd_vars = function
       var :: expr_vars arg
   | Spawn (res, path) ->
       [res]
+  | Assign (id, expr) ->
+      []
 
 let rec prog_vars = function
   | Nop -> []
@@ -260,19 +276,20 @@ let coq_spec_of_handler xch_chan h =
   in
   String.concat "\n" [hdr; bdy; ftr]
 
-let coq_of_init init =
-  let cp = coq_of_prog "tr" [] init in
+let coq_of_init s =
+  let cp = coq_of_prog "tr" [] s.init in
   String.concat "\n\n"
   [ "let tr := inhabits nil in"
   ; if cp.code = ""
     then "        (* no code *)"
     else cp.code
-  ; mkstr "{{ Return (mkst (%snil) (tr ~~~ %s)) }}"
+  ; mkstr "{{ Return (mkst (%snil) (tr ~~~ %s) %s) }}"
       (cp.comps |> List.map (mkstr "%s :: ") |> String.concat "")
       cp.trace
+      (s.var_decls |> List.map fst |> String.concat " ")
   ]
 
-let coq_of_handler xch_chan h =
+let coq_of_handler s xch_chan h =
   let tr =
     mkstr "RecvMsg %s (%s %s) ++ tr"
       xch_chan
@@ -293,9 +310,10 @@ let coq_of_handler xch_chan h =
         "        (* no code *)"
       else
         pacc.code
-    ; mkstr "{{ Return (mkst (%scomps) (tr ~~~ %s)) }}"
+    ; mkstr "{{ Return (mkst (%scomps) (tr ~~~ %s) %s) }}"
         (pacc.comps |> List.map (mkstr "%s :: ") |> String.concat "")
         pacc.trace
+        (s.var_decls |> List.map fst |> String.concat " ")
     ]
 
 (* coq template has string holes for
@@ -456,6 +474,12 @@ Proof.
   apply himp_comm_prem; auto.
 Qed.
 
+Record kstate : Set :=
+  mkst { components : list chan
+       ; ktr : [Trace]
+       %s
+       }.
+
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in
   traced tr * [KTrace tr] * all_bound (components s).
@@ -498,18 +522,35 @@ Definition exchange :
   STsep (kstate_inv kst * [In c (components kst)])
         (fun (kst' : kstate) => kstate_inv kst').
 Proof.
-  intros ? [comps tr]; refine (
+  intros ? [comps tr %s]; refine (
     req <- recv_msg c tr <@> [In c comps] * all_bound_drop comps c * (tr ~~
     [KTrace tr]);
     match req with
 %s
       (* special case for errors *)
       | BadTag tag =>
-        {{ Return (mkst comps (tr ~~~ RecvMsg c (BadTag tag) ++ tr)) }}
+        {{ Return (mkst comps (tr ~~~ RecvMsg c (BadTag tag) ++ tr) %s) }}
     end
   );
   sep unfoldr simplr.
 Qed.
+
+Definition kbody:
+  forall s,
+  STsep (kstate_inv s)
+        (fun s' => kstate_inv s').
+Proof.
+  intros [comps tr %s];
+  refine (
+    comp <- select comps tr
+    <@> (tr ~~ [KTrace tr] * all_bound comps);
+    s' <- exchange comp (mkst comps (tr ~~~ Select comps comp :: tr) %s);
+    {{ Return s' }}
+  );
+  sep unfoldr simplr.
+Qed.
+
+
 "
 
 let coq_of_kernel s =
@@ -518,6 +559,7 @@ let coq_of_kernel s =
     String.concat "\n" (List.map f l)
   in
   let xch_chan, handlers = s.exchange in
+  let kern_state_vars = s.var_decls |> List.map fst |> String.concat " " in
   mkstr coq_template
     (fmt s.constants coq_of_constant_decl)
     (fmt s.msg_decls coq_of_msg_decl)
@@ -535,6 +577,15 @@ let coq_of_kernel s =
         mkstr "forall %s, KTrace (%snil)"
           (String.concat " " v) t
     )
-    (coq_of_init s.init) (* kinit *)
+    (
+      match s.var_decls with
+      | [] -> ""
+      | l -> fmt l (fun (id, typ) -> mkstr "; %s : %s" id (coq_of_typ typ))
+    )
+    (coq_of_init s) (* kinit *)
     xch_chan
-    (fmt handlers (coq_of_handler xch_chan))
+    kern_state_vars
+    (fmt handlers (coq_of_handler s xch_chan))
+    kern_state_vars
+    kern_state_vars
+    kern_state_vars

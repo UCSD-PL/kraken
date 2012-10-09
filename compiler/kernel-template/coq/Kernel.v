@@ -8,29 +8,6 @@ Open Local Scope char_scope.
 Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
 
-Definition kbody:
-  forall s,
-  STsep (kstate_inv s)
-        (fun s' => kstate_inv s').
-Proof.
-  Ltac unfoldr := unfold kstate_inv.
-
-  Ltac simplr := try (
-  match goal with
-    | [ |- KTrace _ ] => constructor
-  end
-  ).
-
-  intros [comps tr];
-  refine (
-    comp <- select comps tr
-    <@> (tr ~~ [KTrace tr] * all_bound comps);
-    s' <- exchange comp (mkst comps (tr ~~~ Select comps comp :: tr));
-    {{ Return s' }}
-  );
-  sep unfoldr simplr.
-Qed.
-
 Definition kloop:
   forall s,
   STsep (kstate_inv s)

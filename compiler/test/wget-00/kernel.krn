@@ -1,5 +1,8 @@
 WGET = "wget.py";
 
+State {
+}
+
 Messages {
   Wget(str);
   HTML(str, fdesc);

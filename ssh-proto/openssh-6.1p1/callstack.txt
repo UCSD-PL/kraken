@@ -1,0 +1,28 @@
+;; This buffer is for notes you don't want to save, and for Lisp evaluation.
+;; If you want to create a file, visit that file with C-x C-f,
+;; then enter the text in that file's own buffer.
+
+#0  0x0000000000408872 in get_hostkey_by_type (type=1, need_private=0) at sshd.c:836
+#1  0x0000000000408915 in get_hostkey_public_by_type (type=1) at sshd.c:849
+#2  0x0000000000424793 in kexecdh_server (kex=0x179eb60) at kexecdhs.c:80
+#3  0x0000000000447390 in kex_kexinit_finish (kex=0x179eb60) at kex.c:279
+#4  kex_input_kexinit (type=<optimized out>, seq=<optimized out>, ctxt=0x179eb60) at kex.c:249
+#5  0x0000000000446964 in dispatch_run (mode=0, done=0x179ebd0, ctxt=0x179eb60) at dispatch.c:99
+#6  0x000000000040ae6d in do_ssh2_kex () at sshd.c:2527
+#7  0x000000000040aac9 in main (ac=2, av=0x1796030) at sshd.c:2142
+
+
+need_private = 0.
+
+
+#0  0x0000000000408872 in get_hostkey_by_type (type=1, need_private=1) at sshd.c:836
+#1  0x0000000000408954 in get_hostkey_private_by_type (type=1) at sshd.c:855
+#2  0x00000000004247ad in kexecdh_server (kex=0x179eb60) at kexecdhs.c:83
+#3  0x0000000000447390 in kex_kexinit_finish (kex=0x179eb60) at kex.c:279
+#4  kex_input_kexinit (type=<optimized out>, seq=<optimized out>, ctxt=0x179eb60) at kex.c:249
+#5  0x0000000000446964 in dispatch_run (mode=0, done=0x179ebd0, ctxt=0x179eb60) at dispatch.c:99
+#6  0x000000000040ae6d in do_ssh2_kex () at sshd.c:2527
+#7  0x000000000040aac9 in main (ac=2, av=0x1796030) at sshd.c:2142
+
+need_private = 1.
+

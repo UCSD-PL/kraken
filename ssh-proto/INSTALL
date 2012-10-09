@@ -1,0 +1,34 @@
+*You might want to run this experimental ssh server in an isolated
+environment like VM to avoid possibly detrimental effects!!
+
+0. Create a dummy user under which the unprivileged ssh slave is going
+to run.
+
+1. Create a RSA key file by `ssh-keygen -t rsa`. Make the key file
+name as you want, but make it sure that the file is only readable by
+the root by chmod 400 $rsafile. Otherwise, the ssh server is not going
+to work.
+
+2. Copy ./sshd_config.default to /usr/local/etc/sshd_config. The ssh
+server looks for the config file at the location by default.
+
+3. Open sshd_mon.h file and modify each of the SSH configurations
+properly. Please refer to the user account you created at step 0, and
+get the uid of the user by `id -u $username`.
+
+4. Compile the downloaded source files by executing ./configure and
+make. Do not `make install` since it may overwrite pre-installed ssh
+binaries.
+
+5. Make it sure that Inetd is working properly on the testing machine.
+This priv-sepped ssh runs only with inetd for now.
+
+6. Add the following line to /etc/inetd.conf
+
+ssh     stream  tcp     nowait  root    $DIR/sshd_mon       sshd_mon
+
+You have to substitute $DIR with the directory where the compiled
+sshd_mon file is located.
+
+7. Restart the inet daemon & enjoy!
+

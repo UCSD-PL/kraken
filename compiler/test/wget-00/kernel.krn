@@ -3,6 +3,10 @@ WGET = "wget.py";
 State {
 }
 
+Components {
+  Main "wget.py";
+}
+
 Messages {
   Wget(str);
   HTML(str, fdesc);
@@ -13,11 +17,13 @@ Init {
 }
 
 Exchange(c) {
-  Wget(url) {
-    f = call(WGET, url);
-    send(c, HTML(url, f));
-  }
+  Main {
+    Wget(url) {
+      f = call(WGET, url);
+      send(c, HTML(url, f));
+    }
 
-  HTML(url, html) {
+    HTML(url, html) {
+    }
   }
 }

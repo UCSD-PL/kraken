@@ -1,6 +1,10 @@
 State {
 }
 
+Components {
+  Main "test.py";
+}
+
 Messages {
   M1(num);
   M2(str);
@@ -11,11 +15,13 @@ Init {
 }
 
 Exchange(c) {
-  M1(y) {
-    send(c, M1(y));
-  }
+  Main {
+    M1(y) {
+      send(c, M1(y));
+    }
 
-  M2(y) {
-    send(c, M2(y));
+    M2(y) {
+      send(c, M2(y));
+    }
   }
 }

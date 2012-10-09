@@ -1,8 +1,7 @@
 Require Import List.
 Require Import Ascii.
 Require Import Ynot.
-Require Import KrakenBase.
-Require Import Exchange.
+Require Import Kraken.
 
 Open Local Scope char_scope.
 Open Local Scope hprop_scope.

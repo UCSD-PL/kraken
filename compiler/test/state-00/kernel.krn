@@ -2,6 +2,11 @@ State {
   curtab : num;
 }
 
+Components {
+  Tab       "tab.py";
+  UserInput "userinput.sh";
+}
+
 Messages {
   ReqCurTab();
   CurTab(num);
@@ -12,12 +17,20 @@ Init {
 }
 
 Exchange(c) {
-  ReqCurTab() {
-    curtab := curtab + 1;
-    send(c, CurTab(curtab));
+  Tab {
+    ReqCurTab() {
+      curtab := curtab + 1;
+      send(c, CurTab(curtab));
+    }
+
+    # ignore
+    CurTab(n) {
+    }
   }
 
-  # ignore
-  CurTab(n) {
+  UserInput {
+    # ignore
+    CurTab(n) {
+    }
   }
 }

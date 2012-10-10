@@ -12,6 +12,8 @@
 %token EQ LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF COLON ASSIGN PLUS
 
+%right PLUS
+
 %token <int> NUMLIT
 %token <string> STRLIT
 %token <string> ID

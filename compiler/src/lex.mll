@@ -16,6 +16,7 @@ let line = '\n'
 
 rule token = parse
   | "State" { STATE }
+  | "Components" { COMPONENTS }
   | "Messages" { MESSAGES }
   | "Init" { INIT }
   | "Exchange" { EXCHANGE }

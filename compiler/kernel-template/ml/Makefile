@@ -5,6 +5,7 @@ CLIBS := $(notdir $(basename $(CLIBS)))
 CLIBS := $(patsubst %,-lib %,$(CLIBS))
 
 FLAGS := \
+	-verbose 2 \
   -lib unix \
   $(CLIBS) \
   -cflags -g,-I,$(KROOT)/c-stubs \

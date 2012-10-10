@@ -36,12 +36,14 @@ let string_of_fd fd =
 
 type chan = Unix.file_descr
 
-let chan_eq c1 c2 =
-  c1 = c2
+let chan_of_tchan (Specif.Coq_existT(_, c)) = c
+
+let tchan_eq tc1 tc2 =
+  chan_of_tchan tc1 = chan_of_tchan tc2
 
 type fdesc = Unix.file_descr
 
-let exec prog _ =
+let exec t prog _ =
   let prog = MlCoq.string_of_str prog in
   let p, c = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   match Unix.fork () with
@@ -53,7 +55,7 @@ let exec prog _ =
   end
   | cpid -> (* parent *) begin
       Unix.close c;
-      p
+      Specif.Coq_existT(t, p)
   end
 
 let call prog arg _ =
@@ -75,16 +77,17 @@ let call prog arg _ =
 let select chans _ =
   let r, _, _ =
     Unix.handle_unix_error (fun _ ->
-      Unix.select chans [] [] (-1.0)) ()
+      Unix.select (List.map chan_of_tchan chans) [] [] (-1.0)) ()
   in
-  List.hd r
+  let fd = List.hd r in
+  List.find (fun (Specif.Coq_existT(_, c)) -> c = fd) chans
 
 let recv c n _ =
   let n = int_of_num n in
   let s = String.make n (Char.chr 0) in
   let r = 
     Unix.handle_unix_error (fun _ ->
-      Unix.recv c s 0 n []) ()
+      Unix.recv (chan_of_tchan c) s 0 n []) ()
   in
   if r <> n then
     failwith "recv - wrong # of bytes"
@@ -96,7 +99,7 @@ let send c s _ =
   let n = String.length s in
   let w =
     Unix.handle_unix_error (fun _ ->
-      Unix.send c s 0 n []) ()
+      Unix.send (chan_of_tchan c) s 0 n []) ()
   in
   if w <> n then
     failwith "send - wrong # of bytes"
@@ -104,7 +107,7 @@ let send c s _ =
     ()
 
 external recv_fd_native : chan -> fdesc = "recv_fd_native"
-let recv_fd c _ = recv_fd_native c
+let recv_fd (Specif.Coq_existT(_, c)) _ = recv_fd_native c
 
 external send_fd_native : chan -> fdesc -> unit = "send_fd_native"
-let send_fd c fd _ = send_fd_native c fd
+let send_fd (Specif.Coq_existT(_, c)) fd _ = send_fd_native c fd

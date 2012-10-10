@@ -125,7 +125,7 @@ if $DEBUG; then
   EXEC="ocamldebug -I $KRAKEN/compiler/src/_build $EXEC"
 fi
 $EXEC $INDIR/kernel.krn \
-  --exchange "$D/coq/Exchange.v" \
+  --kraken "$D/coq/Kraken.v" \
   --lib "$D/client" \
   || error "Kraken compiler failed."
 
@@ -141,7 +141,7 @@ sed "s;__KROOT__;$D;" \
   > "$D/bin/kernel.sh"
 
 if $PRETTY; then
-  $KBIN/coq-prettify.sh "$D/coq/Exchange.v"
+  $KBIN/coq-prettify.sh "$D/coq/Kraken.v"
 fi
 
 if $BUILD; then

@@ -70,13 +70,13 @@ def send_fd(f):
   fd = f.fileno()
   passfd.sendfd(KCHAN, fd)
 
-def recv_msg():
+def recv():
   tag = recv_num()
   return {
 %s
   }[tag](0)
 
-def send_msg(*m):
+def send(*m):
   tag = m[0]
   {
 %s

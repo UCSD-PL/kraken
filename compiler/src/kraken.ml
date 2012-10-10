@@ -83,6 +83,7 @@ let main () =
   List.iter (uncurry writefile)
     [ get_flag "kraken" , GenCoq.coq_of_kernel s
     ; lib_path "msg.py" , GenPy.py_lib s
+    ; lib_path "msg.c"  , GenC.c_lib s
     ]
 
 let _ =

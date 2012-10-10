@@ -3,8 +3,7 @@ State {
 }
 
 Components {
-  Tab       "tab.py";
-  UserInput "userinput.sh";
+  Main "test.py";
 }
 
 Messages {
@@ -14,21 +13,16 @@ Messages {
 
 Init {
   curtab := 0;
+  spawn(Main);
 }
 
 Exchange(c) {
-  Tab {
+  Main {
     ReqCurTab() {
       curtab := curtab + 1;
       send(c, CurTab(curtab));
     }
 
-    # ignore
-    CurTab(n) {
-    }
-  }
-
-  UserInput {
     # ignore
     CurTab(n) {
     }

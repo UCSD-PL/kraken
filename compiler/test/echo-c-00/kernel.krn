@@ -1,0 +1,15 @@
+TEST = "test.sh";
+
+Messages {
+  M(str);
+}
+
+Init {
+  spawn(TEST);
+}
+
+Exchange(c) {
+  M(y) {
+    send(c, M(y));
+  }
+}

@@ -115,8 +115,9 @@ D=$(canonpath "$D")
 # copy template to kernel tree
 cp -r "$KBASE" "$D"
 
-# copy client scripts over
-cp $INDIR/*.py $D/client/
+# copy client component code over, except for kernel spec
+cp $INDIR/* $D/client/
+rm $D/client/kernel.krn
 
 # generate code and proofs
 EXEC="$KBIN/.kraken"

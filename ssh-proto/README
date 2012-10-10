@@ -1,8 +1,49 @@
-KRAKEN_TODO : explain high level design here
+Introduction
 
-What is ptyer?
+This is a simplitic ssh server stemmed from OpenSSH whose main design
+principle is to make the privileged part of OpenSSH as small as
+possible. 
 
-Why is it necessary?
+Based on the idea of privilege separation, the original OpenSSH is
+separated into 1) privileged monitors which serve slaves with
+sensitive system resources in a controlled way and 2) unprivileged
+slaves processing untrusted data from the Internet which must consult
+monitors to access any sensitive system resources. Slaves are exposed
+to untrusted network data and so they can be compromised by attacks
+such as buffer overflow, but the damage is confined within the
+perimiter of the compromised slave process.
 
-What is an example exchange of messages from a slave authenticating and
-taking control of a pty?
+The privileged monitor component of OpenSSH is still to big and hard
+to reason about its behavior, so I extracted the core small part of
+the monitor component, and retrofitted other parts of OpenSSH to work
+with the core monitor. The main goal of this retrofitted OpenSSH is to
+minimize the code size of the monitor which has to run with the root
+privileges.
+
+
+How it works
+
+The inetd daemon creates a new process of sshd_mon.c (1) when it
+receives a client request for the ssh service. sshd_mon must run with
+the root privilege, and it is the core of the monitors that only needs
+the root privilege. sshd_mon forks a slave process, sshd.c (2), which
+actually processes the untrusted network data from the user. sshd_mon
+will ask the user for username and account and check whether the
+username is a valid one by asking the monitor via IPC. One
+authenticated, the slave can ask the monitor for creating a process,
+then the monitor creates a process of ptyer.c (3) under the
+authenticated username and passes the controlling file descriptors to
+the authenticated slave, so that the slave can act as the
+authenticated user. The ptyer process is just a bash process running
+under the authenticated user, and the slave is given the stdio/out of
+the ptyer process from the monitor, so that it can emulate a bash
+process running under the authenticated user process.
+
+
+Main Components
+
+sshd_mon(root)  -- (1)                ptyer(an authenticated user) (3)
+-------------------                  -------------------------
+sshd(sshd_slave) -- (2) ----------------|
+------------------
+

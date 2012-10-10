@@ -5,3 +5,4 @@
 #define PTYER_SLV_PATH "/home/ucsd/openssh/openssh/openssh-6.1p1/ptyer"
 #define PTYER_SLV_FILE "ptyer"
 
+#define TMP_KEY_FILE "/home/ucsd/openssh/openssh/openssh-6.1p1/tmp_keyfile"

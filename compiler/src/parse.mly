@@ -8,9 +8,11 @@
   (* NOTE to get commas right, we special case empty arg lists *)
 %}
 
-%token MESSAGES INIT EXCHANGE NUM STR FDESC CALL SEND SPAWN
+%token STATE MESSAGES INIT EXCHANGE NUM STR FDESC CALL SEND SPAWN
 %token EQ LCURL RCURL LPAREN RPAREN
-%token COMMA SEMI EOF
+%token COMMA SEMI EOF COLON ASSIGN PLUS
+
+%right PLUS
 
 %token <int> NUMLIT
 %token <string> STRLIT
@@ -23,11 +25,12 @@
 
 kernel :
   | constants
-    MESSAGES LCURL msg_decls RCURL 
-    INIT LCURL prog RCURL
-    EXCHANGE LPAREN ID RPAREN LCURL handlers RCURL
+    STATE                     LCURL var_decls RCURL
+    MESSAGES                  LCURL msg_decls RCURL
+    INIT                      LCURL prog      RCURL
+    EXCHANGE LPAREN ID RPAREN LCURL handlers  RCURL
     EOF
-    { mk_kernel $1 $4 $8 ($12, $15) }
+    { mk_kernel $1 $4 $8 $12 ($16, $19) }
 ;;
 
 constants :
@@ -63,6 +66,8 @@ cmd :
     { Send ($3, $5) }
   | SPAWN LPAREN expr RPAREN
     { Spawn (mkstr "c%d" (tock ()), $3) }
+  | ID ASSIGN expr
+    { Assign ($1, $3) }
 ;;
 
 msg_expr :
@@ -80,6 +85,7 @@ exprs :
 ;;
 
 expr :
+  | expr PLUS expr { Plus($1, $3) }
   | NUMLIT { NumLit $1 }
   | STRLIT { StrLit $1 }
   | ID { Var $1 }
@@ -111,6 +117,18 @@ msg_decl :
     { mk_msg $1 [] }
   | ID LPAREN typs RPAREN SEMI
     { mk_msg $1 $3 }
+;;
+
+var_decls :
+  | /* empty */
+    { [] }
+  | var_decl var_decls
+    { $1 :: $2 }
+;;
+
+var_decl :
+  | ID COLON typ SEMI
+    { ($1, $3) }
 ;;
 
 typs :

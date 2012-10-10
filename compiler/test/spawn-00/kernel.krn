@@ -1,5 +1,8 @@
 TEST = "test.py";
 
+State {
+}
+
 Messages {
   M(str);
 }

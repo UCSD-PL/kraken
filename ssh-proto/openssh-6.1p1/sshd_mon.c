@@ -202,12 +202,14 @@ int load_host_keys() {
   if(host_key == NULL) syslog (LOG_ERR, "host_key is NULL");
   public_key = key_demote(host_key);
 
+  // KRAKEN_TODO : should this path be a param in sshd_mon.h ?
   FILE* f = fopen("/home/ucsd/openssh/openssh/openssh-6.1p1/tmp_keyfile", "w");
   if(f == NULL) syslog (LOG_ERR, "tmp file open failed");
   
   key_write(public_key, f);
   fclose(f);
 
+  // KRAKEN_TODO : should this path be a param in sshd_mon.h ?
   f = fopen("/home/ucsd/openssh/openssh/openssh-6.1p1/tmp_keyfile", "r");
   read_char = fread(buf, 1, 4084, f);
   public_key_serialized = (char*)malloc(read_char * sizeof(char));

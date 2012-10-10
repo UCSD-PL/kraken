@@ -1,27 +1,31 @@
-*You might want to run this experimental ssh server in an isolated
-environment like VM to avoid possibly detrimental effects!!
+* WARNING
 
-0. Create a dummy user under which the unprivileged ssh slave is going
-to run.
+For security, you should only run this experimental ssh server in an
+isolate environment like a virtual machine!
 
-1. Create a RSA key file by `ssh-keygen -t rsa`. Make the key file
-name as you want, but make it sure that the file is only readable by
-the root by chmod 400 $rsafile. Otherwise, the ssh server is not going
-to work.
+* INSTALLATION
 
-2. Copy ./sshd_config.default to /usr/local/etc/sshd_config. The ssh
-server looks for the config file at the location by default.
+As root, do the following from within ./openssh-6.1p1/ :
 
-3. Open sshd_mon.h file and modify each of the SSH configurations
-properly. Please refer to the user account you created at step 0, and
-get the uid of the user by `id -u $username`.
+0. Create a dummy user USER. The unprivileged ssh slave will run as USER.
 
-4. Compile the downloaded source files by executing ./configure and
-make. Do not `make install` since it may overwrite pre-installed ssh
+1. Create a RSA key file by `ssh-keygen -t rsa` named KEYFILE. Ensure
+KEYFILE is only readable by root by `chmod 400 KEYFILE`, otherwise sshd
+will refuse to work.
+
+2. Copy sshd_config.default to /usr/local/etc/sshd_config.  This way our
+modified sshd will find our configuration in place of the normal system
+default.
+
+3. Edit sshd_mon.h and set the macros appropriately, refering to the USER
+account created for Step 0. To get the UID of USER, run `id -u USER`.
+
+4. Build our modified version of openssh by running `./configure` and
+`make`. DO NOT RUN `make install`; it may overwrite pre-installed ssh
 binaries.
 
-5. Make it sure that Inetd is working properly on the testing machine.
-This priv-sepped ssh runs only with inetd for now.
+5. Check that inetd is working properly. For now, our priv-sepped ssh only
+runs under indetd.
 
 6. Add the following line to /etc/inetd.conf
 
@@ -31,4 +35,3 @@ You have to substitute $DIR with the directory where the compiled
 sshd_mon file is located.
 
 7. Restart the inet daemon & enjoy!
-

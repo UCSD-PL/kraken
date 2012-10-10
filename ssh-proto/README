@@ -1,0 +1,8 @@
+KRAKEN_TODO : explain high level design here
+
+What is ptyer?
+
+Why is it necessary?
+
+What is an example exchange of messages from a slave authenticating and
+taking control of a pty?

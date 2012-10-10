@@ -40,7 +40,9 @@ let rec coq_of_expr = function
       (coq_of_expr a) (coq_of_expr b)
 
 let coq_of_constant_decl (id, e) =
-  mkstr "Definition %s := %s." id (coq_of_expr e)
+  mkstr "
+Definition %s := %s.
+" id (coq_of_expr e)
 
 let coq_of_msg_decl m =
   mkstr "| %s : %s" m.tag
@@ -196,8 +198,11 @@ send_msg %s %s
             c (coq_of_msg_expr m) pacc.trace
       }
   | Call (res, f, arg) ->
-      { pacc with code = pacc.code ^ "\n\n" ^
-          mkstr "%s <- call %s %s\n(tr ~~~ %s)\n<@> %s;"
+      { pacc with code = pacc.code ^
+          mkstr "
+%s <- call %s %s
+(tr ~~~ %s)
+<@> %s;"
             res (coq_of_expr f) (coq_of_expr arg)
             pacc.trace (coq_of_frame pacc.frame)
       ; trace =
@@ -229,7 +234,8 @@ send_msg %s %s
         code = (
           let (add, contents) = mk_buffer () in
           add pacc.code;
-          add (mkstr "let %s := %s in" id (coq_of_expr expr));
+          add (mkstr "
+let %s := %s in" id (coq_of_expr expr));
           contents ()
         )
       }
@@ -271,7 +277,8 @@ let handler_vars xch_chan h =
 
 let coq_spec_of_handler s comp xch_chan h =
   let hdr =
-    mkstr "| VE_%s_%s :\nforall %s,\nValidExchange ("
+    mkstr "
+| VE_%s_%s :\nforall %s,\nValidExchange ("
       comp
       h.trigger.tag
       (String.concat " " (handler_vars xch_chan h))
@@ -611,8 +618,7 @@ Qed.
 (* prevent sep tactic from unfolding *)
 Global Opaque RecvMsg SendMsg.
 
-Inductive ValidExchange : Trace -> Prop :=
-";
+Inductive ValidExchange : Trace -> Prop :=";
   add (
     let (xch_chan, exchanges) = s.exchange in
     fmt exchanges

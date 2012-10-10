@@ -1,0 +1,37 @@
+* WARNING
+
+For security, you should only run this experimental ssh server in an
+isolate environment like a virtual machine!
+
+* INSTALLATION
+
+As root, do the following from within ./openssh-6.1p1/ :
+
+0. Create a dummy user USER. The unprivileged ssh slave will run as USER.
+
+1. Create a RSA key file by `ssh-keygen -t rsa` named KEYFILE. Ensure
+KEYFILE is only readable by root by `chmod 400 KEYFILE`, otherwise sshd
+will refuse to work.
+
+2. Copy sshd_config.default to /usr/local/etc/sshd_config.  This way our
+modified sshd will find our configuration in place of the normal system
+default.
+
+3. Edit sshd_mon.h and set the macros appropriately, refering to the USER
+account created for Step 0. To get the UID of USER, run `id -u USER`.
+
+4. Build our modified version of openssh by running `./configure` and
+`make`. DO NOT RUN `make install`; it may overwrite pre-installed ssh
+binaries.
+
+5. Check that inetd is working properly. For now, our priv-sepped ssh only
+runs under indetd.
+
+6. Add the following line to /etc/inetd.conf
+
+ssh     stream  tcp     nowait  root    $DIR/sshd_mon       sshd_mon
+
+You have to substitute $DIR with the directory where the compiled
+sshd_mon file is located.
+
+7. Restart the inet daemon & enjoy!

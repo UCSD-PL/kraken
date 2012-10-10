@@ -1,18 +1,24 @@
 State {
 }
 
+Components {
+  Main "test.py";
+}
+
 Messages {
   M(str, str);
 }
 
 Init {
-
+  spawn(Main);
 }
 
 Exchange(c) {
-  M(a, b) {
-    send(c, M("1", "a"));
-    send(c, M("2", "b"));
-    send(c, M("3", "c"));
+  Main {
+    M(a, b) {
+      send(c, M("1", "a"));
+      send(c, M("2", "b"));
+      send(c, M("3", "c"));
+    }
   }
 }

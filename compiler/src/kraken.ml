@@ -21,7 +21,6 @@ kraken.sh driver script.
 
 OPTIONS:
   -h, --help        print this usage information
-  --exchange EXCH   write Coq Exchange module to file EXCH
   --lib LIB         write client libraries to directory LIB
 ";
   exit 1
@@ -42,8 +41,8 @@ let parse_args () =
   let rec loop = function
     | "-h" :: t | "-help" :: t | "--help" :: t ->
         usage ()
-    | "--exchange" :: f :: t ->
-        set_flag "exchange" f;
+    | "--kraken" :: f :: t ->
+        set_flag "kraken" f;
         loop t
     | "--lib" :: f :: t ->
         set_flag "lib" f;
@@ -82,8 +81,8 @@ let main () =
     parse_kernel (get_flag "input")
   in
   List.iter (uncurry writefile)
-    [ get_flag "exchange" , GenCoq.coq_of_kernel s
-    ; lib_path "msg.py"   , GenPy.py_lib s
+    [ get_flag "kraken" , GenCoq.coq_of_kernel s
+    ; lib_path "msg.py" , GenPy.py_lib s
     ]
 
 let _ =

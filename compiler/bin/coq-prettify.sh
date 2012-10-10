@@ -27,4 +27,4 @@ function canonpath {
   echo $(cd $(dirname $1); pwd -P)/$(basename $1)
 }
 
-$EMACS $(canonpath $1) -l "$KBIN/coq-prettify.el" -f 'coq-prettify'
+$EMACS -l ~/.emacs $(canonpath $1) -l "$KBIN/coq-prettify.el" -f 'coq-prettify'

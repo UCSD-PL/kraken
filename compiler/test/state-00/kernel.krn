@@ -1,0 +1,23 @@
+State {
+  curtab : num;
+}
+
+Messages {
+  ReqCurTab();
+  CurTab(num);
+}
+
+Init {
+  curtab := 0;
+}
+
+Exchange(c) {
+  ReqCurTab() {
+    curtab := curtab + 1;
+    send(c, CurTab(curtab));
+  }
+
+  # ignore
+  CurTab(n) {
+  }
+}

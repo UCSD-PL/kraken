@@ -1,3 +1,6 @@
+State {
+}
+
 Messages {
   M(str, str);
 }

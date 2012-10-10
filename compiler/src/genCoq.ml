@@ -637,11 +637,11 @@ Inductive ValidExchange : Trace -> Prop :=";
         s.msg_decls
       in
       fmt rest (fun m ->
+        let args = m.payload |> List.map coq_of_typ |> String.concat " " in
         Printf.sprintf "
 | VE_%s_%s:
-  forall %s, ValidExchange (RecvMsg %s (%s %s))"
-          comp m.tag xch_chan xch_chan m.tag
-          (m.payload |> List.map coq_of_typ |> String.concat " ")
+  forall %s %s, ValidExchange (RecvMsg %s (%s %s))"
+          comp m.tag args xch_chan xch_chan m.tag args
       )
     )
   );

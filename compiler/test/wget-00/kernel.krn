@@ -19,7 +19,7 @@ Init {
 Exchange(c) {
   Main {
     Wget(url) {
-      f = call(WGET, url);
+      f := call(WGET, url);
       send(c, HTML(url, f));
     }
 

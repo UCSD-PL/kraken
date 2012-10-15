@@ -1,15 +1,22 @@
-TEST = "test.sh";
+State {
+}
+
+Components {
+  Main "test.sh";
+}
 
 Messages {
   M(str);
 }
 
 Init {
-  spawn(TEST);
+  spawn(Main);
 }
 
 Exchange(c) {
-  M(y) {
-    send(c, M(y));
+  Main {
+    M(y) {
+      send(c, M(y));
+    }
   }
 }

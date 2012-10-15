@@ -11,16 +11,19 @@ let coq_of_typ = function
   | Num -> "num"
   | Str -> "str"
   | Fdesc -> "fdesc"
+  | Chan -> "tchan"
 
 let coq_recv_typ = function
   | Num -> "recv_num", "RecvNum"
   | Str -> "recv_str", "RecvStr"
   | Fdesc -> "recv_fd", "RecvFD_t"
+  | Chan -> "recv_fd", "RecvChan_t"
 
 let coq_send_typ = function
   | Num -> "send_num", "SendNum"
   | Str -> "send_str", "SendStr"
   | Fdesc -> "send_fd", "SendFD_t"
+  | Chan -> "send_fd", "SendChan_t"
 
 let coq_of_num i =
   mkstr "(Num \"%03d\")" i
@@ -275,6 +278,29 @@ let coq_of_msg_pat m =
 let handler_vars xch_chan h =
   uniq (xch_chan :: h.trigger.payload @ prog_vars h.respond)
 
+module OrderedChan =
+  struct
+    type t = chan
+    let compare = compare
+  end
+
+module ChanSet = Set.Make(OrderedChan);;
+
+let chans_of_cmd = function
+| Send(c, _)    -> ChanSet.singleton c
+| Call(_, _, _) -> ChanSet.empty
+| Spawn(_, _)   -> ChanSet.empty
+| Assign(_, _)  -> ChanSet.empty
+
+let chans_of_prog p =
+  let rec chans_of_prog_aux accu = function
+  | Nop -> ChanSet.elements accu
+  | Seq(cmd, rest) ->
+    let accu = ChanSet.union accu (chans_of_cmd cmd) in
+    chans_of_prog_aux accu rest
+  in
+  chans_of_prog_aux ChanSet.empty p
+
 let coq_spec_of_handler s comp xch_chan h =
   let hdr =
     mkstr "
@@ -287,7 +313,10 @@ let coq_spec_of_handler s comp xch_chan h =
     if h.respond = Nop then
       "      (* no response *)"
     else
-      let fr = [ mkstr "bound %s" xch_chan ] in
+      let fr = List.map
+        (fun c -> mkstr "bound %s" c)
+        (xch_chan :: chans_of_prog h.respond)
+      in
       coq_trace_of_prog s fr h.respond
   in
   let ftr =
@@ -311,6 +340,11 @@ let coq_of_init s =
         (s.var_decls |> List.map fst |> String.concat " ")
     ]
 
+let frames_of_vars s =
+  s.var_decls
+  |> List.filter (fun (_, typ) -> typ = Chan)
+  |> List.map (fun (id, _) -> mkstr "[In %s comps]" id)
+
 let coq_of_handler s xch_chan h =
   let tr =
     mkstr "RecvMsg %s (%s %s) ++ tr"
@@ -318,12 +352,24 @@ let coq_of_handler s xch_chan h =
       h.trigger.tag
       (String.concat " " h.trigger.payload)
   in
-  let fr =
-    [ mkstr "[In %s comps]" xch_chan
-    ; mkstr "bound %s" xch_chan
-    ; mkstr "all_bound_drop comps %s" xch_chan
-    ; "(tr ~~ [KTrace tr])"
-    ]
+  let fr = (
+    let chans = chans_of_prog h.respond in
+    frames_of_vars s @ (
+      List.fold_left
+      (* folding function *)
+      (fun acc elt ->
+        mkstr "bound %s"      elt
+        :: acc)
+      (* starting accumulator *)
+      [ mkstr "all_bound_drops comps (%s :: nil)"
+          (String.concat " :: " chans)
+      ; mkstr "[In %s comps]" xch_chan
+      ; "(tr ~~ [KTrace tr])"
+      ]
+      (* list to fold *)
+      chans
+    )
+  )
   in
   let pacc = coq_of_prog s tr fr h.respond in
   lines
@@ -691,41 +737,117 @@ Fixpoint all_bound (cs : list tchan) : hprop :=
     | c :: cs' => bound c * all_bound cs'
   end.
 
-(* all cs bound except _first_ occurrence of drop *)
-Fixpoint all_bound_drop (cs : list tchan) (drop : tchan) : hprop :=
-  match cs with
-    | nil => emp
-    | c :: cs' =>
-      if tchan_eq c drop then
-        all_bound cs'
-      else
-        bound c * all_bound_drop cs' drop
+Fixpoint remove_first x l :=
+  match l with
+  | nil     => nil
+  | y :: tl => if (tchan_eq x y) then tl else y :: (remove_first x tl)
   end.
+
+(* all cs bound except _first_ occurrence of each drop *)
+Fixpoint all_bound_drops (cs : list tchan) (drops : list tchan) : hprop :=
+  match cs with
+  | nil => emp
+  | c :: cs' =>
+    if List.existsb (fun elt => if tchan_eq elt c then true else false) drops
+      then all_bound_drops cs' (remove_first c drops)
+      else bound c * all_bound_drops cs' drops
+  end.
+
+Theorem all_bound_drops_nil :
+  forall l, all_bound_drops l nil <==> all_bound l.
+Proof.
+  split; induction l; sep fail auto.
+Qed.
+
+Lemma unpack_all_bound_remove :
+  forall cs c,
+    In c cs ->
+    all_bound cs ==> bound c * all_bound (remove_first c cs).
+Proof.
+  induction cs; simpl; intros. contradiction.
+  destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
+  case (tchan_eq c a); intros; subst. apply himp_refl.
+  simpl.
+  apply himp_comm_conc. apply himp_assoc_conc1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_conc. now apply IHcs.
+Qed.
 
 Lemma unpack_all_bound :
   forall cs c,
-  In c cs ->
-  all_bound cs ==> bound c * all_bound_drop cs c.
+    In c cs ->
+    all_bound cs ==> bound c * all_bound_drops cs (c :: nil).
 Proof.
   induction cs; simpl; intros. contradiction.
-  destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
-  case (tchan_eq a c); intros; subst. apply himp_refl.
-  apply himp_comm_conc. apply himp_assoc_conc1.
-  apply himp_split. apply himp_refl.
-  apply himp_comm_conc; auto.
+  destruct H; subst. repeat rewrite tchan_eq_true. simpl.
+  sep fail auto. apply all_bound_drops_nil.
+  case (tchan_eq c a); intros; subst. simpl. rewrite tchan_eq_true.
+  sep fail auto. apply all_bound_drops_nil.
+  simpl. sep fail auto.
+  apply himp_comm_conc. now apply IHcs.
 Qed.
 
-Lemma repack_all_bound :
+Lemma repack_all_bound_remove :
   forall cs c,
-  In c cs ->
-  bound c * all_bound_drop cs c ==> all_bound cs.
+    In c cs ->
+    bound c * all_bound (remove_first c cs) ==> all_bound cs.
 Proof.
   induction cs; simpl; intros. contradiction.
   destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
-  case (tchan_eq a c); intros; subst. apply himp_refl.
-  apply himp_comm_prem. apply himp_assoc_prem1.
-  apply himp_split. apply himp_refl.
-  apply himp_comm_prem; auto.
+  case (tchan_eq c a); intros; subst. apply himp_refl.
+  simpl.
+  sep fail auto. apply himp_comm_prem. now apply IHcs.
+Qed.
+
+Lemma not_In_remove_first :
+  forall x l, ~ In x l -> forall r, ~ In x (remove_first r l).
+Proof.
+  induction l; simpl; intros. easy. intro. destruct (tchan_eq r a).
+  intuition.
+  simpl in H0. intuition.
+  eauto.
+Qed.
+
+Lemma repack_all_bound_drops :
+  forall cs c rest,
+    In c cs ->
+    ~ In c rest ->
+    bound c * all_bound_drops cs (c :: rest) ==> all_bound_drops cs rest.
+Proof.
+  induction cs; simpl; intros. contradiction.
+  destruct H; subst.
+  repeat rewrite tchan_eq_true. simpl.
+  destruct (
+    existsb (fun elt : tchan => if tchan_eq elt c then true else false)
+    rest
+  ) as []_eqn.
+  exfalso. apply existsb_exists in Heqb. destruct Heqb as [x [In Eq]].
+  destruct (tchan_eq x c). subst. contradiction. discriminate.
+  sep fail idtac.
+  destruct (tchan_eq c a); simpl.
+  subst. rewrite tchan_eq_true.
+  destruct (
+    existsb (fun elt : tchan => if tchan_eq elt a then true else false)
+    rest
+  ) as []_eqn.
+  exfalso. apply existsb_exists in Heqb. destruct Heqb as [x [In Eq]].
+  destruct (tchan_eq x a). subst. contradiction. discriminate.
+  sep fail idtac.
+  destruct (
+    existsb (fun elt : tchan => if tchan_eq elt a then true else false)
+    rest
+  ) as []_eqn.
+  destruct (tchan_eq a c). subst. now elim n.
+  apply IHcs. easy. now apply not_In_remove_first.
+  sep fail idtac.
+  auto using himp_comm_prem.
+Qed.
+
+Lemma all_bound_cons :
+  forall cs c,
+    bound c * all_bound cs ==> all_bound (c :: cs).
+Proof.
+  induction cs; sep fail auto.
 Qed.
 
 Record kstate : Set :=
@@ -735,27 +857,43 @@ Record kstate : Set :=
   add (
     match s.var_decls with
     | [] -> ""
-    | l -> fmt l (fun (id, typ) -> mkstr "; %s : %s" id (coq_of_typ typ))
+    | l  -> fmt l (fun (id, typ) -> mkstr "; %s : %s" id (coq_of_typ typ))
   );
   add "
        }.
 
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in
-  traced tr * [KTrace tr] * all_bound (components s).
+  traced tr * [KTrace tr] * all_bound (components s)
+";
+  add (
+    match s.var_decls with
+    | [] -> ""
+    | l  -> fmt l (fun (id, typ) ->
+        match typ with
+        | Chan -> mkstr "* [In (%s s) (components s)]" id
+        | _    -> ""
+      )
+  );
+  add ".
 
 Ltac unfoldr := unfold kstate_inv.
 
 Ltac simplr_fail :=
   match goal with
-  | [ |- all_bound ?comps ==> bound ?c * all_bound_drop ?comps ?c ] =>
-    apply unpack_all_bound
-  | [ |- bound ?c * all_bound_drop ?comps ?c ==> all_bound ?comps ] =>
-    apply repack_all_bound
-  | [ |- bound ?c * all_bound_drop ?comps ?c ==> all_bound ?comps * _ ] =>
-    apply himp_comm_conc; apply himp_prop_conc
-  | [ |- all_bound_drop ?comps ?c * bound ?c ==> all_bound ?comps ] =>
-    apply himp_comm_prem
+  | [ |- all_bound_drops ?cs nil ==> _ ] =>
+    eapply himp_trans; [ apply all_bound_drops_nil | ]
+  | [ H : In ?c ?cs |-
+    bound ?c * all_bound (remove_first ?c ?cs) ==> _ ] =>
+  eapply himp_trans; [now apply repack_all_bound_remove | ]
+  | [ |- bound ?c * all_bound_drops ?cs (?c :: ?rest) ==> _ ] =>
+    eapply himp_trans; [ now apply repack_all_bound_drops | ]
+  | [ H : In ?c ?cs |-
+    all_bound ?cs ==> bound ?c * all_bound_drops ?cs (?c :: nil) ] =>
+  apply unpack_all_bound
+  | [ H : In ?c ?cs |-
+    all_bound ?cs ==> bound ?c * all_bound (remove_first ?c ?cs) ] =>
+  apply unpack_all_bound_remove
   | [ _: KTrace ?x |- KTrace (_ ++ ?x) ] => econstructor; [eauto|]
   | [ _: KTrace ?x |- KTrace ?t ] =>
     match t with context [x] => repeat (rewrite app_assoc) end
@@ -778,7 +916,6 @@ Proof.
   );
   sep unfoldr simplr.
 Qed.
-
 ";
   let kern_state_vars = s.var_decls |> List.map fst |> String.concat " " in
   let (xch_chan, exchanges) = s.exchange in
@@ -792,7 +929,7 @@ Definition exchange_%s :
 Proof.
   intros c [comps tr %s]; refine (
     req <- recv_msg c tr
-    <@> [In c comps] * all_bound_drop comps c * (tr ~~ [KTrace tr]);
+    <@> [In c comps]%s * all_bound_drops comps (c :: nil) * (tr ~~ [KTrace tr]);
     match req with
 %s
     (* special case for errors *)
@@ -805,6 +942,11 @@ Qed.
 "
       comp
       kern_state_vars
+      (
+        match frames_of_vars s with
+        | [] -> ""
+        | l  -> " * " ^ String.concat " * " l
+      )
       (fmt handlers (coq_of_handler s xch_chan))
       kern_state_vars
       (
@@ -849,12 +991,18 @@ Definition kbody:
 Proof.";
   add (Printf.sprintf "
   intros [comps tr %s];" kern_state_vars);
-  add "
+  add ( Printf.sprintf "
   refine (
     comp <- select comps tr
-    <@> (tr ~~ [KTrace tr] * all_bound comps);
+    <@> (tr ~~ [KTrace tr] * all_bound comps%s);
     let handler := (
-      match type_of_comp comp comps with";
+      match type_of_comp comp comps with"
+    (
+      match frames_of_vars s with
+      | [] -> ""
+      | l  -> " * " ^ String.concat " * " l
+    )
+  );
   add (
     String.concat "" (List.map (fun (comp, _) -> Printf.sprintf "
       | %s => exchange_%s" comp comp

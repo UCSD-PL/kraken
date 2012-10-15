@@ -1,0 +1,41 @@
+State {
+  currenttab : chan ;
+  renderer   : chan ;
+}
+
+Components {
+  Renderer  "renderer.py"  ;
+  Tab       "tab.py"       ;
+  UserInput "userinput.py" ;
+}
+
+Messages {
+  Input(str);
+  NewTab(str);
+  Go(str);
+  HTML(str);
+}
+
+Init {
+  renderer := spawn(Renderer);
+  currenttab := spawn(Tab);
+  spawn(UserInput);
+}
+
+Exchange(c) {
+  Renderer {
+  }
+
+  Tab {
+    HTML(s) {
+      # TODO: Check that it's the current tab
+      send(renderer, HTML(s));
+    }
+  }
+
+  UserInput {
+    Input(s) {
+      send(currenttab, Go(s));
+    }
+  }
+}

@@ -23,9 +23,6 @@ Init {
 }
 
 Exchange(c) {
-  Renderer {
-  }
-
   Tab {
     HTML(s) {
       # TODO: Check that it's the current tab

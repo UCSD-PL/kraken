@@ -919,7 +919,11 @@ Qed.
 ";
   let kern_state_vars = s.var_decls |> List.map fst |> String.concat " " in
   let (xch_chan, exchanges) = s.exchange in
-  add (fmt exchanges (fun (comp, handlers) ->
+  add (fmt s.components (fun (comp, _) ->
+    let comp_exchanges = (
+      try Some (List.find (fun (s, _) -> s = comp) (snd (s.exchange)))
+      with Not_found -> None
+    ) in
     (* c should be %s xch_chan, but there's plenty of them :( *)
     Printf.sprintf "
 Definition exchange_%s :
@@ -935,7 +939,7 @@ Proof.
     (* special case for errors *)
     | BadTag tag =>
       {{ Return (mkst comps (tr ~~~ RecvMsg c (BadTag tag) ++ tr) %s) }}
-%s    end
+    end
   );
   sep unfoldr simplr.
 Qed.
@@ -947,27 +951,29 @@ Qed.
         | [] -> ""
         | l  -> " * " ^ String.concat " * " l
       )
-      (fmt handlers (coq_of_handler s xch_chan))
-      kern_state_vars
       (
-        match
-          List.filter
-            (fun msg -> not (
-              List.exists
-                (fun h -> h.trigger.tag = msg.tag)
-                handlers
-            ))
-            s.msg_decls
-        with
-        | [] -> ""
-        | _ ->
-          Printf.sprintf
-"    (* non-handled cases *)
-    | msg =>
-      {{ Return (mkst comps (tr ~~~ RecvMsg c msg ++ tr) %s) }}
+        fmt s.msg_decls (fun msg ->
+          let constr = mkstr "%s %s" msg.tag (str_of_args msg) in
+          let unhandled = Printf.sprintf "
+    (* not handled *)
+    | %s =>
+      {{ Return (mkst comps (tr ~~~ RecvMsg c (%s) ++ tr) %s) }}
 "
-            kern_state_vars
+            constr constr kern_state_vars
+          in
+          match comp_exchanges with
+          | None -> unhandled
+          | Some(exchanges) ->
+            try (
+              let handler =
+                List.find (fun h -> h.trigger.tag = msg.tag) (snd exchanges)
+              in
+              coq_of_handler s xch_chan handler
+            )
+            with Not_found -> unhandled
+        )
       )
+      kern_state_vars
   ));
   add "
 Fixpoint type_of_comp

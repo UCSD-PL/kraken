@@ -392,6 +392,7 @@ let coq_of_kernel_subs s =
   let kstate_vars =
     s.var_decls |> List.map fst |> String.concat " "
   in
+  List.map (fun (f, r) -> (Str.regexp f, r))
   [ "__P_CONST_DECLS__",
       fmt s.constants coq_of_constant_decl
   ; "__P_COMP_DECLS__",
@@ -469,4 +470,3 @@ let coq_of_kernel_subs s =
 "
       kstate_vars comp_xch kstate_vars
   ]
-  |> List.map (fun (f, r) -> (Str.regexp f, r))

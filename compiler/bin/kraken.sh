@@ -121,8 +121,8 @@ if $DEBUG; then
   EXEC="ocamldebug -I $KRAKEN/compiler/src/_build $EXEC"
 fi
 $EXEC $INDIR/kernel.krn \
-  --template kernel "$D/coq/Kraken.temp" \
-  --instance kernel "$D/coq/Kraken.v" \
+  --template kernel "$D/coq/Kernel.v-template" \
+  --instance kernel "$D/coq/Kernel.v" \
   || error "Kraken compiler failed."
 
 # tell Makefile where it lives

@@ -123,12 +123,12 @@ let main () =
     (get_flag "t-kernel")
     (get_flag "i-kernel")
     (GenCoq.coq_of_kernel_subs k);
-(*
   if flag_is_set "t-pylib" then
     instantiate
       (get_flag "t-pylib")
       (get_flag "i-pylib")
       (GenPy.pylib_subs k);
+(*
   if flag_is_set "t-clib-h" then
     instantiate
       (get_flag "t-clib-h")

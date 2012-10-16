@@ -2,6 +2,7 @@ BUILD := ocamlbuild
 SLINK := ln -s -f
 
 FLAGS = \
+	-lib str \
 	-lib unix \
 	-cflag -g \
 	-lflag -g \

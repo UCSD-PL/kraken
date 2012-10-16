@@ -46,10 +46,10 @@ OPTIONS:
 }
 
 # process args
-if [ "$*" = "" ]; then
+if [ $# -eq 0 ]; then
   usage
 fi
-while [ "$*" != "" ]; do
+while [ $# -ne 0 ]; do
   case $1 in
     -h | -help | --help)
       usage
@@ -109,15 +109,11 @@ if [ -d "$D" ]; then
     error "'$D' already exists. To overwrite use --force."
   fi
 fi
-
 D=$(canonpath "$D")
 
-# copy template to kernel tree
+# copy template to kernel tree, install client code
 cp -r "$KBASE" "$D"
-
-# copy client component code over, except for kernel spec
 cp $INDIR/* $D/client/
-rm $D/client/kernel.krn
 
 # generate code and proofs
 EXEC="$KBIN/.kraken"
@@ -125,8 +121,8 @@ if $DEBUG; then
   EXEC="ocamldebug -I $KRAKEN/compiler/src/_build $EXEC"
 fi
 $EXEC $INDIR/kernel.krn \
-  --kraken "$D/coq/Kraken.v" \
-  --lib "$D/client" \
+  --template kernel "$D/coq/Kraken.temp" \
+  --instance kernel "$D/coq/Kraken.v" \
   || error "Kraken compiler failed."
 
 # tell Makefile where it lives

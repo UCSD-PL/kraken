@@ -1,11 +1,5 @@
 include ../Makefile.config
 
-ifeq "$(wildcard Makefile.client)" ""
-client: # no client Makefile
-else
-include Makefile.client
-endif
-
 all: passfd msg.o client
 
 passfd:
@@ -17,6 +11,12 @@ passfd:
 
 %.o: %.c
 	$(CC) -c $*.c
+
+ifeq "$(wildcard Makefile.client)" ""
+client: # no client Makefile
+else
+include Makefile.client
+endif
 
 clean:
 	# only removes temporary build files, not installed passfd

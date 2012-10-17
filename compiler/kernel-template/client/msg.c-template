@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
@@ -11,6 +12,42 @@
 void
 msg_init(char *arg) {
   KCHAN = atoi(arg);
+}
+
+pstr *
+alloc_pstr() {
+  pstr *s;
+
+  s = (pstr *)malloc(sizeof(pstr));
+  assert(s != NULL);
+  return s;
+}
+
+pstr *
+pstr_of_string(char *s) {
+  pstr *p;
+
+  p = alloc_pstr();
+  p->len = strlen(s);
+  p->buf = strdup(s);
+  return p;
+}
+
+pstr *
+mk_pstr(int len, char *buf) {
+  pstr *p;
+
+  p = alloc_pstr();
+  p->len = len;
+  p->buf = (char *)malloc(p->len);
+  assert(p->buf != NULL);
+  memcpy(p->buf, buf, p->len);
+  return p;
+}
+
+pstr *
+pstrdup(pstr *s) {
+  return mk_pstr(s->len, s->buf);
 }
 
 param *
@@ -44,12 +81,12 @@ mk_num_param(uint32_t n, param *next) {
 }
 
 param *
-mk_str_param(char *s, param *next) {
+mk_pstr_param(pstr *s, param *next) {
   param *p;
 
   p = alloc_param();
   p->ptyp = PTYP_STR;
-  p->pval.str = strdup(s);
+  p->pval.pstr = pstrdup(s);
   p->next = next;
   return p;
 }
@@ -79,6 +116,13 @@ mk_msg(int mtyp, param *pay) {
 __MK_MSG_FUNCS__
 
 void
+free_pstr(pstr *s) {
+  free(s->buf);
+  s->buf = NULL;
+  free(s);
+}
+
+void
 free_param(param *p) {
   if(p == NULL) {
     return;
@@ -89,7 +133,7 @@ free_param(param *p) {
     case PTYP_NUM:
       break;
     case PTYP_STR:
-      free(p->pval.str);
+      free_pstr(p->pval.pstr);
       break;
     case PTYP_FD:
       break;
@@ -144,6 +188,34 @@ __STRING_OF_MTYP_CASES__
 }
 
 char *
+string_of_pstr(pstr *s) {
+  char *res, *it;
+  int i;
+
+  res = (char *)malloc(s->len * 4 + 2);
+  assert(res != NULL);
+  it = res;
+  *it = '"'; it++;
+  for(i = 0; i < s->len; i++) {
+    if (! isprint(s->buf[i])) {
+      sprintf(it, "\\x%02x", s->buf[i]);
+      it += 4;
+    } else if (s->buf[i] == '"') {
+      *it = '\\'; it++;
+      *it = '"';  it++;
+    } else if (s->buf[i] == '\\') {
+      *it = '\\'; it++;
+      *it = '\\'; it++;
+    } else {
+      *it = s->buf[i]; it++;
+    }
+  }
+  *it = '"'; it++;
+  *it = '\0';
+  return res;
+}
+
+char *
 string_of_params(param *p) {
   char *s, *h, *t;
   int n;
@@ -156,7 +228,7 @@ string_of_params(param *p) {
       h = zsprintf("%d", p->pval.num);
       break;
     case PTYP_STR:
-      h = zsprintf("\"%s\"", p->pval.str);
+      h = string_of_pstr(p->pval.pstr);
       break;
     case PTYP_FD:
       h = zsprintf("fd(%d)", p->pval.fd);
@@ -221,29 +293,27 @@ send_num(uint32_t x) {
   assert(n == NUM_SIZE);
 }
 
-char *
-recv_str(void) {
-  uint32_t len;
-  char *buf;
+pstr *
+recv_pstr(void) {
+  pstr *s;
   int n;
 
-  len = recv_num();
-  buf = (char *)malloc(len);
-  assert(buf != NULL);
-  n = recv(KCHAN, buf, len, 0);
-  assert(n == len);
-  return buf;
+  s = alloc_pstr();
+  s->len = recv_num();
+  s->buf = (char *)malloc(s->len);
+  assert(s->buf != NULL);
+  n = recv(KCHAN, s->buf, s->len, 0);
+  assert(n == s->len);
+  return s;
 }
 
 void
-send_str(char *buf) {
-  uint32_t len;
+send_pstr(pstr *s) {
   int n;
 
-  len = strlen(buf);
-  send_num(len);
-  n = send(KCHAN, buf, len, 0);
-  assert(n == len);
+  send_num(s->len);
+  n = send(KCHAN, s->buf, s->len, 0);
+  assert(n == s->len);
 }
 
 int
@@ -345,7 +415,7 @@ recv_params(param *p) {
       p->pval.num = recv_num();
       break;
     case PTYP_STR:
-      p->pval.str = recv_str();
+      p->pval.pstr = recv_pstr();
       break;
     case PTYP_FD:
       p->pval.fd = recv_fd();
@@ -367,7 +437,7 @@ send_params(param *p) {
       send_num(p->pval.num);
       break;
     case PTYP_STR:
-      send_str(p->pval.str);
+      send_pstr(p->pval.pstr);
       break;
     case PTYP_FD:
       send_fd(p->pval.fd);

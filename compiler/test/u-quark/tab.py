@@ -4,10 +4,10 @@ import msg, time
 
 def main():
   msg.init()
-  msg.send('Dummy', 'dummy')
   while True:
-    m = msg.recv()
-    html = urllib2.urlopen(m[2].read()).read()
-    msg.send('HTML', html)
+    userinput = msg.recv()
+    msg.send('Wget', userinput[1])
+    html = msg.recv()
+    msg.send('Display', html[2])
 
 main()

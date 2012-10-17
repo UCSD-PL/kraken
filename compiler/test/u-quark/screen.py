@@ -1,13 +1,13 @@
 #!/usr/bin/env python2.7
 
-import msg, time
+import msg, time, subprocess
 
 def main():
   msg.init()
-  msg.send('Dummy', 'dummy')
   while True:
     m = msg.recv()
-    html = urllib2.urlopen(m[2].read()).read()
-    msg.send('HTML', html)
+    p = subprocess.Popen(["lynx", "--dump", "--stdin"], stdin=subprocess.PIPE)
+    (stdout, stderr) = p.communicate(input=m[1].read())
+    print(stdout)
 
 main()

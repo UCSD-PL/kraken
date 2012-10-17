@@ -4,8 +4,8 @@ State {
 }
 
 Components {
-  Tab       "tab.py"       ;
-  Screen    "screen.py"  ;
+  Tab       "tab.py"        ;
+  Screen    "screen.py"     ;
   UserInput "user-input.py" ;
 }
 
@@ -14,7 +14,6 @@ Messages {
   Wget(str);
   HTML(str, fdesc);
   Display(fdesc);
-  Fail(fdesc, fdesc);
 }
 
 Init {
@@ -26,7 +25,7 @@ Init {
 Exchange(c) {
   Tab {
     Wget(url) {
-      f := call("wget.py", "");
+      f := call("wget.py", url);
       send(c, HTML(url, f));
     }
     Display(bitmap) {

@@ -392,29 +392,30 @@ let coq_of_kernel_subs s =
   let kstate_vars =
     s.var_decls |> List.map fst |> String.concat " "
   in
-  List.map (fun (f, r) -> (Str.regexp f, r))
-  [ "__P_CONST_DECLS__",
+  List.map (fun (f, r) ->
+    (Str.regexp ("(\\* *__" ^ f ^ "__ *\\*)"), r))
+  [ "CONST_DECLS",
       fmt s.constants coq_of_constant_decl
-  ; "__P_COMP_DECLS__",
+  ; "COMP_DECLS",
       fmt s.components (fun (id, path) ->
         "| " ^ id)
-  ; "__P_CHAN_PATHS__",
+  ; "CHAN_PATHS",
       fmt s.components (fun (id, path) ->
         mkstr "  | %s => string2str \"%s\"" id path)
-  ; "__P_MSG_DECL__",
+  ; "MSG_DECL",
       fmt s.msg_decls coq_of_msg_decl
-  ; "__P_RECV_T_CASES__",
+  ; "RECV_T_CASES",
       fmt s.msg_decls (coq_trace_recv_msg m)
-  ; "__P_SEND_T_CASES__",
+  ; "SEND_T_CASES",
       fmt s.msg_decls (coq_trace_send_msg m)
-  ; "__P_RECV_CASES__",
+  ; "RECV_CASES",
       fmt s.msg_decls (coq_recv_msg m)
-  ; "__P_SEND_CASES__",
+  ; "SEND_CASES",
       fmt s.msg_decls (coq_send_msg m)
-  ; "__P_VE_HANDLED_CASES__",
+  ; "VE_HANDLED_CASES",
       fmt exchanges (fun (comp, handlers) ->
         fmt handlers (coq_spec_of_handler s comp xch_chan))
-  ; "__P_VE_UNHANDLED_CASES__",
+  ; "VE_UNHANDLED_CASES",
       fmt exchanges (fun (comp, handlers) ->
         let handled m =
           List.exists (fun h -> h.trigger.tag = m.tag) handlers
@@ -430,24 +431,24 @@ let coq_of_kernel_subs s =
             comp m.tag args xch_chan xch_chan m.tag args
         )
       )
-  ; "__P_KTRACE_INIT__", (
+  ; "KTRACE_INIT", (
       let t = coq_trace_of_prog s [] s.init in
       let v = prog_vars s.init in
       match v with
       | [] -> mkstr "KTrace (%snil)" t
       | _  -> mkstr "forall %s, KTrace (%snil)" (String.concat " " v) t
     )
-  ; "__P_KSTATE_FIELDS__",
+  ; "KSTATE_FIELDS",
       fmt s.var_decls (fun (id, typ) ->
         mkstr "; %s : %s" id (coq_of_typ typ))
-  ; "__P_INIT_CODE__",
+  ; "INIT_CODE",
       coq_of_init s
-  ; "__P_EXCHANGES__",
+  ; "EXCHANGES",
       fmt exchanges (coq_of_exchange s xch_chan kstate_vars)
-  ; "__P_TYPE_OF_COMP_DEFAULT__",
+  ; "TYPE_OF_COMP_DEFAULT",
       mkstr "\n| nil => %s (* TODO: need default or proof *)"
         (fst (List.hd s.components))
-  ; "__P_KBODY__",
+  ; "KBODY",
       let comp_xch =
         s.components
           |> List.map (fun (c, _) -> mkstr "\n| %s => exchange_%s" c c)

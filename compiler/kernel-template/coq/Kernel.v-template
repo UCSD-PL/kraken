@@ -37,15 +37,15 @@ Fixpoint string2str (s: string): str :=
   | String c rest => c :: string2str rest
   end.
 
-__P_CONST_DECLS__
+(* __CONST_DECLS__ *)
 
 Inductive chan_type : Set :=
-__P_COMP_DECLS__
+(* __COMP_DECLS__ *)
 .
 
 Definition chan_path (t: chan_type): str :=
   match t with
-__P_CHAN_PATHS__
+(* __CHAN_PATHS__ *)
   end.
 
 Axiom chan : chan_type -> Set.
@@ -223,13 +223,13 @@ Definition SendFD_t (c : tchan) (f : fdesc) : Trace :=
 Global Opaque RecvStr SendStr Exec_t Call_t RecvFD_t SendFD_t.
 
 Inductive msg : Set :=
-__P_MSG_DECL__
+(* __MSG_DECL__ *)
 (* special case for errors *)
 | BadTag : num -> msg.
 
 Definition RecvMsg (c : tchan) (m : msg) : Trace :=
   match m with
-__P_RECV_T_CASES__
+(* __RECV_T_CASES__ *)
   (* special case for errors *)
   | BadTag p0 =>
     RecvNum c p0
@@ -237,7 +237,7 @@ __P_RECV_T_CASES__
 
 Definition SendMsg (c : tchan) (m : msg) : Trace :=
   match m with
-__P_SEND_T_CASES__
+(* __SEND_T_CASES__ *)
   (* special case for errors *)
   | BadTag p0 =>
     SendNum c (Num "000")
@@ -251,7 +251,7 @@ Proof.
   intros; refine (
     tag <- recv_num c tr;
     match tag with
-__P_RECV_CASES__
+(* __RECV_CASES__ *)
     (* special case for errors *)
     | m =>
       {{ Return (BadTag m) }}
@@ -269,7 +269,7 @@ Definition send_msg :
 Proof.
   intros; refine (
     match m with
-__P_SEND_CASES__
+(* __SEND_CASES__ *)
     (* special case for errors *)
     | BadTag _ =>
       send_num c (Num "000") tr;;
@@ -285,8 +285,8 @@ Qed.
 Global Opaque RecvMsg SendMsg.
 
 Inductive ValidExchange : Trace -> Prop :=
-__P_VE_HANDLED_CASES__
-__P_VE_UNHANDLED_CASES__
+(* __VE_HANDLED_CASES__ *)
+(* __VE_UNHANDLED_CASES__ *)
 (* special case for errors *)
 | VE_BadTag :
   forall c tag,
@@ -305,7 +305,7 @@ Hint Constructors AddedValidExchange.
 
 Inductive KTrace : Trace -> Prop :=
 | KT_init :
-__P_KTRACE_INIT__
+(* __KTRACE_INIT__ *)
 | KT_select :
   forall tr cs c,
   KTrace tr ->
@@ -364,7 +364,7 @@ Qed.
 Record kstate : Set :=
   mkst { components : list tchan
        ; ktr : [Trace]
-__P_KSTATE_FIELDS__
+(* __KSTATE_FIELDS__ *)
        }.
 
 Definition kstate_inv s : hprop :=
@@ -399,17 +399,17 @@ Definition kinit :
         (fun s => kstate_inv s).
 Proof.
   intros; refine (
-__P_INIT_CODE__
+(* __INIT_CODE__ *)
   );
   sep unfoldr simplr.
 Qed.
 
-__P_EXCHANGES__
+(* __EXCHANGES__ *)
 
 Fixpoint type_of_comp
   (c: tchan) (comps: list tchan): chan_type :=
   match comps with
-__P_TYPE_OF_COMP_DEFAULT__
+(* __TYPE_OF_COMP_DEFAULT__ *)
   | x :: rest =>
     if tchan_eq x c
       then projT1 x
@@ -421,7 +421,7 @@ Definition kbody:
   STsep (kstate_inv s)
         (fun s' => kstate_inv s').
 Proof.
-__P_KBODY__
+(* __KBODY__ *)
 Qed.
 
 Definition kloop:

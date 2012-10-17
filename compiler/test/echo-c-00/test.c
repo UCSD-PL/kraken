@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <unistd.h>
-#include "msg.c"
+#include "msg.h"
 
 int
 main(int argc, char **argv) {

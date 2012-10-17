@@ -128,7 +128,6 @@ let main () =
       (get_flag "t-pylib")
       (get_flag "i-pylib")
       (GenPy.pylib_subs k);
-(*
   if flag_is_set "t-clib-h" then
     instantiate
       (get_flag "t-clib-h")
@@ -139,8 +138,6 @@ let main () =
       (get_flag "t-clib-c")
       (get_flag "i-clib-c")
       (GenC.clib_c_subs k)
-*)
-  ()
 
 let _ =
   main ()

@@ -18,7 +18,7 @@ let c_mtyp_str m =
 
 let c_typ = function
   | Num -> "uint32_t"
-  | Str -> "char *"
+  | Str -> "pstr *"
   | Fdesc -> "int"
 
 let c_ptyp = function
@@ -28,7 +28,7 @@ let c_ptyp = function
 
 let c_mk_param_typ = function
   | Num -> "mk_num_param"
-  | Str -> "mk_str_param"
+  | Str -> "mk_pstr_param"
   | Fdesc -> "mk_fd_param"
 
 let c_msg_ctor_proto m =

@@ -7,7 +7,7 @@ if [ "$KRAKEN_GDB" != "" ]; then
   " > $KROOT/client/gdb-run
   cgdb $KROOT/client/test -x $KROOT/client/gdb-run
 elif [ "$KRAKEN_VALGRIND" != "" ]; then
-  valgrind $KROOT/client/test "$@"
+  valgrind --verbose --leak-check=full --show-reachable=yes $KROOT/client/test "$@"
 else
   $KROOT/client/test "$@"
 fi

@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+
+import socket, struct, passfd, os, sys
+
+KCHAN = None
+
+def init():
+  global KCHAN
+  fd = int(sys.argv[1])
+  KCHAN = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+
+def recv_num():
+  s = KCHAN.recv(1)
+  n = struct.unpack('>B', s)[0]
+  return n
+
+def recv_str():
+  n = recv_num()
+  s = KCHAN.recv(n)
+  return s
+
+def recv_fd():
+  fd, _ = passfd.recvfd(KCHAN)
+  f = os.fdopen(fd, 'r')
+  return f
+
+def send_num(n):
+  s = struct.pack('>B', n)
+  KCHAN.send(s)
+
+def send_str(s):
+  send_num(len(s))
+  KCHAN.send(s)
+
+def send_fd(f):
+  fd = f.fileno()
+  passfd.sendfd(KCHAN, fd)
+
+def recv():
+  tag = recv_num()
+  return {
+__RECV_CASES__
+  }[tag](0)
+
+def send(*m):
+  tag = m[0]
+  {
+__SEND_CASES__
+  }[tag](0)

@@ -1,2 +1,2 @@
-client:
-	$(CC) -g -o test test.c
+client: msg.o test.o
+	$(CC) $(CFLAGS) -o test test.o msg.o

@@ -10,7 +10,7 @@ passfd:
 		&& ./setup.py install --verbose --prefix "$(KROOT)"
 
 %.o: %.c
-	$(CC) -c $*.c
+	$(CC) $(CFLAGS) -c $*.c
 
 ifeq "$(wildcard Makefile.client)" ""
 client: # no client Makefile

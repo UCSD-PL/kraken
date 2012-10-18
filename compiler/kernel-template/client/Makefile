@@ -1,6 +1,6 @@
 include ../Makefile.config
 
-all: passfd
+all: passfd msg.o client
 
 passfd:
 	tar xzf python-passfd-0.2.tar.gz
@@ -8,6 +8,15 @@ passfd:
 		&& patch < ../passfd-2.7.patch \
 		&& ./setup.py build --verbose \
 		&& ./setup.py install --verbose --prefix "$(KROOT)"
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $*.c
+
+ifeq "$(wildcard Makefile.client)" ""
+client: # no client Makefile
+else
+include Makefile.client
+endif
 
 clean:
 	# only removes temporary build files, not installed passfd

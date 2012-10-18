@@ -15,6 +15,8 @@ let space = [' ' '\t']
 let line = '\n'
 
 rule token = parse
+  | "State" { STATE }
+  | "Components" { COMPONENTS }
   | "Messages" { MESSAGES }
   | "Init" { INIT }
   | "Exchange" { EXCHANGE }
@@ -31,6 +33,9 @@ rule token = parse
   | ")" { RPAREN }
   | "," { COMMA }
   | ";" { SEMI }
+  | ":" { COLON }
+  | ":=" { ASSIGN }
+  | "+" { PLUS }
   | eof { EOF }
   | num as x { NUMLIT (int_of_string x) }
   | str as x { STRLIT (chop_quotes x) }

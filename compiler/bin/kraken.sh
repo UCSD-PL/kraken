@@ -46,10 +46,10 @@ OPTIONS:
 }
 
 # process args
-if [ "$*" = "" ]; then
+if [ $# -eq 0 ]; then
   usage
 fi
-while [ "$*" != "" ]; do
+while [ $# -ne 0 ]; do
   case $1 in
     -h | -help | --help)
       usage
@@ -109,14 +109,11 @@ if [ -d "$D" ]; then
     error "'$D' already exists. To overwrite use --force."
   fi
 fi
-
 D=$(canonpath "$D")
 
-# copy template to kernel tree
+# copy template to kernel tree, install client code
 cp -r "$KBASE" "$D"
-
-# copy client scripts over
-cp $INDIR/*.py $D/client/
+cp $INDIR/* $D/client/
 
 # generate code and proofs
 EXEC="$KBIN/.kraken"
@@ -124,8 +121,14 @@ if $DEBUG; then
   EXEC="ocamldebug -I $KRAKEN/compiler/src/_build $EXEC"
 fi
 $EXEC $INDIR/kernel.krn \
-  --exchange "$D/coq/Exchange.v" \
-  --lib "$D/client" \
+  --template kernel "$D/coq/Kernel.v-template" \
+  --instance kernel "$D/coq/Kernel.v" \
+  --template pylib  "$D/client/msg.py-template" \
+  --instance pylib  "$D/client/msg.py" \
+  --template clib-h "$D/client/msg.h-template" \
+  --instance clib-h "$D/client/msg.h" \
+  --template clib-c "$D/client/msg.c-template" \
+  --instance clib-c "$D/client/msg.c" \
   || error "Kraken compiler failed."
 
 # tell Makefile where it lives
@@ -140,7 +143,7 @@ sed "s;__KROOT__;$D;" \
   > "$D/bin/kernel.sh"
 
 if $PRETTY; then
-  $KBIN/coq-prettify.sh "$D/coq/Exchange.v"
+  $KBIN/coq-prettify.sh "$D/coq/Kraken.v"
 fi
 
 if $BUILD; then

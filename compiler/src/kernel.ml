@@ -12,6 +12,7 @@ type expr =
   | Var of id
   | NumLit of int
   | StrLit of string
+  | Plus of expr * expr
 
 type 'a msg =
   { tag : string
@@ -33,7 +34,8 @@ type msg_expr = expr msg
 type cmd =
   | Send of chan * msg_expr
   | Call of id * expr * expr
-  | Spawn of id * expr
+  | Spawn of id * id
+  | Assign of id * expr
 
 type prog =
   | Nop
@@ -50,17 +52,21 @@ let mk_handler t r =
   }
 
 type kernel =
-  { constants : (id * expr) list
-  ; msg_decls : msg_decl list
-  ; init : prog
-  ; exchange : chan * handler list
+  { constants  : (id * expr) list
+  ; var_decls  : (id * typ) list
+  ; components : (id * string) list
+  ; msg_decls  : msg_decl list
+  ; init       : prog
+  ; exchange   : chan * ((string * handler list) list)
   }
 
-let mk_kernel cs ms i xch =
-  { constants = cs
-  ; msg_decls = ms
-  ; init = i
-  ; exchange = xch
+let mk_kernel cs vs comps ms i xch =
+  { constants  = cs
+  ; var_decls  = vs
+  ; components = comps
+  ; msg_decls  = ms
+  ; init       = i
+  ; exchange   = xch
   }
 
 let ck_kernel s =

@@ -1,17 +1,18 @@
 Require Import Ynot.Extract.
-Require Import KrakenBase.
 Require Import Kernel.
 
-Extract Constant KrakenBase.chan    => "KrakenBaseImpl.chan".
-Extract Constant KrakenBase.chan_eq => "KrakenBaseImpl.chan_eq".
-Extract Constant KrakenBase.fdesc   => "KrakenBaseImpl.fdesc".
-Extract Constant KrakenBase.exec    => "KrakenBaseImpl.exec".
-Extract Constant KrakenBase.call    => "KrakenBaseImpl.call".
-Extract Constant KrakenBase.select  => "KrakenBaseImpl.select".
-Extract Constant KrakenBase.recv    => "KrakenBaseImpl.recv".
-Extract Constant KrakenBase.send    => "KrakenBaseImpl.send".
-Extract Constant KrakenBase.recv_fd => "KrakenBaseImpl.recv_fd".
-Extract Constant KrakenBase.send_fd => "KrakenBaseImpl.send_fd".
+Extraction Blacklist List String.
+
+Extract Constant Kernel.chan     => "KrakenImpl.chan".
+Extract Constant Kernel.tchan_eq => "KrakenImpl.tchan_eq".
+Extract Constant Kernel.fdesc    => "KrakenImpl.fdesc".
+Extract Constant Kernel.exec     => "KrakenImpl.exec".
+Extract Constant Kernel.call     => "KrakenImpl.call".
+Extract Constant Kernel.select   => "KrakenImpl.select".
+Extract Constant Kernel.recv     => "KrakenImpl.recv".
+Extract Constant Kernel.send     => "KrakenImpl.send".
+Extract Constant Kernel.recv_fd  => "KrakenImpl.recv_fd".
+Extract Constant Kernel.send_fd  => "KrakenImpl.send_fd".
 
 Cd "../ml".
 Recursive Extraction Library Kernel.

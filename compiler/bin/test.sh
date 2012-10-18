@@ -16,10 +16,10 @@ PASS=$'\033[1;32mPASS\033[0m'
 FAIL=$'\033[1;31mFAIL\033[0m'
 
 D=$(mktemp -d /tmp/kraken-test-XXXXXX)
-rm -f    /tmp/kraken-last-test
-ln -s $D /tmp/kraken-last-test
+rm -f    /tmp/kraken-test-last
+ln -s $D /tmp/kraken-test-last
 
-echo "Output written to $D (symlinked /tmp/kraken-last-test)"
+echo "Output written to $D (symlinked /tmp/kraken-test-last)"
 
 date > $D/timestamp.txt
 

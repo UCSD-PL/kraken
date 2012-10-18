@@ -1,0 +1,23 @@
+State {
+
+}
+
+Components {
+  Test "test.sh";
+}
+
+Messages {
+  M(str);
+}
+
+Init {
+  spawn(Test);
+}
+
+Exchange(c) {
+  Test {
+    M(y) {
+      send(c, M(y));
+    }
+  }
+}

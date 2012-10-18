@@ -1,16 +1,23 @@
-TEST = "test.py";
+State {
+}
+
+Components {
+  Main "test.py";
+}
 
 Messages {
   M(str);
 }
 
 Init {
-
+  spawn(Main);
 }
 
 Exchange(c) {
-  M(y) {
-    send(c, M("HELLO"));
-    spawn(TEST);
+  Main {
+    M(y) {
+      send(c, M("HELLO"));
+      spawn(Main);
+    }
   }
 }

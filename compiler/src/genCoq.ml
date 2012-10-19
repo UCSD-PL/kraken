@@ -360,21 +360,14 @@ let coq_of_handler s xch_chan h =
   in
   let fr = (
     let chans = chans_of_prog h.respond in
-    frames_of_vars s @ (
-      List.fold_left
-      (* folding function *)
-      (fun acc elt ->
-        mkstr "bound %s"      elt
-        :: acc)
-      (* starting accumulator *)
-      [ mkstr "all_bound_drops comps (%s :: nil)"
-          (String.concat " :: " chans)
+    let acc0 =
+      [ mkstr "all_bound_drops comps (%s :: nil)" (String.concat " :: " chans)
       ; mkstr "[In %s comps]" xch_chan
       ; "(tr ~~ [KTrace tr])"
       ]
-      (* list to fold *)
-      chans
-    )
+    in
+    (frames_of_vars s)
+    @ (List.fold_left (fun acc elt -> mkstr "bound %s" elt :: acc) acc0 chans)
   )
   in
   let pacc = coq_of_prog s tr fr h.respond in

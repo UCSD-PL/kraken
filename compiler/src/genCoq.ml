@@ -1,7 +1,13 @@
 open Common
 open Kernel
 
-let lines l = String.concat "\n" (List.filter (fun s -> s <> "") l)
+let lines l =
+  l |> List.filter ((<>) "")
+    |> String.concat "\n"
+
+let fmt l f =
+  l |> List.map f
+    |> lines
 
 let mk_buffer () =
   let b = Buffer.create 16 in
@@ -384,553 +390,39 @@ let coq_of_handler s xch_chan h =
         (s.var_decls |> List.map fst |> String.concat " ")
     ]
 
-let coq_of_kernel s =
-  let fmt l f = lines (List.map f l) in
-  let (add, contents) = mk_buffer () in
-  add "
-Require Import Ascii.
-Require Import List.
-Require Import String.
-Require Import Ynot.
-Require Import KrakenLib.
-
-Open Local Scope char_scope.
-Open Local Scope hprop_scope.
-Open Local Scope stsepi_scope.
-";
-  add (fmt s.constants coq_of_constant_decl);
-  add "
-Inductive chan_type : Set :=
-";
-  add (fmt s.components (fun (id, _) -> "| " ^ id));
-  add ".
-
-Definition chan_path (t: chan_type): str :=
-  match t with
-";
-  add (fmt s.components
-        (fun (id, path) ->
-          mkstr "  | %s => string2str \"%s\"" id path)
-  );
-  (* TODO?: Move a big chunk of what's next in a template file.
-    If so, remember to unescape "001"
-   *)
-  add "
-  end.
-
-Axiom chan : chan_type -> Set.
-
-Definition tchan := sigT (fun t : chan_type => chan t).
-
-Axiom tchan_eq : forall (c1 c2 : tchan), { c1 = c2 } + { c1 <> c2 }.
-
-Lemma tchan_eq_true :
-  forall (c : tchan) (A : Type) (vT vF : A),
-  (if tchan_eq c c then vT else vF) = vT.
-Proof.
-  intros; case (tchan_eq c c); auto. congruence.
-Qed.
-
-Lemma tchan_eq_false :
-  forall (c1 c2 : tchan) (A : Type) (vT vF : A),
-  c1 <> c2 ->
-  (if tchan_eq c1 c2 then vT else vF) = vF.
-Proof.
-  intros; case (tchan_eq c1 c2); auto. congruence.
-Qed.
-
-Axiom fdesc : Set.
-
-Inductive Action : Set :=
-| Exec   : str -> tchan -> Action
-| Call   : str -> str -> fdesc -> Action
-| Select : list tchan -> tchan -> Action
-| Recv   : tchan -> str -> Action
-| Send   : tchan -> str -> Action
-| RecvFD : tchan -> fdesc -> Action
-| SendFD : tchan -> fdesc -> Action.
-
-Definition Trace : Set := list Action.
-
-Axiom traced : Trace -> hprop.
-
-Axiom bound : tchan -> hprop.
-
-Axiom exec :
-  forall (t: chan_type) (prog : str) (tr : [Trace]),
-    STsep (tr ~~ traced tr * [prog = chan_path t])
-    (fun (c: tchan) =>
-      tr ~~ bound c * traced (Exec prog c :: tr) * [projT1 c = t]).
-
-Axiom call :
-  forall (prog arg : str) (tr : [Trace]),
-  STsep (tr ~~ traced tr)
-        (fun (f : fdesc) => tr ~~ traced (Call prog arg f :: tr)).
-
-(* TODO add non-empty precondition *)
-Axiom select :
-  forall (chans : list tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr)
-        (fun (c : tchan) => tr ~~ traced (Select chans c :: tr) * [In c chans]).
-
-Axiom recv :
-  forall (c : tchan) (n : num) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (s : str) => tr ~~ traced (Recv c s :: tr) * bound c *
-          [nat_of_num n = List.length s]).
-
-Axiom send :
-  forall (c : tchan) (s : str) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (Send c s :: tr) * bound c).
-
-Axiom recv_fd :
-  forall (c : tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (f : fdesc) => tr ~~ traced (RecvFD c f :: tr) * bound c).
-
-Axiom send_fd :
-  forall (c : tchan) (f : fdesc) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (SendFD c f :: tr) * bound c).
-
-Definition RecvNum (c : tchan) (n : num) : Trace :=
-  match n with
-  | Num a1 => Recv c (a1 :: nil) :: nil
-  end.
-
-Definition recv_num:
-  forall (c : tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (n : num) => tr ~~ traced (RecvNum c n ++ tr) * bound c).
-Proof.
-  intros; refine (
-    s <- recv c (Num \"001\") tr;
-    match s with
-    | a1 :: nil =>
-      {{ Return (Num a1) }}
-    | _ => (* bogus *)
-      {{ Return (Num zero) }}
-    end
-  );
-  sep fail auto.
-  compute in H; discriminate.
-  compute in H; discriminate.
-Qed.
-
-Definition SendNum (c : tchan) (n : num) : Trace :=
-  match n with
-  | Num a1 => Send c (a1 :: nil) :: nil
-  end.
-
-Definition send_num:
-  forall (c : tchan) (n : num) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (SendNum c n ++ tr) * bound c).
-Proof.
-  intros; refine (
-    match n with
-    | Num a1 =>
-      send c (a1 :: nil) tr;;
-      {{ Return tt }}
-    end
-  );
-  sep fail auto.
-Qed.
-
-Definition RecvStr (c : tchan) (s : str) : Trace :=
-  Recv c s :: RecvNum c (num_of_nat (List.length s)).
-
-Definition recv_str:
-  forall (c : tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (s : str) => tr ~~ traced (RecvStr c s ++ tr) * bound c).
-Proof.
-  intros; refine (
-    n <- recv_num c tr;
-    s <- recv c n (tr ~~~ RecvNum c n ++ tr);
-    {{ Return s }}
-  );
-  sep fail auto.
-  rewrite <- H.
-  rewrite num_nat_embedding.
-  sep fail auto.
-Qed.
-
-Definition SendStr (c : tchan) (s : str) : Trace :=
-  Send c s :: SendNum c (num_of_nat (List.length s)).
-
-Definition send_str:
-  forall (c : tchan) (s : str) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (SendStr c s ++ tr) * bound c).
-Proof.
-  intros; refine (
-    let n := num_of_nat (List.length s) in
-    send_num c n tr;;
-    send c s (tr ~~~ SendNum c n ++ tr);;
-    {{ Return tt }}
-  );
-  sep fail auto.
-Qed.
-
-(* trace versions of basic actions so we can always use app (++) *)
-
-Definition Exec_t (prog : str) (c : tchan) : Trace :=
-  Exec prog c :: nil.
-
-Definition Call_t (prog arg : str) (f : fdesc) : Trace :=
-  Call prog arg f :: nil.
-
-Definition RecvFD_t (c : tchan) (f : fdesc) : Trace :=
-  RecvFD c f :: nil.
-
-Definition SendFD_t (c : tchan) (f : fdesc) : Trace :=
-  SendFD c f :: nil.
-
-(* prevent sep tactic from unfolding *)
-Global Opaque RecvStr SendStr Exec_t Call_t RecvFD_t SendFD_t.
-
-Inductive msg : Set :=
-";
-  add (fmt s.msg_decls coq_of_msg_decl);
-  add "
-(* special case for errors *)
-| BadTag : num -> msg.
-
-Definition RecvMsg (c : tchan) (m : msg) : Trace :=
-  match m with
-";
-  let m = gen_tag_map s in
-  add (fmt s.msg_decls (coq_trace_recv_msg m));
-  add "
-  (* special case for errors *)
-  | BadTag p0 =>
-    RecvNum c p0
-  end.
-
-Definition SendMsg (c : tchan) (m : msg) : Trace :=
-  match m with
-";
-  add (fmt s.msg_decls (coq_trace_send_msg m));
-  add "
-  (* special case for errors *)
-  | BadTag p0 =>
-    SendNum c (Num \"000\")
-  end.
-
-Definition recv_msg :
-  forall (c : tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (m : msg) => tr ~~ traced (RecvMsg c m ++ tr) * bound c).
-Proof.
-  intros; refine (
-    tag <- recv_num c tr;
-    match tag with
-";
-  add (fmt s.msg_decls (coq_recv_msg m));
-  add "
-    (* special case for errors *)
-    | m =>
-      {{ Return (BadTag m) }}
-    end
-  );
-  sep fail auto;
-  repeat rewrite app_ass; simpl;
-  sep fail auto.
-Qed.
-
-Definition send_msg :
-  forall (c : tchan) (m : msg) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (SendMsg c m ++ tr) * bound c).
-Proof.
-  intros; refine (
-    match m with
-";
-  add (fmt s.msg_decls (coq_send_msg m));
-  add "
-    (* special case for errors *)
-    | BadTag _ =>
-      send_num c (Num \"000\") tr;;
-      {{ Return tt }}
-    end
-  );
-  sep fail auto;
-  repeat rewrite app_ass; simpl;
-  sep fail auto.
-Qed.
-
-(* prevent sep tactic from unfolding *)
-Global Opaque RecvMsg SendMsg.
-
-Inductive ValidExchange : Trace -> Prop :=";
-  add (
-    let (xch_chan, exchanges) = s.exchange in
-    fmt exchanges
-      (fun (comp, handlers) ->
-        fmt handlers (coq_spec_of_handler s comp xch_chan)
-      )
-  );
-  (* for now, add a case for each cross-product that is not handled *)
-  add (
-    let (xch_chan, exchanges) = s.exchange in
-    fmt exchanges (fun (comp, handlers) ->
-      let rest = List.filter
-        (fun m ->
-          not (List.exists (fun h -> h.trigger.tag = m.tag) handlers)
-        )
-        s.msg_decls
+let coq_of_exchange spec xch_chan kstate_vars comp =
+  let comp_handlers = (
+    try Some (List.find (fun x -> fst x = comp) (snd (spec.exchange)))
+    with Not_found -> None
+  ) in
+  let vars_frames =
+    match frames_of_vars spec with
+    | [] -> ""
+    | l  -> " * " ^ String.concat " * " l
+  in
+  let hands =
+    fmt spec.msg_decls (fun msg ->
+      let constr = mkstr "%s %s" msg.tag (str_of_args msg) in
+      let unhandled = Printf.sprintf "
+    (* not handled *)
+    | %s =>
+      {{ Return (mkst comps (tr ~~~ RecvMsg c (%s) ++ tr) %s) }}
+"
+        constr constr kstate_vars
       in
-      fmt rest (fun m ->
-        let args =
-          m.payload
-          |> List.map (fun t -> coq_of_typ t ^ string_of_int (tock ()))
-          |> String.concat " "
-        in
-        Printf.sprintf "
-(* unhandled *)
-| VE_%s_%s:
-  forall %s %s, ValidExchange (RecvMsg %s (%s %s))"
-          comp m.tag args xch_chan xch_chan m.tag args
-      )
+      match comp_handlers with
+      | None -> unhandled
+      | Some(exchanges) ->
+        try (
+          let handler =
+            List.find (fun h -> h.trigger.tag = msg.tag) (snd exchanges)
+          in
+          coq_of_handler spec xch_chan handler
+        )
+        with Not_found -> unhandled
     )
-  );
-  add "
-(* special case for errors *)
-| VE_BadTag :
-  forall c tag,
-  ValidExchange (
-    RecvMsg c (BadTag tag)).
-
-Hint Constructors ValidExchange.
-
-Inductive AddedValidExchange : Trace -> Trace -> Prop :=
-| AVE_intro :
-  forall tr1 tr2,
-  ValidExchange tr2 ->
-  AddedValidExchange tr1 (tr2 ++ tr1).
-
-Hint Constructors AddedValidExchange.
-
-Inductive KTrace : Trace -> Prop :=
-| KT_init :
-";
-  add (
-    let t = coq_trace_of_prog s [] s.init in
-    let v = prog_vars s.init in
-    match v with
-    | [] -> mkstr "KTrace (%snil)" t
-    | _  -> mkstr "forall %s, KTrace (%snil)" (String.concat " " v) t
-  );
-  add "
-| KT_select :
-  forall tr cs c,
-  KTrace tr ->
-  KTrace (Select cs c :: tr)
-| KT_exchange :
-  forall tr1 tr2,
-  KTrace tr1 ->
-  AddedValidExchange tr1 tr2 ->
-  KTrace tr2.
-
-Hint Constructors KTrace.
-
-Fixpoint all_bound (cs : list tchan) : hprop :=
-  match cs with
-    | nil => emp
-    | c :: cs' => bound c * all_bound cs'
-  end.
-
-Fixpoint remove_first x l :=
-  match l with
-  | nil     => nil
-  | y :: tl => if (tchan_eq x y) then tl else y :: (remove_first x tl)
-  end.
-
-(* all cs bound except _first_ occurrence of each drop *)
-Fixpoint all_bound_drops (cs : list tchan) (drops : list tchan) : hprop :=
-  match cs with
-  | nil => emp
-  | c :: cs' =>
-    if List.existsb (fun elt => if tchan_eq elt c then true else false) drops
-      then all_bound_drops cs' (remove_first c drops)
-      else bound c * all_bound_drops cs' drops
-  end.
-
-Theorem all_bound_drops_nil :
-  forall l, all_bound_drops l nil <==> all_bound l.
-Proof.
-  split; induction l; sep fail auto.
-Qed.
-
-Lemma unpack_all_bound_remove :
-  forall cs c,
-    In c cs ->
-    all_bound cs ==> bound c * all_bound (remove_first c cs).
-Proof.
-  induction cs; simpl; intros. contradiction.
-  destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
-  case (tchan_eq c a); intros; subst. apply himp_refl.
-  simpl.
-  apply himp_comm_conc. apply himp_assoc_conc1.
-  apply himp_split. apply himp_refl.
-  apply himp_comm_conc. now apply IHcs.
-Qed.
-
-Lemma unpack_all_bound :
-  forall cs c,
-    In c cs ->
-    all_bound cs ==> bound c * all_bound_drops cs (c :: nil).
-Proof.
-  induction cs; simpl; intros. contradiction.
-  destruct H; subst. repeat rewrite tchan_eq_true. simpl.
-  sep fail auto. apply all_bound_drops_nil.
-  case (tchan_eq c a); intros; subst. simpl. rewrite tchan_eq_true.
-  sep fail auto. apply all_bound_drops_nil.
-  simpl. sep fail auto.
-  apply himp_comm_conc. now apply IHcs.
-Qed.
-
-Lemma repack_all_bound_remove :
-  forall cs c,
-    In c cs ->
-    bound c * all_bound (remove_first c cs) ==> all_bound cs.
-Proof.
-  induction cs; simpl; intros. contradiction.
-  destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
-  case (tchan_eq c a); intros; subst. apply himp_refl.
-  simpl.
-  sep fail auto. apply himp_comm_prem. now apply IHcs.
-Qed.
-
-Lemma not_In_remove_first :
-  forall x l, ~ In x l -> forall r, ~ In x (remove_first r l).
-Proof.
-  induction l; simpl; intros. easy. intro. destruct (tchan_eq r a).
-  intuition.
-  simpl in H0. intuition.
-  eauto.
-Qed.
-
-Lemma repack_all_bound_drops :
-  forall cs c rest,
-    In c cs ->
-    ~ In c rest ->
-    bound c * all_bound_drops cs (c :: rest) ==> all_bound_drops cs rest.
-Proof.
-  induction cs; simpl; intros. contradiction.
-  destruct H; subst.
-  repeat rewrite tchan_eq_true. simpl.
-  destruct (
-    existsb (fun elt : tchan => if tchan_eq elt c then true else false)
-    rest
-  ) as []_eqn.
-  exfalso. apply existsb_exists in Heqb. destruct Heqb as [x [In Eq]].
-  destruct (tchan_eq x c). subst. contradiction. discriminate.
-  sep fail idtac.
-  destruct (tchan_eq c a); simpl.
-  subst. rewrite tchan_eq_true.
-  destruct (
-    existsb (fun elt : tchan => if tchan_eq elt a then true else false)
-    rest
-  ) as []_eqn.
-  exfalso. apply existsb_exists in Heqb. destruct Heqb as [x [In Eq]].
-  destruct (tchan_eq x a). subst. contradiction. discriminate.
-  sep fail idtac.
-  destruct (
-    existsb (fun elt : tchan => if tchan_eq elt a then true else false)
-    rest
-  ) as []_eqn.
-  destruct (tchan_eq a c). subst. now elim n.
-  apply IHcs. easy. now apply not_In_remove_first.
-  sep fail idtac.
-  auto using himp_comm_prem.
-Qed.
-
-Lemma all_bound_cons :
-  forall cs c,
-    bound c * all_bound cs ==> all_bound (c :: cs).
-Proof.
-  induction cs; sep fail auto.
-Qed.
-
-Record kstate : Set :=
-  mkst { components : list tchan
-       ; ktr : [Trace]
-";
-  add (
-    match s.var_decls with
-    | [] -> ""
-    | l  -> fmt l (fun (id, typ) -> mkstr "; %s : %s" id (coq_of_typ typ))
-  );
-  add "
-       }.
-
-Definition kstate_inv s : hprop :=
-  tr :~~ ktr s in
-  traced tr * [KTrace tr] * all_bound (components s)
-";
-  add (
-    match s.var_decls with
-    | [] -> ""
-    | l  -> fmt l (fun (id, typ) ->
-        match typ with
-        | Chan -> mkstr "* [In (%s s) (components s)]" id
-        | _    -> ""
-      )
-  );
-  add ".
-
-Ltac unfoldr := unfold kstate_inv.
-
-Ltac simplr_fail :=
-  match goal with
-  | [ |- all_bound_drops ?cs nil ==> _ ] =>
-    eapply himp_trans; [ apply all_bound_drops_nil | ]
-  | [ H : In ?c ?cs |-
-    bound ?c * all_bound (remove_first ?c ?cs) ==> _ ] =>
-  eapply himp_trans; [now apply repack_all_bound_remove | ]
-  | [ |- bound ?c * all_bound_drops ?cs (?c :: ?rest) ==> _ ] =>
-    eapply himp_trans; [ now apply repack_all_bound_drops | ]
-  | [ H : In ?c ?cs |-
-    all_bound ?cs ==> bound ?c * all_bound_drops ?cs (?c :: nil) ] =>
-  apply unpack_all_bound
-  | [ H : In ?c ?cs |-
-    all_bound ?cs ==> bound ?c * all_bound (remove_first ?c ?cs) ] =>
-  apply unpack_all_bound_remove
-  | [ _: KTrace ?x |- KTrace (_ ++ ?x) ] => econstructor; [eauto|]
-  | [ _: KTrace ?x |- KTrace ?t ] =>
-    match t with context [x] => repeat (rewrite app_assoc) end
-  | [ |- AddedValidExchange _ _ ] => constructor
-  | [ |- ValidExchange ((_ ++ _) ++ _) ] => repeat (rewrite <- app_assoc)
-  | [ |- ValidExchange _ ] => constructor
-  end.
-
-Ltac simplr := try simplr_fail; auto.
-
-Definition kinit :
-  forall (_ : unit),
-  STsep (traced nil)
-        (fun s => kstate_inv s).
-Proof.
-  intros; refine (
-";
-  add (coq_of_init s);
-  add "
-  );
-  sep unfoldr simplr.
-Qed.
-";
-  let kern_state_vars = s.var_decls |> List.map fst |> String.concat " " in
-  let (xch_chan, exchanges) = s.exchange in
-  add (fmt s.components (fun (comp, _) ->
-    let comp_exchanges = (
-      try Some (List.find (fun (s, _) -> s = comp) (snd (s.exchange)))
-      with Not_found -> None
-    ) in
-    (* c should be %s xch_chan, but there's plenty of them :( *)
-    Printf.sprintf "
+  in
+  mkstr "
 Definition exchange_%s :
   forall (c : tchan) (kst : kstate),
   STsep (kstate_inv kst * [In c (components kst)])
@@ -949,91 +441,102 @@ Proof.
   sep unfoldr simplr.
 Qed.
 "
-      comp
-      kern_state_vars
-      (
+  comp kstate_vars vars_frames hands kstate_vars
+
+let coq_of_kernel_subs s =
+  let m = gen_tag_map s in
+  let (xch_chan, exchanges) = s.exchange in
+  let kstate_vars =
+    s.var_decls |> List.map fst |> String.concat " "
+  in
+  List.map (fun (f, r) ->
+    (Str.regexp ("(\\* *__" ^ f ^ "__ *\\*)"), r))
+  [ "CONST_DECLS",
+      fmt s.constants coq_of_constant_decl
+  ; "COMP_DECLS",
+      fmt s.components (fun (id, path) ->
+        "| " ^ id)
+  ; "CHAN_PATHS",
+      fmt s.components (fun (id, path) ->
+        mkstr "  | %s => string2str \"%s\"" id path)
+  ; "MSG_DECL",
+      fmt s.msg_decls coq_of_msg_decl
+  ; "RECV_T_CASES",
+      fmt s.msg_decls (coq_trace_recv_msg m)
+  ; "SEND_T_CASES",
+      fmt s.msg_decls (coq_trace_send_msg m)
+  ; "RECV_CASES",
+      fmt s.msg_decls (coq_recv_msg m)
+  ; "SEND_CASES",
+      fmt s.msg_decls (coq_send_msg m)
+  ; "VE_HANDLED_CASES",
+      fmt exchanges (fun (comp, handlers) ->
+        fmt handlers (coq_spec_of_handler s comp xch_chan))
+  ; "VE_UNHANDLED_CASES",
+      fmt exchanges (fun (comp, handlers) ->
+        let handled m =
+          List.exists (fun h -> h.trigger.tag = m.tag) handlers
+        in
+        let unhandled_msgs =
+          List.filter (fun m -> not (handled m)) s.msg_decls
+        in
+        fmt unhandled_msgs (fun m ->
+          let args = m.payload |> List.map coq_of_typ |> String.concat " " in
+          mkstr "
+| VE_%s_%s:
+  forall %s %s, ValidExchange (RecvMsg %s (%s %s))"
+            comp m.tag args xch_chan xch_chan m.tag args
+        )
+      )
+  ; "KTRACE_INIT", (
+      let t = coq_trace_of_prog s [] s.init in
+      let v = prog_vars s.init in
+      match v with
+      | [] -> mkstr "KTrace (%snil)" t
+      | _  -> mkstr "forall %s, KTrace (%snil)" (String.concat " " v) t
+    )
+  ; "KSTATE_FIELDS",
+      fmt s.var_decls (fun (id, typ) ->
+        mkstr "; %s : %s" id (coq_of_typ typ))
+  ; "KSTATE_INVS",
+      fmt s.var_decls (fun (id, typ) ->
+        match typ with
+        | Chan -> mkstr "* [In (%s s) (components s)]" id
+        | _    -> ""
+      )
+  ; "INIT_CODE",
+      coq_of_init s
+  ; "EXCHANGES",
+      fmt s.components (fun (comp, _) ->
+        coq_of_exchange s xch_chan kstate_vars comp)
+  ; "TYPE_OF_COMP_DEFAULT",
+      mkstr "\n| nil => %s (* TODO: need default or proof *)"
+        (fst (List.hd s.components))
+  ; "KBODY",
+      let comp_xch =
+        s.components
+          |> List.map (fun (c, _) -> mkstr "\n| %s => exchange_%s" c c)
+          |> String.concat ""
+      in
+      let kstate_invs =
         match frames_of_vars s with
         | [] -> ""
         | l  -> " * " ^ String.concat " * " l
-      )
-      (
-        fmt s.msg_decls (fun msg ->
-          let constr = mkstr "%s %s" msg.tag (str_of_args msg) in
-          let unhandled = Printf.sprintf "
-    (* not handled *)
-    | %s =>
-      {{ Return (mkst comps (tr ~~~ RecvMsg c (%s) ++ tr) %s) }}
-"
-            constr constr kern_state_vars
-          in
-          match comp_exchanges with
-          | None -> unhandled
-          | Some(exchanges) ->
-            try (
-              let handler =
-                List.find (fun h -> h.trigger.tag = msg.tag) (snd exchanges)
-              in
-              coq_of_handler s xch_chan handler
-            )
-            with Not_found -> unhandled
-        )
-      )
-      kern_state_vars
-  ));
-  add "
-Fixpoint type_of_comp
-  (c: tchan) (comps: list tchan): chan_type :=
-  match comps with";
-  add (Printf.sprintf "
-  | nil => %s (* TODO: need default or proof *)"
-    (fst (List.hd s.components))
-  );
-  add "
-  | x :: rest =>
-    if tchan_eq x c
-      then projT1 x
-      else type_of_comp c rest
-  end.
-
-Definition kbody:
-  forall s,
-  STsep (kstate_inv s)
-        (fun s' => kstate_inv s').
-Proof.";
-  add (Printf.sprintf "
-  intros [comps tr %s];" kern_state_vars);
-  add ( Printf.sprintf "
+      in
+      mkstr "
+  intros [comps tr %s];
   refine (
     comp <- select comps tr
     <@> (tr ~~ [KTrace tr] * all_bound comps%s);
     let handler := (
-      match type_of_comp comp comps with"
-    (
-      match frames_of_vars s with
-      | [] -> ""
-      | l  -> " * " ^ String.concat " * " l
-    )
-  );
-  add (
-    String.concat "" (List.map (fun (comp, _) -> Printf.sprintf "
-      | %s => exchange_%s" comp comp
-    ) s.components)
-  );
-  add "
+      match type_of_comp comp comps with
+%s
       end
-    ) in";
-  add (Printf.sprintf "
-    s' <- handler comp (mkst comps (tr ~~~ Select comps comp :: tr) %s);"
-    kern_state_vars
-  );
-  add "
+    ) in
+    s' <- handler comp (mkst comps (tr ~~~ Select comps comp :: tr) %s);
     {{ Return s' }}
   );
   sep unfoldr simplr.
-Qed.
-";
-  contents ()
-
-(*
-
-*)
+"
+      kstate_vars kstate_invs comp_xch kstate_vars
+  ]

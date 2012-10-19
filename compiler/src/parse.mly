@@ -5,10 +5,14 @@
   let parse_error s =
     failwith (mkstr "Parse: error on line %d" !line)
 
-  (* NOTE to get commas right, we special case empty arg lists *)
+  (* NOTE to get commas correct, we special case empty arg lists *)
+
+  (* global kernel ref, support omitted and arbitrarily ordered sections *)
+  let _K = ref empty_kernel
 %}
 
-%token STATE COMPONENTS MESSAGES INIT EXCHANGE NUM STR FDESC CHAN CALL SEND SPAWN
+%token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE
+%token NUM STR FDESC CHAN CALL SEND SPAWN
 %token EQ LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF COLON ASSIGN PLUS
 
@@ -24,14 +28,26 @@
 %%
 
 kernel :
-  | constants
-    STATE                     LCURL var_decls     RCURL
-    COMPONENTS                LCURL comp_decls    RCURL
-    MESSAGES                  LCURL msg_decls     RCURL
-    INIT                      LCURL prog          RCURL
-    EXCHANGE LPAREN ID RPAREN LCURL comp_handlers RCURL
-    EOF
-    { mk_kernel $1 $4 $8 $12 $16 ($20, $23) }
+  | section kernel
+    { $2 }
+  | EOF
+    { !_K }
+;;
+
+/* overwrite repeat sections */
+section :
+  | CONSTANTS LCURL constants RCURL
+    { _K := { !_K with constants = $3 } }
+  | STATE LCURL var_decls RCURL
+    { _K := { !_K with var_decls = $3 } }
+  | COMPONENTS LCURL comp_decls RCURL
+    { _K := { !_K with components = $3 } }
+  | MESSAGES LCURL msg_decls RCURL
+    { _K := { !_K with msg_decls = $3 } }
+  | INIT LCURL prog RCURL
+    { _K := { !_K with init = $3 } }
+  | EXCHANGE LPAREN ID RPAREN LCURL comp_handlers RCURL
+    { _K := { !_K with exchange = ($3, $6) } }
 ;;
 
 constants :

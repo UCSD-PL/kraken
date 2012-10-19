@@ -1,0 +1,34 @@
+State {
+  counter : num;
+}
+
+Components {
+  Main "test.py";
+}
+
+Messages {
+  ReqCounterValue();
+  CurCounterValue(num);
+}
+
+Init {
+  counter := 0;
+  spawn(Main);
+}
+
+Exchange(c) {
+  Main {
+    ReqCounterValue() When (counter == 5) {
+      counter := counter + 1;
+      send(c, CurCounterValue(0));
+    }
+    {
+      counter := counter + 1;
+      send(c, CurCounterValue(counter));
+    }
+
+    # ignore
+    CurCounterValue(n) {
+    }
+  }
+}

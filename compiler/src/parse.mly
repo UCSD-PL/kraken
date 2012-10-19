@@ -8,8 +8,8 @@
   (* NOTE to get commas right, we special case empty arg lists *)
 %}
 
-%token STATE COMPONENTS MESSAGES INIT EXCHANGE NUM STR FDESC CALL SEND SPAWN
-%token EQ LCURL RCURL LPAREN RPAREN
+%token STATE COMPONENTS MESSAGES INIT EXCHANGE NUM STR FDESC CALL SEND SPAWN WHEN
+%token EQ EQUALITY LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF COLON ASSIGN PLUS
 
 %right PLUS
@@ -49,8 +49,8 @@ handlers :
 ;;
 
 handler :
-  | msg_pat LCURL prog RCURL
-    { mk_handler $1 $3 }
+  | msg_pat taggedprogs
+    { mk_handler $1 $2 }
 ;;
 
 prog :
@@ -58,6 +58,13 @@ prog :
     { Nop }
   | cmd SEMI prog
     { Seq ($1, $3) }
+;;
+
+taggedprogs :
+  | LCURL prog RCURL
+    { [(mk_taggedprog None $2)] }
+  | WHEN LPAREN lexpr RPAREN LCURL prog RCURL taggedprogs
+    { (mk_taggedprog (Some $3) $6) :: $8 }
 ;;
 
 cmd :
@@ -90,6 +97,10 @@ expr :
   | NUMLIT { NumLit $1 }
   | STRLIT { StrLit $1 }
   | ID { Var $1 }
+;;
+
+lexpr :
+  | ID EQUALITY NUMLIT { LogEq($1, $3) }
 ;;
 
 msg_pat :

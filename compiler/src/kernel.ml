@@ -14,6 +14,9 @@ type expr =
   | StrLit of string
   | Plus of expr * expr
 
+type lexpr =
+  | LogEq of id * int
+
 type 'a msg =
   { tag : string
   ; payload : 'a list
@@ -41,14 +44,24 @@ type prog =
   | Nop
   | Seq of cmd * prog
 
+type taggedprog =
+  { condition : lexpr option
+  ; program : prog
+  }
+
+let mk_taggedprog c r =
+  { condition = c
+  ; program = r
+  } 
+
 type handler =
   { trigger : msg_pat
-  ; respond : prog
+  ; responds : taggedprog list
   }
 
 let mk_handler t r =
   { trigger = t
-  ; respond = r
+  ; responds = r
   }
 
 type kernel =

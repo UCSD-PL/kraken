@@ -7,6 +7,7 @@ type typ =
   | Num
   | Str
   | Fdesc
+  | Chan
 
 type expr =
   | Var of id

@@ -1,6 +1,5 @@
-WGET = "wget.py";
-
-State {
+Constants {
+  WGET = "wget.py";
 }
 
 Components {

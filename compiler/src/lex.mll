@@ -15,6 +15,7 @@ let space = [' ' '\t']
 let line = '\n'
 
 rule token = parse
+  | "Constants" { CONSTANTS }
   | "State" { STATE }
   | "Components" { COMPONENTS }
   | "Messages" { MESSAGES }

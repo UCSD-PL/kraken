@@ -69,6 +69,15 @@ let mk_kernel cs vs comps ms i xch =
   ; exchange   = xch
   }
 
+let empty_kernel =
+  { constants  = []
+  ; var_decls  = []
+  ; components = []
+  ; msg_decls  = []
+  ; init       = Nop
+  ; exchange   = ("", [])
+  }
+
 let ck_kernel s =
   (* TODO *)
   (* msg tags start with uppercase *)

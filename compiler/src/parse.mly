@@ -11,8 +11,9 @@
   let _K = ref empty_kernel
 %}
 
-%token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE
+%token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CALL SEND SPAWN
+%token IMMFOLLOW IMMPRECEDE
 %token EQ LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF COLON ASSIGN PLUS
 
@@ -48,6 +49,8 @@ section :
     { _K := { !_K with init = $3 } }
   | EXCHANGE LPAREN ID RPAREN LCURL comp_handlers RCURL
     { _K := { !_K with exchange = ($3, $6) } }
+  | PROPERTIES LCURL props RCURL
+    { _K := { !_K with props = $3 } }
 ;;
 
 constants :
@@ -178,7 +181,23 @@ comp_handlers :
     { [] }
   | comp_handler comp_handlers
     { $1 :: $2 }
+;;
 
 comp_handler :
   | ID LCURL handlers RCURL
     { ($1, $3) }
+;;
+
+props :
+  | /* empty */
+    { [] }
+  | prop props
+    { $1 :: $2 }
+;;
+
+prop :
+  | IMMFOLLOW LCURL STRLIT RCURL LCURL STRLIT RCURL
+    { ImmFollow ($3, $6) }
+  | IMMPRECEDE LCURL STRLIT RCURL LCURL STRLIT RCURL
+    { ImmPrecede ($3, $6) }
+;;

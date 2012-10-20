@@ -21,13 +21,12 @@ Exchange(c) {
   }
 }
 
-
 Properties {
   ImmFollow
-    { RecvMsg chan msg }
-    { SendMsg chan msg }
+    { "RecvMsg chan msg" }
+    { "SendMsg chan msg" }
 
   ImmPrecede
-    { RecvMsg chan msg }
-    { SendMsg chan msg }
+    { "RecvMsg chan msg" }
+    { "SendMsg chan msg" }
 }

@@ -51,6 +51,10 @@ let mk_handler t r =
   ; respond = r
   }
 
+type prop =
+  | ImmFollow of string * string
+  | ImmPrecede of string * string
+
 type kernel =
   { constants  : (id * expr) list
   ; var_decls  : (id * typ) list
@@ -58,15 +62,7 @@ type kernel =
   ; msg_decls  : msg_decl list
   ; init       : prog
   ; exchange   : chan * ((string * handler list) list)
-  }
-
-let mk_kernel cs vs comps ms i xch =
-  { constants  = cs
-  ; var_decls  = vs
-  ; components = comps
-  ; msg_decls  = ms
-  ; init       = i
-  ; exchange   = xch
+  ; props      : prop list
   }
 
 let empty_kernel =
@@ -76,6 +72,7 @@ let empty_kernel =
   ; msg_decls  = []
   ; init       = Nop
   ; exchange   = ("", [])
+  ; props      = []
   }
 
 let ck_kernel s =

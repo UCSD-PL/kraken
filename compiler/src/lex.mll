@@ -21,12 +21,15 @@ rule token = parse
   | "Messages" { MESSAGES }
   | "Init" { INIT }
   | "Exchange" { EXCHANGE }
+  | "Properties" { PROPERTIES }
   | "num" { NUM }
   | "str" { STR }
   | "fdesc" { FDESC }
   | "call" { CALL }
   | "send" { SEND }
   | "spawn" { SPAWN }
+  | "ImmFollow" { IMMFOLLOW }
+  | "ImmPrecede" { IMMPRECEDE }
   | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }

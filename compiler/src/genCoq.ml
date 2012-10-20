@@ -17,16 +17,19 @@ let coq_of_typ = function
   | Num -> "num"
   | Str -> "str"
   | Fdesc -> "fdesc"
+  | Chan -> "tchan"
 
 let coq_recv_typ = function
   | Num -> "recv_num", "RecvNum"
   | Str -> "recv_str", "RecvStr"
   | Fdesc -> "recv_fd", "RecvFD_t"
+  | Chan -> "recv_fd", "RecvChan_t"
 
 let coq_send_typ = function
   | Num -> "send_num", "SendNum"
   | Str -> "send_str", "SendStr"
   | Fdesc -> "send_fd", "SendFD_t"
+  | Chan -> "send_fd", "SendChan_t"
 
 let coq_of_num i =
   mkstr "(Num \"%03d\")" i
@@ -281,6 +284,29 @@ let coq_of_msg_pat m =
 let handler_vars xch_chan h =
   uniq (xch_chan :: h.trigger.payload @ prog_vars h.respond)
 
+module OrderedChan =
+  struct
+    type t = chan
+    let compare = compare
+  end
+
+module ChanSet = Set.Make(OrderedChan);;
+
+let chans_of_cmd = function
+| Send(c, _)    -> ChanSet.singleton c
+| Call(_, _, _) -> ChanSet.empty
+| Spawn(_, _)   -> ChanSet.empty
+| Assign(_, _)  -> ChanSet.empty
+
+let chans_of_prog p =
+  let rec chans_of_prog_aux accu = function
+  | Nop -> ChanSet.elements accu
+  | Seq(cmd, rest) ->
+    let accu = ChanSet.union accu (chans_of_cmd cmd) in
+    chans_of_prog_aux accu rest
+  in
+  chans_of_prog_aux ChanSet.empty p
+
 let coq_spec_of_handler s comp xch_chan h =
   let hdr =
     mkstr "
@@ -293,7 +319,10 @@ let coq_spec_of_handler s comp xch_chan h =
     if h.respond = Nop then
       "      (* no response *)"
     else
-      let fr = [ mkstr "bound %s" xch_chan ] in
+      let fr = List.map
+        (fun c -> mkstr "bound %s" c)
+        (xch_chan :: chans_of_prog h.respond)
+      in
       coq_trace_of_prog s fr h.respond
   in
   let ftr =
@@ -317,6 +346,11 @@ let coq_of_init s =
         (s.var_decls |> List.map fst |> String.concat " ")
     ]
 
+let frames_of_vars s =
+  s.var_decls
+  |> List.filter (fun (_, typ) -> typ = Chan)
+  |> List.map (fun (id, _) -> mkstr "[In %s comps]" id)
+
 let coq_of_handler s xch_chan h =
   let tr =
     mkstr "RecvMsg %s (%s %s) ++ tr"
@@ -324,12 +358,17 @@ let coq_of_handler s xch_chan h =
       h.trigger.tag
       (String.concat " " h.trigger.payload)
   in
-  let fr =
-    [ mkstr "[In %s comps]" xch_chan
-    ; mkstr "bound %s" xch_chan
-    ; mkstr "all_bound_drop comps %s" xch_chan
-    ; "(tr ~~ [KTrace tr])"
-    ]
+  let fr = (
+    let chans = chans_of_prog h.respond in
+    let acc0 =
+      [ mkstr "all_bound_drops comps (%s :: nil)" (String.concat " :: " chans)
+      ; mkstr "[In %s comps]" xch_chan
+      ; "(tr ~~ [KTrace tr])"
+      ]
+    in
+    (frames_of_vars s)
+    @ (List.fold_left (fun acc elt -> mkstr "bound %s" elt :: acc) acc0 chans)
+  )
   in
   let pacc = coq_of_prog s tr fr h.respond in
   lines
@@ -344,27 +383,38 @@ let coq_of_handler s xch_chan h =
         (s.var_decls |> List.map fst |> String.concat " ")
     ]
 
-let coq_of_exchange spec xch_chan kstate_vars (comp, handlers) =
-  let hands =
-    fmt handlers (coq_of_handler spec xch_chan)
-  in
-  let handled m =
-    List.exists (fun h -> h.trigger.tag = m.tag) handlers
-  in
-  let unhandled_msgs =
-    List.filter (fun m -> not (handled m)) spec.msg_decls
-  in
-  let fall_through =
-    match unhandled_msgs with
+let coq_of_exchange spec xch_chan kstate_vars comp =
+  let comp_handlers = (
+    try Some (List.find (fun x -> fst x = comp) (snd (spec.exchange)))
+    with Not_found -> None
+  ) in
+  let vars_frames =
+    match frames_of_vars spec with
     | [] -> ""
-    | _ -> mkstr "
-    (* unhandled cases *)
-    | msg =>
-      {{ Return (mkst comps (tr ~~~ RecvMsg c msg ++ tr) %s) }}
-"
-      kstate_vars
+    | l  -> " * " ^ String.concat " * " l
   in
-  (* TODO c should be %s xch_chan, but there's plenty of them :( *)
+  let hands =
+    fmt spec.msg_decls (fun msg ->
+      let constr = mkstr "%s %s" msg.tag (str_of_args msg) in
+      let unhandled = Printf.sprintf "
+    (* not handled *)
+    | %s =>
+      {{ Return (mkst comps (tr ~~~ RecvMsg c (%s) ++ tr) %s) }}
+"
+        constr constr kstate_vars
+      in
+      match comp_handlers with
+      | None -> unhandled
+      | Some(exchanges) ->
+        try (
+          let handler =
+            List.find (fun h -> h.trigger.tag = msg.tag) (snd exchanges)
+          in
+          coq_of_handler spec xch_chan handler
+        )
+        with Not_found -> unhandled
+    )
+  in
   mkstr "
 Definition exchange_%s :
   forall (c : tchan) (kst : kstate),
@@ -373,18 +423,18 @@ Definition exchange_%s :
 Proof.
   intros c [comps tr %s]; refine (
     req <- recv_msg c tr
-    <@> [In c comps] * all_bound_drop comps c * (tr ~~ [KTrace tr]);
+    <@> [In c comps]%s * all_bound_drops comps (c :: nil) * (tr ~~ [KTrace tr]);
     match req with
 %s
     (* special case for errors *)
     | BadTag tag =>
       {{ Return (mkst comps (tr ~~~ RecvMsg c (BadTag tag) ++ tr) %s) }}
-%s    end
+    end
   );
   sep unfoldr simplr.
 Qed.
 "
-  comp kstate_vars hands kstate_vars fall_through
+  comp kstate_vars vars_frames hands kstate_vars
 
 let coq_of_kernel_subs s =
   let m = gen_tag_map s in
@@ -441,10 +491,17 @@ let coq_of_kernel_subs s =
   ; "KSTATE_FIELDS",
       fmt s.var_decls (fun (id, typ) ->
         mkstr "; %s : %s" id (coq_of_typ typ))
+  ; "KSTATE_INVS",
+      fmt s.var_decls (fun (id, typ) ->
+        match typ with
+        | Chan -> mkstr "* [In (%s s) (components s)]" id
+        | _    -> ""
+      )
   ; "INIT_CODE",
       coq_of_init s
   ; "EXCHANGES",
-      fmt exchanges (coq_of_exchange s xch_chan kstate_vars)
+      fmt s.components (fun (comp, _) ->
+        coq_of_exchange s xch_chan kstate_vars comp)
   ; "TYPE_OF_COMP_DEFAULT",
       mkstr "\n| nil => %s (* TODO: need default or proof *)"
         (fst (List.hd s.components))
@@ -454,11 +511,16 @@ let coq_of_kernel_subs s =
           |> List.map (fun (c, _) -> mkstr "\n| %s => exchange_%s" c c)
           |> String.concat ""
       in
+      let kstate_invs =
+        match frames_of_vars s with
+        | [] -> ""
+        | l  -> " * " ^ String.concat " * " l
+      in
       mkstr "
   intros [comps tr %s];
   refine (
     comp <- select comps tr
-    <@> (tr ~~ [KTrace tr] * all_bound comps);
+    <@> (tr ~~ [KTrace tr] * all_bound comps%s);
     let handler := (
       match type_of_comp comp comps with
 %s
@@ -469,5 +531,5 @@ let coq_of_kernel_subs s =
   );
   sep unfoldr simplr.
 "
-      kstate_vars comp_xch kstate_vars
+      kstate_vars kstate_invs comp_xch kstate_vars
   ]

@@ -11,9 +11,7 @@ Components {
 
 Messages {
   Input(str);
-  Wget(str);
-  HTML(str, fdesc);
-  Display(fdesc);
+  Display(str);
 }
 
 Init {
@@ -24,13 +22,9 @@ Init {
 
 Exchange(c) {
   Tab {
-    Wget(url) {
-      f := call("wget.py", url);
-      send(c, HTML(url, f));
-    }
-    Display(bitmap) {
+    Display(url) {
       # TODO check that this is from cur tab
-      send(screen, Display(bitmap));
+      send(screen, Display(url));
     }
   }
 

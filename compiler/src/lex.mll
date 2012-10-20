@@ -25,6 +25,7 @@ rule token = parse
   | "num" { NUM }
   | "str" { STR }
   | "fdesc" { FDESC }
+  | "chan" { CHAN }
   | "call" { CALL }
   | "send" { SEND }
   | "spawn" { SPAWN }

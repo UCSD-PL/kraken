@@ -1,0 +1,42 @@
+State {
+  curtab : chan ;
+  screen : chan ;
+}
+
+Components {
+  Tab       "tab.py"        ;
+  Screen    "screen.py"     ;
+  UserInput "user-input.py" ;
+}
+
+Messages {
+  Input(str);
+  Wget(str);
+  HTML(str, fdesc);
+  Display(fdesc);
+}
+
+Init {
+  curtab := spawn(Tab);
+  screen := spawn(Screen);
+  spawn(UserInput);
+}
+
+Exchange(c) {
+  Tab {
+    Wget(url) {
+      f := call("wget.py", url);
+      send(c, HTML(url, f));
+    }
+    Display(bitmap) {
+      # TODO check that this is from cur tab
+      send(screen, Display(bitmap));
+    }
+  }
+
+  UserInput {
+    Input(i) {
+      send(curtab, Input(i));
+    }
+  }
+}

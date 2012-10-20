@@ -12,7 +12,7 @@
 %}
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
-%token NUM STR FDESC CALL SEND SPAWN
+%token NUM STR FDESC CHAN CALL SEND SPAWN
 %token IMMFOLLOW IMMPRECEDE
 %token EQ LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF COLON ASSIGN PLUS
@@ -80,10 +80,12 @@ prog :
 ;;
 
 cmd :
-  | ID EQ CALL LPAREN expr COMMA expr RPAREN
+  | ID ASSIGN CALL LPAREN expr COMMA expr RPAREN
     { Call ($1, $5, $7) }
   | SEND LPAREN ID COMMA msg_expr RPAREN
     { Send ($3, $5) }
+  | ID ASSIGN SPAWN LPAREN ID RPAREN
+    { Spawn ($1, $5) }
   | SPAWN LPAREN ID RPAREN
     { Spawn (mkstr "c%d" (tock ()), $3) }
   | ID ASSIGN expr
@@ -174,6 +176,7 @@ typ :
   | NUM { Num }
   | STR { Str }
   | FDESC { Fdesc }
+  | CHAN { Chan }
 ;;
 
 comp_handlers :

@@ -10,11 +10,13 @@ let py_recv_typ = function
   | Num -> "recv_num"
   | Str -> "recv_str"
   | Fdesc -> "recv_fd"
+  | Chan -> "recv_fd"
 
 let py_send_typ = function
   | Num -> "send_num"
   | Str -> "send_str"
   | Fdesc -> "send_fd"
+  | Chan -> "send_fd"
 
 let py_recv_msg tag_map m =
   let args =

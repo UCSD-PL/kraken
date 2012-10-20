@@ -1,6 +1,3 @@
-State {
-}
-
 Components {
   Main "test.py";
 }

@@ -1,0 +1,33 @@
+State {
+}
+
+Components {
+  Main "test.py";
+}
+
+Messages {
+  M(str);
+}
+
+Init {
+  spawn(Main);
+}
+
+Exchange(c) {
+  Main {
+    M(y) {
+      send(c, M(y));
+    }
+  }
+}
+
+
+Properties {
+  ImmFollow
+    { RecvMsg chan msg }
+    { SendMsg chan msg }
+
+  ImmPrecede
+    { RecvMsg chan msg }
+    { SendMsg chan msg }
+}

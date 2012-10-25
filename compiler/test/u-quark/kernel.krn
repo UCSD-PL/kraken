@@ -12,6 +12,7 @@ Components {
 Messages {
   Input(str);
   Display(str);
+  Quit();
 }
 
 Init {
@@ -31,6 +32,10 @@ Exchange(c) {
   UserInput {
     Input(i) {
       send(curtab, Input(i));
+    }
+    Quit() {
+      send(curtab, Quit());
+      send(screen, Quit());
     }
   }
 }

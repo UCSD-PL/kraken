@@ -1,15 +1,14 @@
 #!/usr/bin/env python2.7
 
-import msg, time
+import msg, readline, time
 
 def main():
   msg.init()
-  while True:
-    msg.send('Input', 'http://cs.ucsd.edu/~d1jang')
-    time.sleep(3)
-    msg.send('Input', 'http://cs.ucsd.edu/~vrobert')
-    time.sleep(3)
-    msg.send('Input', 'http://cs.ucsd.edu/~ztatlock')
-    time.sleep(3)
+  try:
+    while True:
+      url = raw_input("\n")
+      msg.send('Input', url)
+  except EOFError:
+    msg.send('Quit')
 
 main()

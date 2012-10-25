@@ -170,11 +170,16 @@ let coq_send_msg tag_map m =
   lines [hdr; pay; ret]
 
 let coq_of_msg_expr m =
-  mkstr "(%s %s)" m.tag
-    (m.payload
-      |> List.map coq_of_expr
-      |> String.concat ") ("
-      |> mkstr "(%s)")
+    mkstr "(%s%s)" m.tag
+      (
+        match m.payload with
+        | [] -> ""
+        | pl ->
+          pl
+          |> List.map coq_of_expr
+          |> String.concat ") ("
+          |> mkstr " (%s)"
+      )
 
 let coq_of_frame fr =
   fr |> List.map (mkstr "%s * ")

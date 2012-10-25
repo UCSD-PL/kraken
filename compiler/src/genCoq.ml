@@ -191,10 +191,22 @@ type prog_acc =
 let fresh_chan_id () =
   mkstr "c%d" (tock ())
 
+let extract_bound c fr =
+  let s = mkstr "bound %s" c in
+  let rec aux = function
+  | [] -> raise Not_found
+  | h :: t ->
+    if h = s
+    then t
+    else if h = "all_bound comps"
+    then mkstr "all_bound_drop comps %s" c :: t
+    else h :: aux t
+  in aux fr
+
 let coq_of_cmd s pacc = function
   | Send (c, m) ->
       { pacc with code = pacc.code ^
-          (let fr' = remove (mkstr "bound %s" c) pacc.frame in
+          (let fr' = extract_bound c pacc.frame in
           mkstr "
 send_msg %s %s
 (tr ~~~ %s)
@@ -361,13 +373,12 @@ let coq_of_handler s xch_chan h =
   let fr = (
     let chans = chans_of_prog h.respond in
     let acc0 =
-      [ mkstr "all_bound_drops comps (%s :: nil)" (String.concat " :: " chans)
+      [ "all_bound comps"
       ; mkstr "[In %s comps]" xch_chan
       ; "(tr ~~ [KTrace tr])"
       ]
     in
-    (frames_of_vars s)
-    @ (List.fold_left (fun acc elt -> mkstr "bound %s" elt :: acc) acc0 chans)
+    (frames_of_vars s) @ acc0
   )
   in
   let pacc = coq_of_prog s tr fr h.respond in
@@ -423,7 +434,7 @@ Definition exchange_%s :
 Proof.
   intros c [comps tr %s]; refine (
     req <- recv_msg c tr
-    <@> [In c comps]%s * all_bound_drops comps (c :: nil) * (tr ~~ [KTrace tr]);
+    <@> [In c comps]%s * all_bound_drop comps c * (tr ~~ [KTrace tr]);
     match req with
 %s
     (* special case for errors *)

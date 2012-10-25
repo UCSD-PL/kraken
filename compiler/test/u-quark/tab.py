@@ -6,8 +6,6 @@ def main():
   msg.init()
   while True:
     userinput = msg.recv()
-    msg.send('Wget', userinput[1])
-    html = msg.recv()
-    msg.send('Display', html[2])
+    msg.send('Display', userinput[1])
 
 main()

@@ -324,117 +324,39 @@ Fixpoint all_bound (cs : list tchan) : hprop :=
     | c :: cs' => bound c * all_bound cs'
   end.
 
-Fixpoint remove_first x l :=
-  match l with
-  | nil     => nil
-  | y :: tl => if (tchan_eq x y) then tl else y :: (remove_first x tl)
-  end.
-
-(* all cs bound except _first_ occurrence of each drop *)
-Fixpoint all_bound_drops (cs : list tchan) (drops : list tchan) : hprop :=
+Fixpoint all_bound_drop (cs : list tchan) (drop : tchan) : hprop :=
   match cs with
   | nil => emp
   | c :: cs' =>
-    if List.existsb (fun elt => if tchan_eq elt c then true else false) drops
-      then all_bound_drops cs' (remove_first c drops)
-      else bound c * all_bound_drops cs' drops
+    if tchan_eq c drop
+      then all_bound cs'
+      else bound c * all_bound_drop cs' drop
   end.
-
-Theorem all_bound_drops_nil :
-  forall l, all_bound_drops l nil <==> all_bound l.
-Proof.
-  split; induction l; sep fail auto.
-Qed.
-
-Lemma unpack_all_bound_remove :
-  forall cs c,
-    In c cs ->
-    all_bound cs ==> bound c * all_bound (remove_first c cs).
-Proof.
-  induction cs; simpl; intros. contradiction.
-  destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
-  case (tchan_eq c a); intros; subst. apply himp_refl.
-  simpl.
-  apply himp_comm_conc. apply himp_assoc_conc1.
-  apply himp_split. apply himp_refl.
-  apply himp_comm_conc. now apply IHcs.
-Qed.
 
 Lemma unpack_all_bound :
   forall cs c,
-    In c cs ->
-    all_bound cs ==> bound c * all_bound_drops cs (c :: nil).
-Proof.
-  induction cs; simpl; intros. contradiction.
-  destruct H; subst. repeat rewrite tchan_eq_true. simpl.
-  sep fail auto. apply all_bound_drops_nil.
-  case (tchan_eq c a); intros; subst. simpl. rewrite tchan_eq_true.
-  sep fail auto. apply all_bound_drops_nil.
-  simpl. sep fail auto.
-  apply himp_comm_conc. now apply IHcs.
-Qed.
-
-Lemma repack_all_bound_remove :
-  forall cs c,
-    In c cs ->
-    bound c * all_bound (remove_first c cs) ==> all_bound cs.
+  In c cs ->
+  all_bound cs ==> bound c * all_bound_drop cs c.
 Proof.
   induction cs; simpl; intros. contradiction.
   destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
-  case (tchan_eq c a); intros; subst. apply himp_refl.
-  simpl.
-  sep fail auto. apply himp_comm_prem. now apply IHcs.
+  case (tchan_eq a c); intros; subst. apply himp_refl.
+  apply himp_comm_conc. apply himp_assoc_conc1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_conc; auto.
 Qed.
 
-Lemma not_In_remove_first :
-  forall x l, ~ In x l -> forall r, ~ In x (remove_first r l).
-Proof.
-  induction l; simpl; intros. easy. intro. destruct (tchan_eq r a).
-  intuition.
-  simpl in H0. intuition.
-  eauto.
-Qed.
-
-Lemma repack_all_bound_drops :
-  forall cs c rest,
-    In c cs ->
-    ~ In c rest ->
-    bound c * all_bound_drops cs (c :: rest) ==> all_bound_drops cs rest.
+Lemma repack_all_bound :
+  forall cs c,
+  In c cs ->
+  bound c * all_bound_drop cs c ==> all_bound cs.
 Proof.
   induction cs; simpl; intros. contradiction.
-  destruct H; subst.
-  repeat rewrite tchan_eq_true. simpl.
-  destruct (
-    existsb (fun elt : tchan => if tchan_eq elt c then true else false)
-    rest
-  ) as []_eqn.
-  exfalso. apply existsb_exists in Heqb. destruct Heqb as [x [In Eq]].
-  destruct (tchan_eq x c). subst. contradiction. discriminate.
-  sep fail idtac.
-  destruct (tchan_eq c a); simpl.
-  subst. rewrite tchan_eq_true.
-  destruct (
-    existsb (fun elt : tchan => if tchan_eq elt a then true else false)
-    rest
-  ) as []_eqn.
-  exfalso. apply existsb_exists in Heqb. destruct Heqb as [x [In Eq]].
-  destruct (tchan_eq x a). subst. contradiction. discriminate.
-  sep fail idtac.
-  destruct (
-    existsb (fun elt : tchan => if tchan_eq elt a then true else false)
-    rest
-  ) as []_eqn.
-  destruct (tchan_eq a c). subst. now elim n.
-  apply IHcs. easy. now apply not_In_remove_first.
-  sep fail idtac.
-  auto using himp_comm_prem.
-Qed.
-
-Lemma all_bound_cons :
-  forall cs c,
-    bound c * all_bound cs ==> all_bound (c :: cs).
-Proof.
-  induction cs; sep fail auto.
+  destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
+  case (tchan_eq a c); intros; subst. apply himp_refl.
+  apply himp_comm_prem. apply himp_assoc_prem1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_prem; auto.
 Qed.
 
 Record kstate : Set :=
@@ -451,21 +373,39 @@ Definition kstate_inv s : hprop :=
 
 Ltac unfoldr := unfold kstate_inv.
 
+Ltac sep' := sep fail idtac.
+
+Ltac isolate t :=
+  match t with ?lhs ==> ?rhs =>
+    refine (@himp_trans (lhs * _) _ _ _ _); [ sep' | ];
+    refine (@himp_trans (rhs * _) _ _ _ _); [ | sep' ];
+    apply himp_split
+  end.
+
 Ltac simplr_fail :=
+  sep';
   match goal with
-  | [ |- all_bound_drops ?cs nil ==> _ ] =>
-    eapply himp_trans; [ apply all_bound_drops_nil | ]
-  | [ H : In ?c ?cs |-
-    bound ?c * all_bound (remove_first ?c ?cs) ==> _ ] =>
-  eapply himp_trans; [now apply repack_all_bound_remove | ]
-  | [ |- bound ?c * all_bound_drops ?cs (?c :: ?rest) ==> _ ] =>
-    eapply himp_trans; [ now apply repack_all_bound_drops | ]
-  | [ H : In ?c ?cs |-
-    all_bound ?cs ==> bound ?c * all_bound_drops ?cs (?c :: nil) ] =>
-  apply unpack_all_bound
-  | [ H : In ?c ?cs |-
-    all_bound ?cs ==> bound ?c * all_bound (remove_first ?c ?cs) ] =>
-  apply unpack_all_bound_remove
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (bound c * all_bound_drop cs c ==> all_bound cs);
+      [ apply repack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match rhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (all_bound cs ==> bound c * all_bound_drop cs c);
+      [ apply unpack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+    match rhs with context [ all_bound_drop ?cs ?d ] =>
+      isolate (bound c * all_bound_drop cs c ==> bound d * all_bound_drop cs d);
+      [ eapply himp_trans; [ apply repack_all_bound | apply unpack_all_bound ] | ]
+    end
+    end
+
   | [ _: KTrace ?x |- KTrace (_ ++ ?x) ] => econstructor; [eauto|]
   | [ _: KTrace ?x |- KTrace ?t ] =>
     match t with context [x] => repeat (rewrite app_assoc) end

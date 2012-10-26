@@ -22,11 +22,13 @@ Exchange(c) {
 }
 
 Properties {
-  ImmFollow
-    { "RecvMsg chan msg" }
-    { "SendMsg chan msg" }
+  AlwaysResponds =
+    ImmFollow
+      { "RecvMsg chan msg" }
+      { "SendMsg chan msg" };
 
-  ImmPrecede
-    { "RecvMsg chan msg" }
-    { "SendMsg chan msg" }
+  OnlyResponds =
+    ImmPrecede
+      { "RecvMsg chan msg" }
+      { "SendMsg chan msg" };
 }

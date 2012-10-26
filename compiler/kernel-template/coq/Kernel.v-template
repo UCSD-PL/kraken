@@ -539,3 +539,37 @@ Proof.
   unfold kstate_inv;
   sep fail auto.
 Qed.
+
+(* __PROPERTIES__ *)
+
+Definition ImmBefore (bef aft : KTrace) : Prop :=
+  forall tr, KTraceOK tr ->
+  forall x y, tr = x ++ bef ++ y ->
+  exists z, y = aft ++ z.
+
+Definition ImmAfter (bef aft : KTrace) : Prop :=
+  forall tr, KTraceOK tr ->
+  forall x y, tr = x ++ aft ++ y ->
+  exists z, x = z ++ bef.
+
+Ltac inv H :=
+  inversion H; subst; clear H.
+
+Ltac imm_tac := repeat progress
+  match goal with
+  | |- exists z, ?x = z ++ ?x =>
+    exists nil; auto
+  | H: nil = ?x ++ ?y :: ?z |- _ =>
+    apply app_cons_not_nil in H; contradiction
+  | H: ?e :: ?tr = ?a ++ ?b |- _ =>
+    destruct a; simpl in *; inv H
+  | H: ValidExchange ?tr |- _ =>
+    inv H; simpl in *
+  | |- exists z, ?a :: ?x = z ++ ?c =>
+    let H := fresh "H" in
+    let e := fresh "e" in
+    cut (exists z, x = z ++ c);
+      [ intro H; destruct H as [e H]; rewrite H; exists (a :: e); auto | ]
+  | _ =>
+    eauto
+  end.

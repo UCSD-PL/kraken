@@ -63,7 +63,7 @@ type kernel =
   ; msg_decls  : msg_decl list
   ; init       : prog
   ; exchange   : chan * ((string * handler list) list)
-  ; props      : prop list
+  ; props      : (id * prop) list
   }
 
 let empty_kernel =

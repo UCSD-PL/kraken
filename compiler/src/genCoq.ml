@@ -436,6 +436,23 @@ Qed.
 "
   comp kstate_vars vars_frames hands kstate_vars
 
+let coq_of_prop (name, prop) : string =
+  match prop with
+  | ImmFollow (pre, post) ->
+      mkstr "
+Theorem %s :
+  XXX
+  %s
+  %s
+" name pre post
+  | ImmPrecede (pre, post) ->
+      mkstr "
+Theorem %s :
+  XXX
+  %s
+  %s
+" name pre post
+
 let coq_of_kernel_subs s =
   let m = gen_tag_map s in
   let (xch_chan, exchanges) = s.exchange in
@@ -505,7 +522,7 @@ let coq_of_kernel_subs s =
   ; "TYPE_OF_COMP_DEFAULT",
       mkstr "\n| nil => %s (* TODO: need default or proof *)"
         (fst (List.hd s.components))
-  ; "KBODY",
+  ; "KBODY", (
       let comp_xch =
         s.components
           |> List.map (fun (c, _) -> mkstr "\n| %s => exchange_%s" c c)
@@ -531,5 +548,7 @@ let coq_of_kernel_subs s =
   );
   sep unfoldr simplr.
 "
-      kstate_vars kstate_invs comp_xch kstate_vars
+      kstate_vars kstate_invs comp_xch kstate_vars)
+  ; "PROPERTIES",
+      fmt s.props coq_of_prop
   ]

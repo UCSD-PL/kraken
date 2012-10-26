@@ -194,8 +194,8 @@ comp_handler :
 props :
   | /* empty */
     { [] }
-  | prop props
-    { $1 :: $2 }
+  | ID EQ prop SEMI props
+    { ($1, $3) :: $5 }
 ;;
 
 prop :

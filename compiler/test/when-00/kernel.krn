@@ -18,7 +18,7 @@ Init {
 
 Exchange(c) {
   Main {
-    ReqCounterValue() When (counter == 5) {
+    ReqCounterValue() when (counter == 5) {
       counter := counter + 1;
       send(c, CurCounterValue(0));
     }

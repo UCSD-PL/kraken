@@ -20,7 +20,7 @@ rule token = parse
   | "Messages" { MESSAGES }
   | "Init" { INIT }
   | "Exchange" { EXCHANGE }
-  | "When" { WHEN }
+  | "when" { WHEN }
   | "num" { NUM }
   | "str" { STR }
   | "fdesc" { FDESC }

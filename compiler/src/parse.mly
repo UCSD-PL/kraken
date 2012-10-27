@@ -49,7 +49,7 @@ handlers :
 ;;
 
 handler :
-  | msg_pat taggedprogs
+  | msg_pat cond_progs
     { mk_handler $1 $2 }
 ;;
 
@@ -60,11 +60,11 @@ prog :
     { Seq ($1, $3) }
 ;;
 
-taggedprogs :
+cond_progs :
   | LCURL prog RCURL
-    { [(mk_taggedprog None $2)] }
-  | WHEN LPAREN lexpr RPAREN LCURL prog RCURL taggedprogs
-    { (mk_taggedprog (Some $3) $6) :: $8 }
+    { [(mk_cond_prog None $2)] }
+  | WHEN LPAREN when_cond RPAREN LCURL prog RCURL cond_progs
+    { (mk_cond_prog (Some $3) $6) :: $8 }
 ;;
 
 cmd :
@@ -99,7 +99,7 @@ expr :
   | ID { Var $1 }
 ;;
 
-lexpr :
+when_cond :
   | ID EQUALITY NUMLIT { LogEq($1, $3) }
 ;;
 

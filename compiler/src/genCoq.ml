@@ -361,13 +361,16 @@ let coq_of_msg_pat m =
   mkstr "| %s %s =>" m.tag
     (String.concat " " m.payload)
 
+
+(* we have to excluse global state variables here for forall of each
+handlers *)
 let handler_vars xch_chan trig statevars program =
-  let statevarnames = (List.map (fun (id,typ) -> id) statevars) in
-  List.fold_left 
+  let varnames = (List.map (fun (id,typ) -> id) statevars) in
+  (List.fold_left 
     (fun lst elem -> 
-      if List.mem elem statevarnames then lst 
+      if List.mem elem varnames then lst 
       else (elem :: lst)
-    ) [] (uniq (xch_chan :: trig.payload))
+    ) [] (uniq ((xch_chan :: trig.payload) @ (comp_vars program) @ (init_vars program))))
 
 let coq_mkst_with_effects effecttbl vardecls =
   (fmt vardecls (fun (id, typ) -> 
@@ -400,6 +403,7 @@ let coq_of_logical le =
   | LogEq (id, v) -> 
       (mkstr "(nat_of_num %s) = %d" id v)
 
+
 let coq_of_condition_spec conds cond =  
   let conds_str = 
     (String.concat " -> " (List.map (fun cond -> 
@@ -414,18 +418,20 @@ let coq_of_condition_spec conds cond =
   ) in
   (if res = "" then "" else (mkstr " %s -> " res))
 
+
 let coq_spec_of_handler s comp xch_chan trig conds index tprog =
   let fr = [ mkstr "bound %s" xch_chan ] in
   let effecttbl = effects_of_prog s fr tprog.program in
+  let comp_vs =  (comp_vars tprog.program) in
   let hdr =
     mkstr "
-| VE_%s_%s_%d : \nforall %s, %s \nValidExchange (mkst comps "
+| VE_%s_%s_%d : \nforall %s, %s \nValidExchange (mkst (%s) "
       comp
       trig.tag
       index
-      (* (fmt s.var_decls (fun (id, typ) -> mkstr " let %s := (%s s) in \n" id id)) *)
-      (String.concat " " (handler_vars xch_chan trig s.var_decls tprog.program))
+      (String.concat " " ((handler_vars xch_chan trig s.var_decls tprog.program)))
       (coq_of_condition_spec conds tprog.condition)
+      (match comp_vs with | [] -> "comps" | _ -> mkstr "%s::comps" (String.concat "::" (comp_vs)))
   in
   let tr =
     if tprog.program = Nop then

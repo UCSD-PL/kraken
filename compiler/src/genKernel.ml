@@ -1,185 +1,15 @@
 open Common
 open Kernel
-
-let lines l =
-  l |> List.filter ((<>) "")
-    |> String.concat "\n"
-
-let fmt l f =
-  l |> List.map f
-    |> lines
-
-let mk_buffer () =
-  let b = Buffer.create 16 in
-  (Buffer.add_string b, fun () -> Buffer.contents b)
-
-let coq_of_typ = function
-  | Num -> "num"
-  | Str -> "str"
-  | Fdesc -> "fdesc"
-  | Chan -> "tchan"
-
-let coq_recv_typ = function
-  | Num -> "recv_num", "RecvNum"
-  | Str -> "recv_str", "RecvStr"
-  | Fdesc -> "recv_fd", "RecvFD_t"
-  | Chan -> "recv_fd", "RecvChan_t"
-
-let coq_send_typ = function
-  | Num -> "send_num", "SendNum"
-  | Str -> "send_str", "SendStr"
-  | Fdesc -> "send_fd", "SendFD_t"
-  | Chan -> "send_fd", "SendChan_t"
-
-let coq_of_num i =
-  mkstr "(Num \"%03d\")" i
-
-let coq_of_string s =
-  s |> explode
-    |> List.map (mkstr "\"%c\" :: ")
-    |> String.concat ""
-    |> mkstr "(%snil)"
-
-let rec coq_of_expr = function
-  | Var id -> id
-  | NumLit i -> coq_of_num i
-  | StrLit s -> coq_of_string s
-  | Plus(a, b) ->
-    mkstr "(num_of_nat ((nat_of_num (%s)) + (nat_of_num (%s))))"
-      (coq_of_expr a) (coq_of_expr b)
-
-let coq_of_constant_decl (id, e) =
-  mkstr "
-Definition %s := %s.
-" id (coq_of_expr e)
-
-let coq_of_msg_decl m =
-  mkstr "| %s : %s" m.tag
-    (m.payload
-      |> List.map coq_of_typ
-      |> List.map (mkstr "%s -> ")
-      |> String.concat ""
-      |> mkstr "%smsg")
-
-let str_of_args m =
-  m.payload
-    |> mapi (fun i _ -> mkstr "p%d" i)
-    |> String.concat " "
-
-let coq_trace_recv_msg tag_map m =
-  let hdr =
-    mkstr "| %s %s =>" m.tag (str_of_args m)
-  in
-  let pay =
-    if m.payload = [] then
-      "(* empty payload *)"
-    else
-      m.payload
-        |> mapi (fun i t ->
-            let _, rT = coq_recv_typ t in
-            mkstr "%s c p%d ++" rT i)
-        |> List.rev
-        |> lines
-  in
-  let tag =
-    mkstr "RecvNum c (Num \"%03d\")"
-      (List.assoc m.tag tag_map)
-  in
-  lines [hdr; pay; tag]
-
-(* WARNING copy/paste of coq_trace_recv_msg *)
-let coq_trace_send_msg tag_map m =
-  let hdr =
-    mkstr "| %s %s =>" m.tag (str_of_args m)
-  in
-  let pay =
-    if m.payload = [] then
-      "(* empty payload *)"
-    else
-      m.payload
-        |> mapi (fun i t ->
-            let _, sT = coq_send_typ t in
-            mkstr "%s c p%d ++" sT i)
-        |> List.rev
-        |> lines
-  in
-  let tag =
-    mkstr "SendNum c (Num \"%03d\")"
-      (List.assoc m.tag tag_map)
-  in
-  lines [hdr; pay; tag]
-
-(* recv msg on bound chan "c" *)
-let coq_recv_msg tag_map m =
-  let hdr =
-    mkstr "| Num \"%03d\" => (* %s *)"
-      (List.assoc m.tag tag_map) m.tag
-  in
-  let pay =
-    let aux (i, code, tr) t =
-      let rF, rT = coq_recv_typ t in
-      ( i + 1
-      , mkstr "p%d <- %s c\n(tr ~~~ %s);" i rF tr :: code
-      , mkstr "%s c p%d ++ %s" rT i tr
-      )
-    in
-    let tr =
-      mkstr "RecvNum c (Num \"%03d\") ++ tr"
-        (List.assoc m.tag tag_map)
-    in
-    m.payload
-      |> List.fold_left aux (0, [], tr)
-      |> fun (_, x, _) -> x
-      |> List.rev
-      |> lines
-  in
-  let ret =
-    mkstr "{{ Return (%s %s) }}\n" m.tag (str_of_args m)
-  in
-  lines [hdr; pay; ret]
-
-(* send msg on bound chan "c" *)
-(* WARNING copy/paste of coq_recv_msg *)
-let coq_send_msg tag_map m =
-  let hdr = lines
-    [ mkstr "| %s %s =>" m.tag (str_of_args m)
-    ; mkstr "send_num c (Num \"%03d\") tr;;" (List.assoc m.tag tag_map)
-    ]
-  in
-  let pay =
-    let aux (i, code, tr) t =
-      let sF, sT = coq_send_typ t in
-      ( i + 1
-      , mkstr "%s c p%d\n(tr ~~~ %s);;" sF i tr :: code
-      , mkstr "%s c p%d ++ %s" sT i tr
-      )
-    in
-    let tr =
-      mkstr "SendNum c (Num \"%03d\") ++ tr"
-        (List.assoc m.tag tag_map)
-    in
-    m.payload
-      |> List.fold_left aux (0, [], tr)
-      |> fun (_, x, _) -> x
-      |> List.rev
-      |> lines
-  in
-  let ret =
-    "{{ Return tt }}"
-  in
-  lines [hdr; pay; ret]
+open Gen
 
 let coq_of_msg_expr m =
-    mkstr "(%s%s)" m.tag
-      (
-        match m.payload with
-        | [] -> ""
-        | pl ->
-          pl
-          |> List.map coq_of_expr
-          |> String.concat ") ("
-          |> mkstr " (%s)"
-      )
+  if m.payload = [] then
+    "(" ^ m.tag ^ ")"
+  else
+    m.payload
+      |> List.map coq_of_expr
+      |> String.concat ") ("
+      |> mkstr "(%s (%s))" m.tag
 
 let coq_of_frame fr =
   fr |> List.map (mkstr "%s * ")
@@ -199,14 +29,16 @@ let fresh_chan_id () =
 let extract_bound c fr =
   let s = mkstr "bound %s" c in
   let rec aux = function
-  | [] -> raise Not_found
-  | h :: t ->
-    if h = s
-    then t
-    else if h = "all_bound comps"
-    then mkstr "all_bound_drop comps %s" c :: t
-    else h :: aux t
-  in aux fr
+    | [] -> raise Not_found
+    | h :: t ->
+      if h = s then
+        t
+      else if h = "all_bound comps" then
+        mkstr "all_bound_drop comps %s" c :: t
+      else
+        h :: aux t
+  in
+  aux fr
 
 let coq_of_cmd s pacc = function
   | Send (c, m) ->
@@ -257,13 +89,8 @@ send_msg %s %s
       }
   | Assign (id, expr) ->
       { pacc with
-        code = (
-          let (add, contents) = mk_buffer () in
-          add pacc.code;
-          add (mkstr "
-let %s := %s in" id (coq_of_expr expr));
-          contents ()
-        )
+         code = pacc.code ^
+           mkstr "\nlet %s := %s in" id (coq_of_expr expr)
       }
 
 let coq_of_prog s tr0 fr0 p =
@@ -276,8 +103,9 @@ let coq_of_prog s tr0 fr0 p =
 let coq_trace_of_prog s fr p =
   (coq_of_prog s "" fr p).trace
 
-let expr_vars = function
+let rec expr_vars = function
   | Var id -> [id]
+  | Plus (e1, e2) -> expr_vars e1 @ expr_vars e2
   | _ -> []
 
 let cmd_vars = function
@@ -316,13 +144,13 @@ let chans_of_cmd = function
 | Assign(_, _)  -> ChanSet.empty
 
 let chans_of_prog p =
-  let rec chans_of_prog_aux accu = function
-  | Nop -> ChanSet.elements accu
-  | Seq(cmd, rest) ->
-    let accu = ChanSet.union accu (chans_of_cmd cmd) in
-    chans_of_prog_aux accu rest
+  let rec aux acc = function
+    | Nop ->
+        ChanSet.elements acc
+    | Seq(cmd, rest) ->
+        aux (ChanSet.union acc (chans_of_cmd cmd)) rest
   in
-  chans_of_prog_aux ChanSet.empty p
+  aux ChanSet.empty p
 
 let coq_spec_of_handler s comp xch_chan h =
   let hdr =
@@ -348,27 +176,14 @@ let coq_spec_of_handler s comp xch_chan h =
       h.trigger.tag
       (String.concat " " h.trigger.payload)
   in
-  lines [hdr; bdy; ftr]
+  lcat [hdr; bdy; ftr]
 
-let coq_of_init s =
-  let cp = coq_of_prog s "tr" [] s.init in
-  lines
-    [ "let tr := inhabits nil in"
-    ; if cp.code = ""
-      then "        (* no code *)"
-      else cp.code
-    ; mkstr "{{ Return (mkst (%snil) (tr ~~~ %s) %s) }}"
-        (cp.comps |> List.map (mkstr "%s :: ") |> String.concat "")
-        cp.trace
-        (s.var_decls |> List.map fst |> String.concat " ")
-    ]
+let frames_of_vars k =
+  k.var_decls
+    |> List.filter (fun (_, typ) -> typ = Chan)
+    |> List.map (fun (id, _) -> mkstr "[In %s comps]" id)
 
-let frames_of_vars s =
-  s.var_decls
-  |> List.filter (fun (_, typ) -> typ = Chan)
-  |> List.map (fun (id, _) -> mkstr "[In %s comps]" id)
-
-let coq_of_handler s xch_chan h =
+let coq_of_handler k xch_chan h =
   let tr =
     mkstr "RecvMsg %s (%s %s) ++ tr"
       xch_chan
@@ -383,20 +198,31 @@ let coq_of_handler s xch_chan h =
       ; "(tr ~~ [KTrace tr])"
       ]
     in
-    (frames_of_vars s) @ acc0
+    (frames_of_vars k) @ acc0
   )
   in
-  let pacc = coq_of_prog s tr fr h.respond in
-  lines
+  let pacc = coq_of_prog k tr fr h.respond in
+  let code =
+    if pacc.code = "" then
+      "        (* no code *)"
+    else
+      pacc.code
+  in
+  let comps =
+    pacc.comps
+      |> List.map (mkstr "%s :: ")
+      |> String.concat ""
+  in
+  let fields =
+    k.var_decls
+      |> List.map fst
+      |> String.concat " "
+  in
+  lcat
     [ coq_of_msg_pat h.trigger
-    ; if pacc.code = "" then
-        "        (* no code *)"
-      else
-        pacc.code
+    ; code
     ; mkstr "{{ Return (mkst (%scomps) (tr ~~~ %s) %s) }}"
-        (pacc.comps |> List.map (mkstr "%s :: ") |> String.concat "")
-        pacc.trace
-        (s.var_decls |> List.map fst |> String.concat " ")
+        comps pacc.trace fields
     ]
 
 let coq_of_exchange spec xch_chan kstate_vars comp =
@@ -411,8 +237,8 @@ let coq_of_exchange spec xch_chan kstate_vars comp =
   in
   let hands =
     fmt spec.msg_decls (fun msg ->
-      let constr = mkstr "%s %s" msg.tag (str_of_args msg) in
-      let unhandled = Printf.sprintf "
+      let constr = mkstr "%s %s" msg.tag (coq_of_args msg) in
+      let unhandled = mkstr "
     (* not handled *)
     | %s =>
       {{ Return (mkst comps (tr ~~~ RecvMsg c (%s) ++ tr) %s) }}
@@ -452,6 +278,31 @@ Qed.
 "
   comp kstate_vars vars_frames hands kstate_vars
 
+let coq_of_init k =
+  let cp = coq_of_prog k "tr" [] k.init in
+  let code =
+    if cp.code = "" then
+      "        (* no code *)"
+    else
+      cp.code
+  in
+  let comps =
+    cp.comps
+      |> List.map (mkstr "%s :: ")
+      |> String.concat ""
+  in
+  let fields =
+    k.var_decls
+      |> List.map fst
+      |> String.concat " "
+  in
+  lcat
+    [ "let tr := inhabits nil in"
+    ; code
+    ; mkstr "{{ Return (mkst (%snil) (tr ~~~ %s) %s) }}"
+        comps cp.trace fields
+    ]
+
 let coq_of_prop (name, prop) : string =
   match prop with
   | ImmFollow (pre, post) ->
@@ -469,33 +320,14 @@ Theorem %s :
   %s
 " name pre post
 
-let coq_of_kernel_subs s =
-  let m = gen_tag_map s in
+let subs s =
   let (xch_chan, exchanges) = s.exchange in
   let kstate_vars =
     s.var_decls |> List.map fst |> String.concat " "
   in
   List.map (fun (f, r) ->
     (Str.regexp ("(\\* *__" ^ f ^ "__ *\\*)"), r))
-  [ "CONST_DECLS",
-      fmt s.constants coq_of_constant_decl
-  ; "COMP_DECLS",
-      fmt s.components (fun (id, path) ->
-        "| " ^ id)
-  ; "CHAN_PATHS",
-      fmt s.components (fun (id, path) ->
-        mkstr "  | %s => string2str \"%s\"" id path)
-  ; "MSG_DECL",
-      fmt s.msg_decls coq_of_msg_decl
-  ; "RECV_T_CASES",
-      fmt s.msg_decls (coq_trace_recv_msg m)
-  ; "SEND_T_CASES",
-      fmt s.msg_decls (coq_trace_send_msg m)
-  ; "RECV_CASES",
-      fmt s.msg_decls (coq_recv_msg m)
-  ; "SEND_CASES",
-      fmt s.msg_decls (coq_send_msg m)
-  ; "VE_HANDLED_CASES",
+  [ "VE_HANDLED_CASES",
       fmt exchanges (fun (comp, handlers) ->
         fmt handlers (coq_spec_of_handler s comp xch_chan))
   ; "VE_UNHANDLED_CASES",

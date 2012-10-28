@@ -1,6 +1,5 @@
-WGET = "wget.py";
-
-State {
+Constants {
+  WGET = "wget.py";
 }
 
 Components {
@@ -19,7 +18,7 @@ Init {
 Exchange(c) {
   Main {
     Wget(url) {
-      f = call(WGET, url);
+      f := call(WGET, url);
       send(c, HTML(url, f));
     }
 

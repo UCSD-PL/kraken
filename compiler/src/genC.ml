@@ -20,16 +20,19 @@ let c_typ = function
   | Num -> "uint32_t"
   | Str -> "pstr *"
   | Fdesc -> "int"
+  | Chan -> "int"
 
 let c_ptyp = function
   | Num -> "PTYP_NUM"
   | Str -> "PTYP_STR"
   | Fdesc -> "PTYP_FD"
+  | Chan -> "PTYP_FD"
 
 let c_mk_param_typ = function
   | Num -> "mk_num_param"
   | Str -> "mk_pstr_param"
   | Fdesc -> "mk_fd_param"
+  | Chan -> "mk_fd_param"
 
 let c_msg_ctor_proto m =
   let args =

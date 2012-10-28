@@ -15,6 +15,7 @@ let space = [' ' '\t']
 let line = '\n'
 
 rule token = parse
+  | "Constants" { CONSTANTS }
   | "State" { STATE }
   | "Components" { COMPONENTS }
   | "Messages" { MESSAGES }
@@ -24,6 +25,7 @@ rule token = parse
   | "num" { NUM }
   | "str" { STR }
   | "fdesc" { FDESC }
+  | "chan" { CHAN }
   | "call" { CALL }
   | "send" { SEND }
   | "spawn" { SPAWN }

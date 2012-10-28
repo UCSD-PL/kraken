@@ -7,6 +7,7 @@ type typ =
   | Num
   | Str
   | Fdesc
+  | Chan
 
 type expr =
   | Var of id
@@ -80,6 +81,15 @@ let mk_kernel cs vs comps ms i xch =
   ; msg_decls  = ms
   ; init       = i
   ; exchange   = xch
+  }
+
+let empty_kernel =
+  { constants  = []
+  ; var_decls  = []
+  ; components = []
+  ; msg_decls  = []
+  ; init       = Nop
+  ; exchange   = ("", [])
   }
 
 let ck_kernel s =

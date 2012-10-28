@@ -342,15 +342,13 @@ Fixpoint all_bound (cs : list tchan) : hprop :=
     | c :: cs' => bound c * all_bound cs'
   end.
 
-(* all cs bound except _first_ occurrence of drop *)
 Fixpoint all_bound_drop (cs : list tchan) (drop : tchan) : hprop :=
   match cs with
-    | nil => emp
-    | c :: cs' =>
-      if tchan_eq c drop then
-        all_bound cs'
-      else
-        bound c * all_bound_drop cs' drop
+  | nil => emp
+  | c :: cs' =>
+    if tchan_eq c drop
+      then all_bound cs'
+      else bound c * all_bound_drop cs' drop
   end.
 
 Lemma unpack_all_bound :
@@ -382,28 +380,51 @@ Qed.
 
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in
-  traced tr * [KInvariant s ] * all_bound (components s).
+  traced tr * [KInvariant s ] * all_bound (components s) 
+(* __KSTATE_INVS__ *)
+.
+
 
 Ltac unfoldr := unfold kstate_inv.
 
+Ltac sep' := sep fail idtac.
 
+Ltac isolate t :=
+  match t with ?lhs ==> ?rhs =>
+    refine (@himp_trans (lhs * _) _ _ _ _); [ sep' | ];
+    refine (@himp_trans (rhs * _) _ _ _ _); [ | sep' ];
+    apply himp_split
+  end.
 Ltac simplr_fail :=
+  sep';
   match goal with
-    | [ oldcomps := ?comps |- all_bound ?comps ==> _ ] => try fold oldcomps; 
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (bound c * all_bound_drop cs c ==> all_bound cs);
+      [ apply repack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match rhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (all_bound cs ==> bound c * all_bound_drop cs c);
+      [ apply unpack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+    match rhs with context [ all_bound_drop ?cs ?d ] =>
+      isolate (bound c * all_bound_drop cs c ==> bound d * all_bound_drop cs d);
+      [ eapply himp_trans; [ apply repack_all_bound | apply unpack_all_bound ] | ]
+    end
+    end
+
+  | [ oldcomps := ?comps |- all_bound ?comps ==> _ ] => try fold oldcomps; 
     match goal with 
       | [ |- all_bound ?comps ==> bound ?c * all_bound_drop ?comps ?c ] =>
         apply unpack_all_bound
     end
-  | [ |- all_bound ?comps ==> bound ?c * all_bound_drop ?comps ?c ] =>
-    apply unpack_all_bound
-  | [ |- all_bound_drop ?comps ?c * bound ?c ==> all_bound ?comps ] =>
-    apply himp_comm_prem 
-  | [ |- bound ?c * all_bound_drop ?comps ?c ==> all_bound ?comps ] =>
-    apply repack_all_bound
-  | [ |- bound ?c * all_bound_drop ?comps ?c ==> all_bound ?comps * _ ] =>
-    apply himp_comm_conc; apply himp_prop_conc
-  | [ |- bound ?c * all_bound_drop ?comps ?c ==> _ * all_bound ?comps] =>
-    apply himp_prop_conc
+
+
   | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] => 
     match t with 
       | context [_ ++ (_ ++ _)] => repeat (rewrite app_assoc)

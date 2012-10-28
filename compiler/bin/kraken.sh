@@ -21,7 +21,7 @@ OUTDIR="."
 BUILD=false
 FORCE=false
 PRETTY=false
-DEBUG=false
+DEBUG=true
 INDIR=""
 
 function usage {
@@ -118,7 +118,7 @@ cp $INDIR/* $D/client/
 # generate code and proofs
 EXEC="$KBIN/.kraken"
 if $DEBUG; then
-  EXEC="ocamldebug -I $KRAKEN/compiler/src/_build $EXEC"
+  EXEC="ocamlrun -b -I $KRAKEN/compiler/src/_build $EXEC"
 fi
 $EXEC $INDIR/kernel.krn \
   --template kernel "$D/coq/Kernel.v-template" \

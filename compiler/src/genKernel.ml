@@ -46,25 +46,25 @@ let coq_of_cmd s pacc = function
           (let fr' = extract_bound c pacc.frame in
           mkstr "
 send_msg %s %s
-(tr ~~~ %s)
+(tr ~~~ expand_ktrace (%s))
 <@> %s;;
 "
             c (coq_of_msg_expr m)
             pacc.trace (coq_of_frame fr'))
       ; trace =
-          mkstr "SendMsg %s %s ++ %s"
+          mkstr "KSend %s %s :: %s"
             c (coq_of_msg_expr m) pacc.trace
       }
   | Call (res, f, arg) ->
       { pacc with code = pacc.code ^
           mkstr "
 %s <- call %s %s
-(tr ~~~ %s)
+(tr ~~~ expand_ktrace (%s))
 <@> %s;"
             res (coq_of_expr f) (coq_of_expr arg)
             pacc.trace (coq_of_frame pacc.frame)
       ; trace =
-          mkstr "Call_t %s %s %s ++ %s"
+          mkstr "KCall %s %s %s :: %s"
             (coq_of_expr f) (coq_of_expr arg) res pacc.trace
       }
   | Spawn (res, comp) ->
@@ -73,14 +73,14 @@ send_msg %s %s
       in
       { code = pacc.code ^
           mkstr "
-%s <- exec %s (string2str \"%s\")
-(tr ~~~ %s)
+%s <- exec %s (str_of_string \"%s\")
+(tr ~~~ expand_ktrace (%s))
 <@> %s;
 "
             res comp path
             pacc.trace (coq_of_frame pacc.frame)
       ; trace =
-          mkstr "Exec_t (string2str \"%s\") %s ++ %s"
+          mkstr "KExec (str_of_string \"%s\") %s :: %s"
             path res pacc.trace
       ; frame =
           mkstr "bound %s" res :: pacc.frame
@@ -171,7 +171,7 @@ let coq_spec_of_handler s comp xch_chan h =
       coq_trace_of_prog s fr h.respond
   in
   let ftr =
-    mkstr "RecvMsg %s (%s %s))"
+    mkstr "KRecv %s (%s %s) :: nil)"
       xch_chan
       h.trigger.tag
       (String.concat " " h.trigger.payload)
@@ -185,17 +185,16 @@ let frames_of_vars k =
 
 let coq_of_handler k xch_chan h =
   let tr =
-    mkstr "RecvMsg %s (%s %s) ++ tr"
+    mkstr "KRecv %s (%s %s) :: tr"
       xch_chan
       h.trigger.tag
       (String.concat " " h.trigger.payload)
   in
   let fr = (
-    let chans = chans_of_prog h.respond in
     let acc0 =
       [ "all_bound comps"
       ; mkstr "[In %s comps]" xch_chan
-      ; "(tr ~~ [KTrace tr])"
+      ; "(tr ~~ [KTraceOK tr])"
       ]
     in
     (frames_of_vars k) @ acc0
@@ -241,7 +240,7 @@ let coq_of_exchange spec xch_chan kstate_vars comp =
       let unhandled = mkstr "
     (* not handled *)
     | %s =>
-      {{ Return (mkst comps (tr ~~~ RecvMsg c (%s) ++ tr) %s) }}
+      {{ Return (mkst comps (tr ~~~ KRecv c (%s) :: tr) %s) }}
 "
         constr constr kstate_vars
       in
@@ -264,13 +263,13 @@ Definition exchange_%s :
         (fun (kst' : kstate) => kstate_inv kst').
 Proof.
   intros c [comps tr %s]; refine (
-    req <- recv_msg c tr
-    <@> [In c comps]%s * all_bound_drop comps c * (tr ~~ [KTrace tr]);
+    req <- recv_msg c (tr ~~~ expand_ktrace tr)
+    <@> [In c comps]%s * all_bound_drop comps c * (tr ~~ [KTraceOK tr]);
     match req with
 %s
     (* special case for errors *)
     | BadTag tag =>
-      {{ Return (mkst comps (tr ~~~ RecvMsg c (BadTag tag) ++ tr) %s) }}
+      {{ Return (mkst comps (tr ~~~ KRecv c (BadTag tag) :: tr) %s) }}
     end
   );
   sep unfoldr simplr.
@@ -342,7 +341,7 @@ let subs s =
           let args = m.payload |> List.map coq_of_typ |> String.concat " " in
           mkstr "
 | VE_%s_%s:
-  forall %s %s, ValidExchange (RecvMsg %s (%s %s))"
+  forall %s %s, ValidExchange (KRecv %s (%s %s) :: nil)"
             comp m.tag args xch_chan xch_chan m.tag args
         )
       )
@@ -350,8 +349,8 @@ let subs s =
       let t = coq_trace_of_prog s [] s.init in
       let v = prog_vars s.init in
       match v with
-      | [] -> mkstr "KTrace (%snil)" t
-      | _  -> mkstr "forall %s, KTrace (%snil)" (String.concat " " v) t
+      | [] -> mkstr "KTraceOK (%snil)" t
+      | _  -> mkstr "forall %s, KTraceOK (%snil)" (String.concat " " v) t
     )
   ; "KSTATE_FIELDS",
       fmt s.var_decls (fun (id, typ) ->
@@ -384,14 +383,14 @@ let subs s =
       mkstr "
   intros [comps tr %s];
   refine (
-    comp <- select comps tr
-    <@> (tr ~~ [KTrace tr] * all_bound comps%s);
+    comp <- select comps (tr ~~~ expand_ktrace tr)
+    <@> (tr ~~ [KTraceOK tr] * all_bound comps%s);
     let handler := (
       match type_of_comp comp comps with
 %s
       end
     ) in
-    s' <- handler comp (mkst comps (tr ~~~ Select comps comp :: tr) %s);
+    s' <- handler comp (mkst comps (tr ~~~ KSelect comps comp :: tr) %s);
     {{ Return s' }}
   );
   sep unfoldr simplr.

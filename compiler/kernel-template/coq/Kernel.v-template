@@ -41,7 +41,7 @@ Inductive ValidExchange : KTrace -> Prop :=
 | VE_BadTag :
   forall c tag,
   ValidExchange (
-    RecvMsg c (BadTag tag)).
+    KRecv c (BadTag tag) :: nil).
 
 Hint Constructors ValidExchange.
 
@@ -58,7 +58,7 @@ Inductive KTraceOK : KTrace -> Prop :=
   ValidExchange tEx ->
   KTraceOK (tEx ++ tr).
 
-Hint Constructors KTrace.
+Hint Constructors KTraceOK.
 
 Fixpoint all_bound (cs : list tchan) : hprop :=
   match cs with

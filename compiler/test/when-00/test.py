@@ -5,7 +5,6 @@ import msg, time
 def main():
   msg.init()
   while True:
-    reqcounterval()
     msg.send('ReqCounterValue')
     m = msg.recv()
     print(m)

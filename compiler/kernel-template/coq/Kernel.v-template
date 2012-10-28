@@ -82,6 +82,7 @@ Inductive Action : Set :=
 .
 
 Definition Trace : Set := list Action.
+Hint Unfold Trace.
 
 Axiom traced : Trace -> hprop.
 
@@ -444,6 +445,7 @@ Ltac simplr_fail :=
           | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] => 
             match t with 
               | context [[?l0 ++ ?x]%inhabited] => 
+	        try (unfold Trace);
                 (replace ([l0 ++ x]%inhabited) with 
                   (inhabit_unpack (ktr kst)
                     (fun oldktr : Trace => l0 ++ oldktr)));

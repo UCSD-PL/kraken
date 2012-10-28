@@ -383,7 +383,7 @@ let rec init_vars = function
 
 let rec comp_vars = function
   | Nop -> []
-  | Seq (c, p) -> comp_cmd_vars c @ comp_vars p
+  | Seq (c, p) -> (comp_vars p) @ (comp_cmd_vars c)
 
 let coq_of_msg_pat m =
   mkstr "| %s %s =>" m.tag

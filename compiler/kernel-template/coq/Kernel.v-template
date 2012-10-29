@@ -420,13 +420,6 @@ Ltac simplr_fail :=
     end
     end
 
-  | [ oldcomps := ?comps |- all_bound ?comps ==> _ ] => try fold oldcomps;
-    match goal with
-      | [ |- all_bound ?comps ==> bound ?c * all_bound_drop ?comps ?c ] =>
-        apply unpack_all_bound
-    end
-
-
   | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] =>
     match t with
       | context [_ ++ (_ ++ _)] => repeat (rewrite app_assoc)

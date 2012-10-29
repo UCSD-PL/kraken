@@ -53,8 +53,8 @@ let mk_handler t r =
   }
 
 type prop =
-  | ImmFollow of string * string
-  | ImmPrecede of string * string
+  | ImmAfter of string * string
+  | ImmBefore of string * string
 
 type kernel =
   { constants  : (id * expr) list

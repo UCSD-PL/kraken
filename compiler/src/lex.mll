@@ -29,8 +29,8 @@ rule token = parse
   | "call" { CALL }
   | "send" { SEND }
   | "spawn" { SPAWN }
-  | "ImmFollow" { IMMFOLLOW }
-  | "ImmPrecede" { IMMPRECEDE }
+  | "ImmAfter" { IMMAFTER }
+  | "ImmBefore" { IMMBEFORE }
   | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }

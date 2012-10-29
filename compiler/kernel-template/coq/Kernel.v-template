@@ -60,6 +60,26 @@ Inductive KTraceOK : KTrace -> Prop :=
 
 Hint Constructors KTraceOK.
 
+Ltac trace_ok :=
+  match goal with
+  | [ _: KTraceOK ?x |- KTraceOK (_ ++ ?x) ] =>
+      econstructor; [eauto|]
+  | [ _: KTraceOK ?x |- KTraceOK (?w :: ?x) ] =>
+      replace (w :: x) with ((w :: nil) ++ x)
+  | [ _: KTraceOK ?x |- KTraceOK (?v :: ?w :: ?x) ] =>
+      replace (v :: w :: x) with ((v :: w :: nil) ++ x)
+  | [ _: KTraceOK ?x |- KTraceOK (?u :: ?v :: ?w :: ?x) ] =>
+      replace (u :: v :: w :: x) with ((u :: v :: w :: nil) ++ x)
+  | [ _: KTraceOK ?x |- KTraceOK ?t ] =>
+      match t with context [x] =>
+        repeat (rewrite app_assoc)
+      end
+  | [ |- ValidExchange ((_ ++ _) ++ _) ] =>
+      repeat (rewrite <- app_assoc)
+  | [ |- ValidExchange _ ] =>
+      constructor
+  end.
+
 Fixpoint all_bound (cs : list tchan) : hprop :=
   match cs with
     | nil => emp
@@ -101,37 +121,7 @@ Proof.
   apply himp_comm_prem; auto.
 Qed.
 
-Record kstate : Set :=
-  mkst { components : list tchan
-       ; ktr : [KTrace]
-(* __KSTATE_FIELDS__ *)
-       }.
-
-Definition kstate_inv s : hprop :=
-  tr :~~ ktr s in
-  traced (expand_ktrace tr) * [KTraceOK tr] * all_bound (components s)
-(* __KSTATE_INVS__ *)
-.
-
-Ltac unfoldr := unfold kstate_inv.
-
 Ltac sep' := sep fail idtac.
-
-Ltac trace_ok :=
-  match goal with
-  | [ _: KTraceOK ?x |- KTraceOK (_ ++ ?x) ] =>
-      econstructor; [eauto|]
-  | [ _: KTraceOK ?x |- KTraceOK (?w :: ?x) ] =>
-      replace (w :: x) with ((w::nil) ++ x)
-  | [ _: KTraceOK ?x |- KTraceOK (?u :: ?w :: ?x) ] =>
-      replace (u :: w :: x) with ((u :: w::nil) ++ x)
-  | [ _: KTraceOK ?x |- KTraceOK ?t ] =>
-      match t with context [x] => repeat (rewrite app_assoc) end
-  | [ |- ValidExchange ((_ ++ _) ++ _) ] =>
-      repeat (rewrite <- app_assoc)
-  | [ |- ValidExchange _ ] =>
-      constructor
-  end.
 
 Ltac isolate t :=
   match t with ?lhs ==> ?rhs =>
@@ -164,6 +154,20 @@ Ltac bounds_packing :=
     end
 
   end.
+
+Record kstate : Set :=
+  mkst { components : list tchan
+       ; ktr : [KTrace]
+(* __KSTATE_FIELDS__ *)
+       }.
+
+Definition kstate_inv s : hprop :=
+  tr :~~ ktr s in
+  traced (expand_ktrace tr) * [KTraceOK tr] * all_bound (components s)
+(* __KSTATE_INVS__ *)
+.
+
+Ltac unfoldr := unfold kstate_inv.
 
 Ltac simplr :=
   sep';
@@ -234,27 +238,41 @@ Proof.
   sep fail auto.
 Qed.
 
-(* __PROPERTIES__ *)
+(* REMEMBER : traces are in reverse chrono order
+ * so most recent event is in head position and
+ * first action is last
+ *)
 
+(* if you see aft in a trace,
+ * then it is immediately chrono preceded by bef
+ *)
 Definition ImmBefore (bef aft : KTrace) : Prop :=
   forall tr, KTraceOK tr ->
-  forall x y, tr = x ++ bef ++ y ->
-  exists z, y = aft ++ z.
+  forall x y, tr = x ++ aft ++ y ->
+  exists z, y = bef ++ z.
 
+(* if you see bef in a trace,
+ * then it is immediately chrono followed by aft
+ *)
 Definition ImmAfter (bef aft : KTrace) : Prop :=
   forall tr, KTraceOK tr ->
-  forall x y, tr = x ++ aft ++ y ->
-  exists z, x = z ++ bef.
+  forall x y, tr = x ++ bef ++ y ->
+  exists z, x = z ++ aft.
 
 Ltac inv H :=
   inversion H; subst; clear H.
 
-Ltac imm_tac := repeat progress
+Definition valid_msg (m: msg) : Prop :=
+  forall t, m <> BadTag t.
+
+Ltac imm_tac_step :=
   match goal with
   | |- exists z, ?x = z ++ ?x =>
     exists nil; auto
   | H: nil = ?x ++ ?y :: ?z |- _ =>
     apply app_cons_not_nil in H; contradiction
+  | H: valid_msg (BadTag ?t) |- _ =>
+    unfold valid_msg in H; edestruct H; eauto
   | H: ?e :: ?tr = ?a ++ ?b |- _ =>
     destruct a; simpl in *; inv H
   | H: ValidExchange ?tr |- _ =>
@@ -267,3 +285,8 @@ Ltac imm_tac := repeat progress
   | _ =>
     eauto
   end.
+
+Ltac imm_tac :=
+  repeat progress imm_tac_step.
+
+(* __PROPERTIES__ *)

@@ -304,20 +304,30 @@ let coq_of_init k =
 
 let coq_of_prop (name, prop) : string =
   match prop with
-  | ImmFollow (pre, post) ->
+  | ImmAfter (bef, aft) ->
       mkstr "
 Theorem %s :
-  XXX
-  %s
-  %s
-" name pre post
-  | ImmPrecede (pre, post) ->
+  forall chan msg,
+  valid_msg msg ->
+  ImmAfter
+    (%s)
+    (%s).
+Proof.
+  unfold ImmAfter; induction 2; intros; imm_tac.
+Qed.
+" name bef aft
+  | ImmBefore (bef, aft) ->
       mkstr "
 Theorem %s :
-  XXX
-  %s
-  %s
-" name pre post
+  forall chan msg,
+  valid_msg msg ->
+  ImmBefore
+    (%s)
+    (%s).
+Proof.
+  unfold ImmBefore; induction 2; intros; imm_tac.
+Qed.
+" name bef aft
 
 let subs s =
   let (xch_chan, exchanges) = s.exchange in

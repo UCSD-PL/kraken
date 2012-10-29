@@ -23,12 +23,12 @@ Exchange(c) {
 
 Properties {
   AlwaysResponds =
-    ImmFollow
-      { "RecvMsg chan msg" }
-      { "SendMsg chan msg" };
+    ImmAfter
+      { "KRecv chan msg :: nil" }
+      { "KSend chan msg :: nil" };
 
   OnlyResponds =
-    ImmPrecede
-      { "RecvMsg chan msg" }
-      { "SendMsg chan msg" };
+    ImmBefore
+      { "KRecv chan msg :: nil" }
+      { "KSend chan msg :: nil" };
 }

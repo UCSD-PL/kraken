@@ -53,9 +53,9 @@ let rec coq_of_expr = function
     mkstr "(num_of_nat ((nat_of_num (%s)) + (nat_of_num (%s))))"
       (coq_of_expr a) (coq_of_expr b)
 
-(* eftable : a variname name -> an expressions containing the current
-value of the variable represented by the old variables at the start of
-the handler. (e.g, after a := a + 1, a is mapped to a + 1 *)
+(* eftable : a state variable name -> an expressions containing the
+current value of the variable represented by the old variables at the
+start of the handler. (e.g, after a := a + 1, a is mapped to a + 1 *)
 let rec get_affected_expr eftable id =
   match eftable with
   | [] -> Var id

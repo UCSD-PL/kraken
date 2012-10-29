@@ -545,7 +545,6 @@ let coq_of_handler s xch_chan trig index tprog =
       (String.concat " " trig.payload)
   in
   let fr = (
-    let chans = chans_of_prog tprog.program in
     let acc0 =
       [ "all_bound comps"
       ; mkstr "[In %s comps]" xch_chan

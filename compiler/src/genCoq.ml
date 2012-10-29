@@ -635,7 +635,7 @@ Proof.
     | BadTag tag =>
       {{ Return (mkst comps (tr ~~~ RecvMsg c (BadTag tag) ++ tr) %s) }}
     end
-  );  sep unfoldr simplr_handler.
+  );  sep unfoldr simplr.
 Qed.
 "
   comp var_ext vars_frames hands kstate_vars
@@ -766,7 +766,7 @@ let coq_of_kernel_subs s =
     s' <- handler comp (mkst comps (tr ~~~ Select comps comp :: tr) %s);
     {{ Return s' }}
   );
-  sep unfoldr simplr_body.
+  sep unfoldr simplr.
 "
       (fmt s.var_decls (fun (id,typ) -> (mkstr "pose (%s := (%s kst));" id id)))
       kstate_invs

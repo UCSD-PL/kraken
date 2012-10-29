@@ -432,35 +432,21 @@ Ltac simplr_fail :=
     end
     end
 
+  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?t ] =>
+    match t with context [[?act :: ?x]%inhabited] =>
+      unfold Trace;
+      replace ([act :: x]%inhabited)
+      with (inhabit_unpack (ktr kst) (fun oldktr : Trace => act :: oldktr));
+      [ eapply KT_select; eauto | rewrite H; auto]
+    end
+
   | [H: _ = [_]%inhabited |- _] => rewrite H in *; simpl in *
   | [H:[_]%inhabited = [_]%inhabited |- _] => apply pack_injective in H; rewrite H in *
   | [H:[_]%inhabited = [_]%inhabited |- _] => apply pack_injective in H; rewrite <- H in *
-  end.
-
-
-Ltac simplr_handler_fail :=
-  try (match goal with
-  | [ _: KInvariant _ |- KInvariant _ ] => econstructor; [eauto|]
-  end); simplr_fail.
-
-Ltac simplr_body_fail :=
-  try (match goal with
-  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?t ] =>
-    match t with
-      | context [[?act :: ?x]%inhabited] =>
-        unfold Trace;
-          replace ([act :: x]%inhabited) with
-            (inhabit_unpack (ktr kst)
-              (fun oldktr : Trace => act :: oldktr));
-            [ eapply KT_select; eauto | rewrite H; auto]
-    end
- end); simplr_fail.
-
+  | [_: KInvariant _ |- KInvariant _ ] => econstructor; [eauto|]
+end.
 
 Ltac simplr := try simplr_fail; auto.
-Ltac simplr_body := try simplr_body_fail; auto.
-Ltac simplr_handler := try simplr_handler_fail; auto.
-
 
 Definition kinit :
   forall (_ : unit),

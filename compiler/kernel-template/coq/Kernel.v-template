@@ -424,16 +424,14 @@ Ltac simplr_fail :=
     match t with
     | context [_ ++ (_ ++ _)] => repeat (rewrite app_assoc)
     | context [[?l0 ++ ?x]%inhabited] =>
-      try (
-        repeat (
-          match goal with
-          | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] =>
-            match t with
-            | context [[((?l0 ++ ?l1) ++ ?l2) ++ x0]%inhabited] =>
-              rewrite <- (app_assoc l0 l1 l2)
-            end
+      repeat (
+        match goal with
+        | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] =>
+          match t with
+          | context [[((?l0 ++ ?l1) ++ ?l2) ++ x0]%inhabited] =>
+            rewrite <- (app_assoc l0 l1 l2)
           end
-        )
+        end
       );
       match goal with
       | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] =>

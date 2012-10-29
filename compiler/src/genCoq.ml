@@ -57,7 +57,7 @@ let rec coq_of_expr = function
 value of the variable represented by the old variables at the start of
 the handler. (e.g, after a := a + 1, a is mapped to a + 1 *)
 let rec get_affected_expr eftable id =
-  match eftable with 
+  match eftable with
   | [] -> Var id
   | (id', ex) :: eftable' ->
       if id = id' then ex else (get_affected_expr eftable' id)
@@ -192,7 +192,7 @@ let coq_send_msg tag_map m =
   lines [hdr; pay; ret]
 
 let coq_of_msg_expr_for_trace eftable m =
-  mkstr "(%s %s)" m.tag 
+  mkstr "(%s %s)" m.tag
     (if (List.length m.payload = 0) then " " else
     (m.payload
       |> List.map (coq_of_expr_for_trace eftable)
@@ -230,10 +230,10 @@ let fresh_chan_id () =
 
 
 let rec subst e table =
-  match e with 
+  match e with
   | Var id ->
       let (id', ex) = (List.find (fun (id', ex) -> id = id') table) in
-      ex      
+      ex
   | Plus (e1, e2) ->
       Plus ((subst e1 table), (subst e2 table))
   | _ -> e
@@ -257,7 +257,7 @@ let extract_bound c fr =
 
 let coq_of_cmd s pacc = function
   | Send (c, m) ->
-      { 
+      {
         pacc with code = pacc.code ^
           (let fr' = extract_bound c pacc.frame in
           mkstr "
@@ -323,18 +323,18 @@ send_msg %s %s
          add (mkstr "
 let %s := %s in" id (coq_of_expr expr));
          contents ()
-         ); 
-	   trace_spec = pacc.trace_spec
-	   ; trace_impl = pacc.trace_impl
-	   ; frame = pacc.frame
-	   ; comps = pacc.comps
-	   ; effecttbl = (apply_effect id expr pacc.effecttbl)
-      } 
+         );
+     trace_spec = pacc.trace_spec
+     ; trace_impl = pacc.trace_impl
+     ; frame = pacc.frame
+     ; comps = pacc.comps
+     ; effecttbl = (apply_effect id expr pacc.effecttbl)
+      }
 
 
 let init_effecttbl vardecls =
-  (List.fold_left 
-    (fun acc (id, typ) -> 
+  (List.fold_left
+    (fun acc (id, typ) ->
       (id, (Var id)) :: acc)
      [] vardecls)
 
@@ -367,7 +367,7 @@ let cmd_vars = function
       []
   |  _ -> []
   (*
-	we have to consider this separately
+  we have to consider this separately
   | Spawn (res, path) ->
       [res]
   *)
@@ -394,24 +394,24 @@ let coq_of_msg_pat m =
 handlers *)
 let handler_vars xch_chan trig statevars program =
   let varnames = (List.map (fun (id,typ) -> id) statevars) in
-  (List.fold_left 
-    (fun lst elem -> 
-      if List.mem elem varnames then lst 
+  (List.fold_left
+    (fun lst elem ->
+      if List.mem elem varnames then lst
       else (elem :: lst)
     ) [] (uniq ((xch_chan :: trig.payload) @ (comp_vars program) @ (init_vars program))))
 
 let coq_mkst_with_effects effecttbl vardecls =
-  (fmt vardecls (fun (id, typ) -> 
+  (fmt vardecls (fun (id, typ) ->
     (mkstr "( %s )" (coq_of_expr (get_affected_expr effecttbl id)))))
 
 let rec get_init_state_values cmds =
   match cmds with
   | c :: cmds' ->
       (let res = (get_init_state_values cmds') in
-      (match c with 
-      |	Assign (id, e) -> ((id, e) :: res)
-      |	Spawn (id, e) -> ((id, Var id) :: res)
-      |	_ -> res))
+      (match c with
+      | Assign (id, e) -> ((id, e) :: res)
+      | Spawn (id, e) -> ((id, Var id) :: res)
+      | _ -> res))
   | [] -> []
 
 let rec ext_cmds prog =
@@ -419,30 +419,30 @@ let rec ext_cmds prog =
   | Nop -> []
   | Seq (cmd, prog') -> cmd :: (ext_cmds prog')
 
-let coq_init_mkst prog vardecls = 
+let coq_init_mkst prog vardecls =
   let cmds = (ext_cmds prog) in
   let vals = get_init_state_values cmds in
   mkstr " %s "
-    (fmt vardecls (fun (id, typ) -> 
+    (fmt vardecls (fun (id, typ) ->
       (mkstr "( %s )" (coq_of_expr (snd (try List.find (fun (id', e) -> id = id') vals with Not_found -> print_string id; print_string " not found\n"; raise Not_found))))))
 
 let coq_of_logical le =
   match le with
-  | LogEq (id, v) -> 
+  | LogEq (id, v) ->
       (mkstr "(nat_of_num %s) = %d" id v)
 
 
-let coq_of_condition_spec conds cond =  
-  let conds_str = 
-    (String.concat " -> " (List.map (fun cond -> 
-    match cond with 
+let coq_of_condition_spec conds cond =
+  let conds_str =
+    (String.concat " -> " (List.map (fun cond ->
+    match cond with
     | None -> ""
     | Some le -> mkstr "~(%s)" (coq_of_logical le)) conds)) in
   let res = (match cond with
   | None -> conds_str
-  | Some le -> (mkstr " %s %s " 
-	(if conds_str = "" then "" else (mkstr " %s -> " conds_str)) 
-	(coq_of_logical le))
+  | Some le -> (mkstr " %s %s "
+    (if conds_str = "" then "" else (mkstr " %s -> " conds_str))
+    (coq_of_logical le))
   ) in
   (if res = "" then "" else (mkstr " %s -> " res))
 
@@ -513,7 +513,7 @@ let coq_of_init s =
     ; mkstr "{{ Return (mkst (%snil) (tr ~~~ %s) %s) }}"
         (cp.comps |> List.map (mkstr "%s :: ") |> String.concat "")
         cp.trace_impl
-	(coq_init_mkst s.init s.var_decls)
+        (coq_init_mkst s.init s.var_decls)
     ]
 
 
@@ -524,13 +524,13 @@ let coq_of_condition index cond =
   match cond with
   | None ->
       (if index = 0 then "" else " else ")
-  | Some le -> 
+  | Some le ->
       match le with
-      |	LogEq (id, v) ->
-	  lines 
-	    [ (if index > 0 then " else " else "");
-	      (mkstr "if (Peano_dec.eq_nat_dec (nat_of_num %s) %d) then " id v);
-	    ]
+      | LogEq (id, v) ->
+        lines
+          [ (if index > 0 then " else " else "");
+            (mkstr "if (Peano_dec.eq_nat_dec (nat_of_num %s) %d) then " id v);
+          ]
 
 let frames_of_vars s =
   s.var_decls
@@ -557,7 +557,7 @@ let coq_of_handler s xch_chan trig index tprog =
   in
   let pacc = coq_of_prog s tr fr tprog.program in
   lines
-    [ 
+    [
     (*coq_of_msg_pat trig
     ;  *)
     coq_of_condition index tprog.condition
@@ -605,13 +605,13 @@ let coq_of_exchange spec xch_chan comp =
       | Some(exchanges) ->
         try (
           let h =
-	      List.find (fun h -> h.trigger.tag = msg.tag) (snd exchanges) 
+            List.find (fun h -> h.trigger.tag = msg.tag) (snd exchanges)
           in
-	  lines 
-	  [ coq_of_handler_header h.trigger ;
-	    fmti h.responds (coq_of_handler spec xch_chan h.trigger)
-	  ] 
-	 (* coq_of_handler spec xch_chan handler *)
+        lines
+        [ coq_of_handler_header h.trigger ;
+          fmti h.responds (coq_of_handler spec xch_chan h.trigger)
+        ]
+       (* coq_of_handler spec xch_chan handler *)
         )
         with Not_found -> unhandled
     )
@@ -638,7 +638,7 @@ Proof.
   );  sep unfoldr simplr_handler.
 Qed.
 "
-  comp var_ext vars_frames hands kstate_vars 
+  comp var_ext vars_frames hands kstate_vars
 
 
 let coq_of_kernel_subs s =
@@ -674,17 +674,17 @@ let coq_of_kernel_subs s =
       (fmt s.var_decls (fun (id,typ) -> (mkstr "%s " id)))
   ; "VE_HANDLED_CASES",
       fmt exchanges (fun (comp, handlers) ->
-	fmt handlers 
-	  (fun h ->
-	    String.concat "\n" (snd (
-	    List.fold_left 
-	      (fun ((idx, conds), res) tprog -> 
-		((idx + 1, tprog.condition :: conds), 
-		 (coq_spec_of_handler s comp xch_chan h.trigger conds idx tprog) :: res))
-	      ((0, []), [])
-	      h.responds))
-	  )
-	    (* fmti h.responds (coq_spec_of_handler s comp xch_chan h.trigger) *)
+      fmt handlers
+        (fun h ->
+          String.concat "\n" (snd (
+          List.fold_left
+            (fun ((idx, conds), res) tprog ->
+            ((idx + 1, tprog.condition :: conds),
+             (coq_spec_of_handler s comp xch_chan h.trigger conds idx tprog) :: res))
+            ((0, []), [])
+            h.responds))
+        )
+          (* fmti h.responds (coq_spec_of_handler s comp xch_chan h.trigger) *)
       )
         (* fmt handlers (coq_spec_of_handler s comp xch_chan)) *)
   ; "VE_UNHANDLED_CASES",
@@ -704,26 +704,26 @@ let coq_of_kernel_subs s =
         )
       )
   ; "KTRACE_INIT", (
-      let t = coq_trace_impl_of_prog s [] s.init in 
+      let t = coq_trace_impl_of_prog s [] s.init in
       let comp_vs = comp_vars s.init in
       let init_vs = init_vars s.init in
       let mkst = coq_init_mkst s.init s.var_decls in
       (match (comp_vs @ init_vs) with
       | [] -> "" (* ignore this case. What's the kernel for without any component? *)
-      | _  -> mkstr "forall %s, KInvariant (mkst (%s) [%s nil] %s) " 
-	    (String.concat " " (comp_vs @ init_vs))
-	    (mkstr "%s::nil" (String.concat "::" (comp_vs)))
-	    t
-	    mkst
+      | _  -> mkstr "forall %s, KInvariant (mkst (%s) [%s nil] %s) "
+          (String.concat " " (comp_vs @ init_vs))
+          (mkstr "%s::nil" (String.concat "::" (comp_vs)))
+          t
+          mkst
       )
     )
   ; "STATE_FIELDS", (
       let declstr = (String.concat ";" (List.map (fun (id, typ) ->
         mkstr " %s : %s " id (coq_of_typ typ)) s.var_decls)) in
-      (match (s.var_decls) with 
-      |	[] -> declstr
-      |	_ -> mkstr ("; %s") declstr)
-	)
+      (match (s.var_decls) with
+      | [] -> declstr
+      | _ -> mkstr ("; %s") declstr)
+  )
   ; "KSTATE_INVS",
       fmt s.var_decls (fun (id, typ) ->
         match typ with
@@ -770,6 +770,6 @@ let coq_of_kernel_subs s =
 "
       (fmt s.var_decls (fun (id,typ) -> (mkstr "pose (%s := (%s kst));" id id)))
       kstate_invs
-      comp_xch 
+      comp_xch
       (fmt s.var_decls (fun (id,typ) -> (mkstr "%s " id)))
   ]

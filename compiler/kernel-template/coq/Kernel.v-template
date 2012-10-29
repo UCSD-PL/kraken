@@ -304,14 +304,14 @@ Section VEX.
 (* __VE_HANDLED_CASES__ *)
 (* __VE_UNHANDLED_CASES__ *)
 (* special case for errors *)
-  | VE_BadTag : 
+  | VE_BadTag :
     forall c tag,
-      ValidExchange 
-      (mkst 
+      ValidExchange
+      (mkst
         comps
         (tr ~~~ (RecvMsg c (BadTag tag) ++ tr))
 (* __VE_STATE_VAR_LISTS__ *)
-	).
+  ).
 End VEX.
 
 Hint Constructors ValidExchange.
@@ -326,7 +326,7 @@ Inductive KInvariant : kstate -> Prop :=
   let tr := (ktr s) in
 (* __KTRACE_VAR_DECLS__ *)
   KInvariant s ->
-  KInvariant (mkst comps (tr ~~~ (Select cs c :: tr)) 
+  KInvariant (mkst comps (tr ~~~ (Select cs c :: tr))
 (* __KTRACE_VAR_LISTS__ *)
 )
 | KT_exchange :
@@ -381,7 +381,7 @@ Qed.
 
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in
-  traced tr * [KInvariant s ] * all_bound (components s) 
+  traced tr * [KInvariant s ] * all_bound (components s)
 (* __KSTATE_INVS__ *)
 .
 
@@ -396,6 +396,7 @@ Ltac isolate t :=
     refine (@himp_trans (rhs * _) _ _ _ _); [ | sep' ];
     apply himp_split
   end.
+
 Ltac simplr_fail :=
   sep';
   match goal with
@@ -419,40 +420,41 @@ Ltac simplr_fail :=
     end
     end
 
-  | [ oldcomps := ?comps |- all_bound ?comps ==> _ ] => try fold oldcomps; 
-    match goal with 
+  | [ oldcomps := ?comps |- all_bound ?comps ==> _ ] => try fold oldcomps;
+    match goal with
       | [ |- all_bound ?comps ==> bound ?c * all_bound_drop ?comps ?c ] =>
         apply unpack_all_bound
     end
 
 
-  | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] => 
-    match t with 
+  | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] =>
+    match t with
       | context [_ ++ (_ ++ _)] => repeat (rewrite app_assoc)
-      | context [[?l0 ++ ?x]%inhabited] => 
+      | context [[?l0 ++ ?x]%inhabited] =>
         try (
           repeat (
           match goal with
-            | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] => 
+            | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] =>
               match t with
-                | context [[((?l0 ++ ?l1) ++ ?l2) ++ x0]%inhabited] => 
+                | context [[((?l0 ++ ?l1) ++ ?l2) ++ x0]%inhabited] =>
                   rewrite <- (app_assoc l0 l1 l2)
               end
           end
           )
         );
         match goal with
-          | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] => 
-            match t with 
-              | context [[?l0 ++ ?x]%inhabited] => 
-	        try (unfold Trace);
-                (replace ([l0 ++ x]%inhabited) with 
+          | [ H: ktr ?kst = [?x0]%inhabited |- ValidExchange ?kst ?t ] =>
+            match t with
+              | context [[?l0 ++ ?x]%inhabited] =>
+          try (unfold Trace);
+                (replace ([l0 ++ x]%inhabited) with
                   (inhabit_unpack (ktr kst)
                     (fun oldktr : Trace => l0 ++ oldktr)));
                 [ econstructor; eauto | rewrite H; auto]
             end
         end
     end
+
   | [H: _ = [_]%inhabited |- _] => rewrite H in *; simpl in *
   | [H:[_]%inhabited = [_]%inhabited |- _] => apply pack_injective in H; rewrite H in *
   | [H:[_]%inhabited = [_]%inhabited |- _] => apply pack_injective in H; rewrite <- H in *
@@ -466,9 +468,9 @@ Ltac simplr_handler_fail :=
 
 Ltac simplr_body_fail :=
   try (match goal with
-  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?t ] => 
-    match t with 
-      | context [[?act :: ?x]%inhabited] => 
+  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?t ] =>
+    match t with
+      | context [[?act :: ?x]%inhabited] =>
         unfold Trace;
           replace ([act :: x]%inhabited) with
             (inhabit_unpack (ktr kst)

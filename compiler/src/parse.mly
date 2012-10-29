@@ -11,9 +11,9 @@
   let _K = ref empty_kernel
 %}
 
-%token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE
-%token NUM STR FDESC CHAN CALL SEND SPAWN
-%token EQ LCURL RCURL LPAREN RPAREN
+%token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE WHEN
+%token NUM STR FDESC CHAN CALL SEND SPAWN 
+%token EQ EQUALITY LCURL RCURL LPAREN RPAREN
 %token COMMA SEMI EOF COLON ASSIGN PLUS
 
 %right PLUS
@@ -65,8 +65,8 @@ handlers :
 ;;
 
 handler :
-  | msg_pat LCURL prog RCURL
-    { mk_handler $1 $3 }
+  | msg_pat cond_progs
+    { mk_handler $1 $2 }
 ;;
 
 prog :
@@ -74,6 +74,13 @@ prog :
     { Nop }
   | cmd SEMI prog
     { Seq ($1, $3) }
+;;
+
+cond_progs :
+  | LCURL prog RCURL
+    { [(mk_cond_prog None $2)] }
+  | WHEN LPAREN when_cond RPAREN LCURL prog RCURL cond_progs
+    { (mk_cond_prog (Some $3) $6) :: $8 }
 ;;
 
 cmd :
@@ -108,6 +115,10 @@ expr :
   | NUMLIT { NumLit $1 }
   | STRLIT { StrLit $1 }
   | ID { Var $1 }
+;;
+
+when_cond :
+  | ID EQUALITY NUMLIT { LogEq($1, $3) }
 ;;
 
 msg_pat :

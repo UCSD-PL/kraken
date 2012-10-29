@@ -21,6 +21,7 @@ rule token = parse
   | "Messages" { MESSAGES }
   | "Init" { INIT }
   | "Exchange" { EXCHANGE }
+  | "when" { WHEN }
   | "num" { NUM }
   | "str" { STR }
   | "fdesc" { FDESC }
@@ -28,6 +29,7 @@ rule token = parse
   | "call" { CALL }
   | "send" { SEND }
   | "spawn" { SPAWN }
+  | "==" { EQUALITY }
   | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }

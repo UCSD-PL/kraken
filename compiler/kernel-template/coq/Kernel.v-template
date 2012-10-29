@@ -82,6 +82,7 @@ Inductive Action : Set :=
 .
 
 Definition Trace : Set := list Action.
+Hint Unfold Trace.
 
 Axiom traced : Trace -> hprop.
 
@@ -281,42 +282,60 @@ Proof.
   sep fail auto.
 Qed.
 
+Record kstate : Set :=
+  mkst { components : list tchan
+       ; ktr : [Trace]
+       (* __STATE_FIELDS__ *)
+  }.
+
 (* prevent sep tactic from unfolding *)
 Global Opaque RecvMsg SendMsg.
 
-Inductive ValidExchange : Trace -> Prop :=
+Section VEX.
+  Variable s:kstate.
+
+  Let comps := (components s).
+  Let tr := (ktr s).
+
+(* __VE_STATE_VAR_DECLS__ *)
+
+  Inductive ValidExchange : kstate -> Prop :=
+
 (* __VE_HANDLED_CASES__ *)
 (* __VE_UNHANDLED_CASES__ *)
 (* special case for errors *)
-| VE_BadTag :
-  forall c tag,
-  ValidExchange (
-    RecvMsg c (BadTag tag)).
+  | VE_BadTag :
+    forall c tag,
+      ValidExchange
+      (mkst
+        comps
+        (tr ~~~ (RecvMsg c (BadTag tag) ++ tr))
+(* __VE_STATE_VAR_LISTS__ *)
+  ).
+End VEX.
 
 Hint Constructors ValidExchange.
 
-Inductive AddedValidExchange : Trace -> Trace -> Prop :=
-| AVE_intro :
-  forall tr1 tr2,
-  ValidExchange tr2 ->
-  AddedValidExchange tr1 (tr2 ++ tr1).
 
-Hint Constructors AddedValidExchange.
-
-Inductive KTrace : Trace -> Prop :=
+Inductive KInvariant : kstate -> Prop :=
 | KT_init :
 (* __KTRACE_INIT__ *)
 | KT_select :
-  forall tr cs c,
-  KTrace tr ->
-  KTrace (Select cs c :: tr)
+  forall s cs c,
+  let comps := (components s) in
+  let tr := (ktr s) in
+(* __KTRACE_VAR_DECLS__ *)
+  KInvariant s ->
+  KInvariant (mkst comps (tr ~~~ (Select cs c :: tr))
+(* __KTRACE_VAR_LISTS__ *)
+)
 | KT_exchange :
-  forall tr1 tr2,
-  KTrace tr1 ->
-  AddedValidExchange tr1 tr2 ->
-  KTrace tr2.
+  forall s s',
+  KInvariant s ->
+  ValidExchange s s' ->
+  KInvariant s'.
 
-Hint Constructors KTrace.
+Hint Constructors KInvariant.
 
 Fixpoint all_bound (cs : list tchan) : hprop :=
   match cs with
@@ -359,17 +378,13 @@ Proof.
   apply himp_comm_prem; auto.
 Qed.
 
-Record kstate : Set :=
-  mkst { components : list tchan
-       ; ktr : [Trace]
-(* __KSTATE_FIELDS__ *)
-       }.
 
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in
-  traced tr * [KTrace tr] * all_bound (components s)
+  traced tr * [KInvariant s ] * all_bound (components s)
 (* __KSTATE_INVS__ *)
 .
+
 
 Ltac unfoldr := unfold kstate_inv.
 
@@ -385,7 +400,6 @@ Ltac isolate t :=
 Ltac simplr_fail :=
   sep';
   match goal with
-
   | [ |- ?lhs ==> ?rhs ] =>
     match lhs with context [ all_bound_drop ?cs ?c ] =>
       isolate (bound c * all_bound_drop cs c ==> all_bound cs);
@@ -406,13 +420,31 @@ Ltac simplr_fail :=
     end
     end
 
-  | [ _: KTrace ?x |- KTrace (_ ++ ?x) ] => econstructor; [eauto|]
-  | [ _: KTrace ?x |- KTrace ?t ] =>
-    match t with context [x] => repeat (rewrite app_assoc) end
-  | [ |- AddedValidExchange _ _ ] => constructor
-  | [ |- ValidExchange ((_ ++ _) ++ _) ] => repeat (rewrite <- app_assoc)
-  | [ |- ValidExchange _ ] => constructor
-  end.
+  | [ H: ktr ?kst = [?x]%inhabited |- ValidExchange ?kst ?t ] =>
+    (* puts the list in the form (a ++ b ++ c) ++ x *)
+    repeat rewrite (app_assoc _ _ x);
+    match goal with [ |- ValidExchange _ ?t ] =>
+    match t with context [?new ++ x] =>
+      unfold Trace;
+      replace ([new ++ x]%inhabited)
+      with (inhabit_unpack (ktr kst) (fun oldktr : Trace => new ++ oldktr));
+      [ econstructor; eauto | rewrite H; auto ]
+    end
+    end
+
+  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?t ] =>
+    match t with context [[?act :: ?x]%inhabited] =>
+      unfold Trace;
+      replace ([act :: x]%inhabited)
+      with (inhabit_unpack (ktr kst) (fun oldktr : Trace => act :: oldktr));
+      [ eapply KT_select; eauto | rewrite H; auto]
+    end
+
+  | [H: _ = [_]%inhabited |- _] => rewrite H in *; simpl in *
+  | [H:[_]%inhabited = [_]%inhabited |- _] => apply pack_injective in H; rewrite H in *
+  | [H:[_]%inhabited = [_]%inhabited |- _] => apply pack_injective in H; rewrite <- H in *
+  | [_: KInvariant _ |- KInvariant _ ] => econstructor; [eauto|]
+end.
 
 Ltac simplr := try simplr_fail; auto.
 

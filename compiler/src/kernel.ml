@@ -15,6 +15,9 @@ type expr =
   | StrLit of string
   | Plus of expr * expr
 
+type when_cond =
+  | LogEq of id * int
+
 type 'a msg =
   { tag : string
   ; payload : 'a list
@@ -42,14 +45,24 @@ type prog =
   | Nop
   | Seq of cmd * prog
 
+type cond_prog =
+  { condition : when_cond option
+  ; program : prog
+  }
+
+let mk_cond_prog c r =
+  { condition = c
+  ; program = r
+  } 
+
 type handler =
   { trigger : msg_pat
-  ; respond : prog
+  ; responds : cond_prog list
   }
 
 let mk_handler t r =
   { trigger = t
-  ; respond = r
+  ; responds = r
   }
 
 type kernel =

@@ -390,29 +390,29 @@ let rec chans_of_prog = function
   | Nop -> []
   | Seq (c, p) -> chans_of_cmd c @ chans_of_prog p
 
-let coq_spec_of_handler s comp xch_chan trig conds index tprog =
+let coq_spec_of_handler k comp xch_chan trig conds index tprog =
   let fr0 =
     List.map
       (fun c -> mkstr "bound %s" c)
       (xch_chan :: chans_of_prog tprog.program)
   in
-  let pacc = coq_of_prog s "" fr0 tprog.program in
-  let hdr =
-    mkstr "
-| VE_%s_%s_%d : \nforall %s, %s\nValidExchange (mkst (%scomps)"
-      comp trig.tag index
-      (String.concat " " ((handler_vars_nonstate xch_chan trig tprog.program s.var_decls)))
-      (coq_of_cond_spec conds tprog.condition)
-      (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
-  in
-  let ftr =
-    mkstr "(tr ~~~ ((%s RecvMsg %s (%s %s)) ++ tr))"
-      pacc.trace_spec
-      xch_chan
-      trig.tag
-      (String.concat " " trig.payload)
-  in
-  lines [hdr; ftr; lkup_st_fields pacc.sstate s; ")"]
+  let pacc = coq_of_prog k "" fr0 tprog.program in
+  lines
+    [ mkstr "| VE_%s_%s_%d :"
+        comp trig.tag index
+    ; mkstr "forall %s,"
+        (String.concat " " (handler_vars_nonstate xch_chan trig tprog.program k.var_decls))
+    ; coq_of_cond_spec conds tprog.condition
+    ; "ValidExchange (mkst"
+    ; mkstr "  (%scomps)"
+        (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
+    ; mkstr "  (tr ~~~ ((%s RecvMsg %s (%s %s)) ++ tr))"
+        pacc.trace_spec xch_chan trig.tag
+        (String.concat " " trig.payload)
+    ; mkstr "  %s"
+        (lkup_st_fields pacc.sstate k)
+    ; ")"
+    ]
 
 let coq_of_init k =
   let pacc = coq_of_prog k "tr" [] k.init in

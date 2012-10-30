@@ -235,8 +235,7 @@ let extract_bound c fr =
 
 let coq_of_cmd s pacc = function
   | Send (c, m) ->
-      {
-        pacc with code = pacc.code ^
+      { pacc with code = pacc.code ^
           (let fr' = extract_bound c pacc.frame in
           mkstr "
 send_msg %s %s
@@ -245,7 +244,6 @@ send_msg %s %s
 "
             c (coq_of_msg_expr m)
             pacc.trace_impl (coq_of_frame fr'))
-
       ; trace_impl =
           mkstr "SendMsg %s %s ++ %s"
             c (coq_of_msg_expr m) pacc.trace_impl
@@ -363,10 +361,6 @@ let handler_vars_nonstate xch_chan trig prog svars =
     (fun x -> not (List.mem x globals))
     (handler_vars xch_chan trig prog)
 
-let coq_mkst_with_effects effecttbl vardecls =
-  (fmt vardecls (fun (id, typ) ->
-    (mkstr "( %s )" (coq_of_expr (lkup_var effecttbl id)))))
-
 let rec get_init_state_values cmds =
   match cmds with
   | c :: cmds' ->
@@ -439,8 +433,13 @@ let coq_spec_of_handler s comp xch_chan trig conds index tprog =
       trig.tag
       (String.concat " " trig.payload)
   in
-  let other_state = (coq_mkst_with_effects pacc.sstate s.var_decls) in
-  (lines [hdr; ftr; other_state; ")"])
+  let st_fields =
+    s.var_decls
+      |> List.map (fun v -> lkup_var pacc.sstate (fst v))
+      |> List.map (fun e -> mkstr "(%s)" (coq_of_expr e))
+      |> lines
+  in
+  lines [hdr; ftr; st_fields; ")"]
 
 let coq_of_init s =
   let cp = coq_of_prog s "tr" [] s.init in
@@ -454,7 +453,6 @@ let coq_of_init s =
         cp.trace_impl
         (coq_init_mkst s.init s.var_decls)
     ]
-
 
 let coq_of_handler_header trig=
   coq_of_msg_pat trig

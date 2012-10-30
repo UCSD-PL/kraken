@@ -13,10 +13,6 @@ let fmti l f =
   l |> mapi f
     |> lines
 
-let mk_buffer () =
-  let b = Buffer.create 16 in
-  (Buffer.add_string b, fun () -> Buffer.contents b)
-
 let coq_of_typ = function
   | Num -> "num"
   | Str -> "str"
@@ -214,31 +210,16 @@ let coq_of_frame fr =
      |> mkstr "%semp"
 
 type prog_acc =
-  { code  : string
+  { code   : string
+  ; frame  : string list
+  ; comps  : string list
+  ; sstate : sstate
   ; trace_impl : string
   ; trace_spec : string
-  ; frame : string list
-  ; comps : string list
-  ; effecttbl : (string * expr) list
   }
 
 let fresh_chan_id () =
   mkstr "c%d" (tock ())
-
-
-let rec subst e table =
-  match e with
-  | Var id ->
-      let (id', ex) = (List.find (fun (id', ex) -> id = id') table) in
-      ex
-  | Plus (e1, e2) ->
-      Plus ((subst e1 table), (subst e2 table))
-  | _ -> e
-
-let apply_effect id expr effecttbl =
-  (* working *)
-  (id,(subst expr effecttbl)) :: effecttbl
-
 
 let extract_bound c fr =
   let s = mkstr "bound %s" c in
@@ -270,7 +251,7 @@ send_msg %s %s
             c (coq_of_msg_expr m) pacc.trace_impl
       ; trace_spec =
           mkstr "SendMsg %s %s ++ %s"
-            c (coq_of_msg_expr (lkup_msg_expr pacc.effecttbl m)) pacc.trace_spec
+            c (coq_of_msg_expr (lkup_msg_expr pacc.sstate m)) pacc.trace_spec
 
       }
   | Call (res, f, arg) ->
@@ -283,18 +264,20 @@ send_msg %s %s
             pacc.trace_impl (coq_of_frame pacc.frame)
       ; trace_impl =
           mkstr "Call_t %s %s %s ++ %s"
-            (coq_of_expr f) (coq_of_expr arg) res pacc.trace_impl
+            (coq_of_expr f)
+            (coq_of_expr arg)
+            res pacc.trace_impl
       ; trace_spec =
           mkstr "Call_t %s %s %s ++ %s"
-            (coq_of_expr (lkup_expr pacc.effecttbl f))
-            (coq_of_expr (lkup_expr pacc.effecttbl arg))
+            (coq_of_expr (lkup_expr pacc.sstate f))
+            (coq_of_expr (lkup_expr pacc.sstate arg))
             res pacc.trace_spec
       }
   | Spawn (res, comp) ->
       let path =
         snd (List.find (fun (id, _) -> id = comp) s.components)
       in
-      { code = pacc.code ^
+      { pacc with code = pacc.code ^
           mkstr "
 %s <- exec %s (string2str \"%s\")
 (tr ~~~ %s)
@@ -312,37 +295,30 @@ send_msg %s %s
           mkstr "bound %s" res :: pacc.frame
       ; comps =
           res :: pacc.comps
-      ; effecttbl = pacc.effecttbl
       }
   | Assign (id, expr) ->
-      {
-         code = (
-         let (add, contents) = mk_buffer () in
-         add pacc.code;
-         add (mkstr "
-let %s := %s in" id (coq_of_expr expr));
-         contents ()
-         );
-     trace_spec = pacc.trace_spec
-     ; trace_impl = pacc.trace_impl
-     ; frame = pacc.frame
-     ; comps = pacc.comps
-     ; effecttbl = (apply_effect id expr pacc.effecttbl)
+      { pacc with code = pacc.code ^
+          (* TODO should this expr be expanded first ? *)
+          mkstr "\nlet %s := %s in" id (coq_of_expr expr)
+      ; sstate =
+          set_var pacc.sstate id expr
       }
-
-
-let init_effecttbl vardecls =
-  (List.fold_left
-    (fun acc (id, typ) ->
-      (id, (Var id)) :: acc)
-     [] vardecls)
 
 let coq_of_prog s tr0 fr0 p =
   let rec loop pacc = function
     | Nop -> pacc
     | Seq (c, p') -> loop (coq_of_cmd s pacc c) p'
   in
-  loop {code = ""; trace_impl = tr0; trace_spec = tr0; frame = fr0; comps = []; effecttbl = (init_effecttbl s.var_decls)} p
+  let pacc0 =
+    { code   = ""
+    ; frame  = fr0
+    ; comps  = []
+    ; sstate = []
+    ; trace_impl = tr0
+    ; trace_spec = tr0
+    }
+  in
+  loop pacc0 p
 
 let coq_trace_spec_of_prog s fr p =
   (coq_of_prog s "" fr p).trace_spec
@@ -350,8 +326,8 @@ let coq_trace_spec_of_prog s fr p =
 let coq_trace_impl_of_prog s fr p =
   (coq_of_prog s "" fr p).trace_impl
 
-let effects_of_prog s fr p =
-  (coq_of_prog s "" fr p).effecttbl
+let sstate_of_prog s fr p =
+  (coq_of_prog s "" fr p).sstate
 
 let expr_vars = function
   | Var id -> [id]
@@ -472,7 +448,7 @@ let chans_of_prog p =
 
 let coq_spec_of_handler s comp xch_chan trig conds index tprog =
   let fr = List.map (fun c -> mkstr "bound %s" c) (xch_chan :: chans_of_prog tprog.program) in
-  let effecttbl = effects_of_prog s fr tprog.program in
+  let sstate = sstate_of_prog s fr tprog.program in
   let comp_vs =  (comp_vars tprog.program) in
   let hdr =
     mkstr "
@@ -498,7 +474,7 @@ let coq_spec_of_handler s comp xch_chan trig conds index tprog =
       trig.tag
       (String.concat " " trig.payload)
   in
-  let other_state = (coq_mkst_with_effects effecttbl s.var_decls) in
+  let other_state = (coq_mkst_with_effects sstate s.var_decls) in
   (lines [hdr; ftr; other_state; ")"])
 
 

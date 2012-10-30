@@ -1,0 +1,94 @@
+# This SSH monitor works as follows :
+# 1) the SSH monitor(MON) creates 3 different comps : SYS, SLV, PTY
+# 2) MON waits till SLV sends LoginReq
+#
+# == Login Request
+# 1) SLV asks MON to login via LoginReq, 
+# 1-1) if login_cnt == 3 then send Login_Res(0) back to SLV
+# 1-2) otherwise, login_cnt = login_cnt + 1, then send SysLogReq() 
+# to SYS
+#
+# 2) SYS replies to MON with SysLogRes() 
+# if the response is 1 then set login_succeded := 1; and 
+# login_account := $account and MON delivers it to SLV with LogRes  
+#
+# == PubKey Request
+# 1) SLV asks MON for the public key via PubKeyReq
+# MON delivers it to SYS via SysPubKeyReq
+#  
+# 2) SYS replies to MON with SysPubKeyRes
+# MON delivers it to SLV
+#
+# == KeySign Request(str)/IOCTL(fdesc)
+# works in the same as as PubKeyRequest
+#
+# == CreatePtyer
+# 1) SLV asks MON for a created PTYER
+# 1-1) if login_succeeded == 0 then ignore this request completely 
+# and don't send anything back
+#
+# 2) MON creates a PTY by sending SysCreatePtyReq()
+# 3) SYS sends back with SysCreatPtyRes(fdesc, fdesc) 
+# (SYS applies ioctl() to the slave fd & it creates a ptyer inside it
+# (Question: there are two options : a. create ptyer inside SYS
+# b. spawns a ptyer as a component from MON. Which one is better?? ) 
+#
+# 4) MON replies back to SLV with the two file descriptors
+
+
+State {
+  system:chan;
+  slave:chan ;
+
+  login_cnt:nat;
+  login_succeeded:nat;
+}
+
+Components {
+  System "system";
+  Slave "slave";
+}
+
+Messages {
+  # slave <-> monitor 
+  LoginReq(str);
+  LoginRes(num);
+
+  PubkeyReq();
+  PubkeyRes(str);
+
+  KeysignReq(str);
+  KeysignRes(str);
+
+  CreatePtyerReq();
+  CreatePtyerRes(fdesc, fdesc);
+
+
+  # monitor <-> system
+  SysLoginReq(str);
+  SysLoginRes(str);
+
+  SysPubkeyReq();
+  SysPubkeyRes(str);
+
+  SysKeysignReq(str);
+  SysKeysignRes(str);
+
+  SysCreatePtyerReq();
+  SysCreatePtyerRes(fdesc, fdesc);
+}
+
+Init {
+  system := spwan(System);
+  slave := spawn(Slave);
+}
+
+Exchange(c) {
+  Tab {
+
+  }
+
+  UserInput {
+  }
+}
+

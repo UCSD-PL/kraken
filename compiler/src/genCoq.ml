@@ -1,7 +1,6 @@
 open Common
 open Kernel
 
-
 let lines l =
   l |> List.filter ((<>) "")
     |> String.concat "\n"
@@ -53,27 +52,36 @@ let rec coq_of_expr = function
     mkstr "(num_of_nat ((nat_of_num (%s)) + (nat_of_num (%s))))"
       (coq_of_expr a) (coq_of_expr b)
 
-(* eftable : a state variable name -> an expressions containing the
-current value of the variable represented by the old variables at the
-start of the handler. (e.g, after a := a + 1, a is mapped to a + 1 *)
-let rec get_affected_expr eftable id =
-  match eftable with
-  | [] -> Var id
-  | (id', ex) :: eftable' ->
-      if id = id' then ex else (get_affected_expr eftable' id)
-
-let rec coq_of_expr_for_trace eftable = function
-  | Var id -> (coq_of_expr (get_affected_expr eftable id))
-  | NumLit i -> coq_of_num i
-  | StrLit s -> coq_of_string s
-  | Plus(a, b) ->
-    mkstr "(num_of_nat ((nat_of_num (%s)) + (nat_of_num (%s))))"
-      (coq_of_expr_for_trace eftable a) (coq_of_expr_for_trace eftable b)
-
 let coq_of_constant_decl (id, e) =
   mkstr "
 Definition %s := %s.
 " id (coq_of_expr e)
+
+(* symbolic state
+ *
+ * Track current value of state var during a handler's symbolic execution.
+ * For example, after [a := a + 1], [a] is mapped to [a + 1].
+ *)
+
+type sstate = (id * expr) list
+
+let lkup_var st id =
+  try
+    List.assoc id st
+  with Not_found ->
+    Var id
+
+let rec lkup_expr st = function
+  | Var id      -> lkup_var st id
+  | NumLit i    -> NumLit i
+  | StrLit s    -> StrLit s
+  | Plus (a, b) -> Plus (lkup_expr st a, lkup_expr st b)
+
+let lkup_msg_expr st m =
+  { m with payload = List.map (lkup_expr st) m.payload }
+
+let set_var st id expr =
+  (id, lkup_expr st expr) :: st
 
 let coq_of_msg_decl m =
   mkstr "| %s : %s" m.tag
@@ -191,25 +199,14 @@ let coq_send_msg tag_map m =
   in
   lines [hdr; pay; ret]
 
-let coq_of_msg_expr_for_trace eftable m =
-  mkstr "(%s %s)" m.tag
-    (if (List.length m.payload = 0) then " " else
-    (m.payload
-      |> List.map (coq_of_expr_for_trace eftable)
-      |> String.concat ") ("
-      |> mkstr "(%s)"))
-
 let coq_of_msg_expr m =
-    mkstr "(%s%s)" m.tag
-      (
-        match m.payload with
-        | [] -> ""
-        | pl ->
-          pl
-          |> List.map coq_of_expr
-          |> String.concat ") ("
-          |> mkstr " (%s)"
-      )
+  if m.payload = [] then
+    "(" ^ m.tag ^ ")"
+  else
+    m.payload
+      |> List.map coq_of_expr
+      |> String.concat ") ("
+      |> mkstr "(%s (%s))" m.tag
 
 let coq_of_frame fr =
   fr |> List.map (mkstr "%s * ")
@@ -273,7 +270,7 @@ send_msg %s %s
             c (coq_of_msg_expr m) pacc.trace_impl
       ; trace_spec =
           mkstr "SendMsg %s %s ++ %s"
-            c (coq_of_msg_expr_for_trace pacc.effecttbl m) pacc.trace_spec
+            c (coq_of_msg_expr (lkup_msg_expr pacc.effecttbl m)) pacc.trace_spec
 
       }
   | Call (res, f, arg) ->
@@ -289,7 +286,9 @@ send_msg %s %s
             (coq_of_expr f) (coq_of_expr arg) res pacc.trace_impl
       ; trace_spec =
           mkstr "Call_t %s %s %s ++ %s"
-            (coq_of_expr_for_trace pacc.effecttbl f) (coq_of_expr_for_trace pacc.effecttbl arg) res pacc.trace_spec
+            (coq_of_expr (lkup_expr pacc.effecttbl f))
+            (coq_of_expr (lkup_expr pacc.effecttbl arg))
+            res pacc.trace_spec
       }
   | Spawn (res, comp) ->
       let path =
@@ -402,7 +401,7 @@ let handler_vars xch_chan trig statevars program =
 
 let coq_mkst_with_effects effecttbl vardecls =
   (fmt vardecls (fun (id, typ) ->
-    (mkstr "( %s )" (coq_of_expr (get_affected_expr effecttbl id)))))
+    (mkstr "( %s )" (coq_of_expr (lkup_var effecttbl id)))))
 
 let rec get_init_state_values cmds =
   match cmds with

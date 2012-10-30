@@ -16,7 +16,8 @@ type expr =
   | Plus of expr * expr
 
 type when_cond =
-  | LogEq of id * int
+  | Always
+  | NumEq of id * int
 
 type 'a msg =
   { tag : string
@@ -46,7 +47,7 @@ type prog =
   | Seq of cmd * prog
 
 type cond_prog =
-  { condition : when_cond option
+  { condition : when_cond
   ; program : prog
   }
 
@@ -65,13 +66,16 @@ let mk_handler t r =
   ; responds = r
   }
 
+type component =
+  string
+
 type kernel =
   { constants  : (id * expr) list
   ; var_decls  : (id * typ) list
   ; components : (id * string) list
   ; msg_decls  : msg_decl list
   ; init       : prog
-  ; exchange   : chan * ((string * handler list) list)
+  ; exchange   : chan * ((component * handler list) list)
   }
 
 let mk_kernel cs vs comps ms i xch =

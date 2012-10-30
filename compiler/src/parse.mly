@@ -78,9 +78,9 @@ prog :
 
 cond_progs :
   | LCURL prog RCURL
-    { [(mk_cond_prog None $2)] }
+    { [(mk_cond_prog Always $2)] }
   | WHEN LPAREN when_cond RPAREN LCURL prog RCURL cond_progs
-    { (mk_cond_prog (Some $3) $6) :: $8 }
+    { (mk_cond_prog $3 $6) :: $8 }
 ;;
 
 cmd :
@@ -118,7 +118,7 @@ expr :
 ;;
 
 when_cond :
-  | ID EQUALITY NUMLIT { LogEq($1, $3) }
+  | ID EQUALITY NUMLIT { NumEq($1, $3) }
 ;;
 
 msg_pat :

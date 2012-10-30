@@ -64,12 +64,48 @@ Ltac trace_ok :=
   match goal with
   | [ _: KTraceOK ?x |- KTraceOK (_ ++ ?x) ] =>
       econstructor; [eauto|]
-  | [ _: KTraceOK ?x |- KTraceOK (?w :: ?x) ] =>
-      replace (w :: x) with ((w :: nil) ++ x)
-  | [ _: KTraceOK ?x |- KTraceOK (?v :: ?w :: ?x) ] =>
-      replace (v :: w :: x) with ((v :: w :: nil) ++ x)
-  | [ _: KTraceOK ?x |- KTraceOK (?u :: ?v :: ?w :: ?x) ] =>
-      replace (u :: v :: w :: x) with ((u :: v :: w :: nil) ++ x)
+
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?tr) =>
+      replace (a1 :: tr)
+      with ((a1 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?tr) =>
+      replace (a1 :: a2 :: tr)
+      with ((a1 :: a2 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?tr) =>
+      replace (a1 :: a2 :: a3 :: tr)
+      with ((a1 :: a2 :: a3 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?tr) =>
+      replace (a1 :: a2 :: a3 :: a4 :: tr)
+      with ((a1 :: a2 :: a3 :: a4 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?tr) =>
+      replace (a1 :: a2 :: a3 :: a4 :: a5 :: tr)
+      with ((a1 :: a2 :: a3 :: a4 :: a5 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?tr) =>
+      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: tr)
+      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?tr) =>
+      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: tr)
+      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?a8 :: ?tr) =>
+      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: tr)
+      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?a8 :: ?a9 :: ?tr) =>
+      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: tr)
+      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: nil) ++ tr)
+  | _: KTraceOK ?tr
+    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?a8 :: ?a9 :: ?a10 :: ?tr) =>
+      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: a10 :: tr)
+      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: a10 :: nil) ++ tr)
+
   | [ _: KTraceOK ?x |- KTraceOK ?t ] =>
       match t with context [x] =>
         repeat (rewrite app_assoc)

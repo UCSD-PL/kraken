@@ -274,9 +274,7 @@ send_msg %s %s
             res pacc.trace_spec
       }
   | Spawn (res, comp) ->
-      let path =
-        snd (List.find (fun (id, _) -> id = comp) s.components)
-      in
+      let path = List.assoc comp s.components in
       { pacc with code = pacc.code ^
           mkstr "
 %s <- exec %s (string2str \"%s\")
@@ -329,51 +327,41 @@ let coq_trace_impl_of_prog s fr p =
 let sstate_of_prog s fr p =
   (coq_of_prog s "" fr p).sstate
 
-let expr_vars = function
+let rec expr_vars = function
   | Var id -> [id]
+  | Plus (e1, e2) -> expr_vars e1 @ expr_vars e2
   | _ -> []
 
+(* vars that need forall binding *)
 let cmd_vars = function
   | Send (c, m) ->
       c :: List.flatten (List.map expr_vars m.payload)
   | Call (var, func, arg) ->
       var :: expr_vars arg
+  | Spawn (res, path) ->
+      [res]
   | Assign (id, expr) ->
-      []
-  |  _ -> []
-  (*
-  we have to consider this separately
-  | Spawn (res, path) ->
-      [res]
-  *)
+      [] (* get bound in a let *)
 
-let comp_cmd_vars = function
-  | Spawn (res, path) ->
-      [res]
-  |  _ -> []
-
-let rec init_vars = function
+let rec prog_vars = function
   | Nop -> []
-  | Seq (c, p) -> cmd_vars c @ init_vars p
-
-let rec comp_vars = function
-  | Nop -> []
-  | Seq (c, p) -> (comp_vars p) @ (comp_cmd_vars c)
+  | Seq (c, p) -> cmd_vars c @ prog_vars p
 
 let coq_of_msg_pat m =
   mkstr "| %s %s =>" m.tag
     (String.concat " " m.payload)
 
+let handler_vars xch_chan trig prog =
+    uniq (xch_chan :: trig.payload @ prog_vars prog)
 
-(* we have to excluse global state variables here for forall of each
-handlers *)
-let handler_vars xch_chan trig statevars program =
-  let varnames = (List.map (fun (id,typ) -> id) statevars) in
-  (List.fold_left
-    (fun lst elem ->
-      if List.mem elem varnames then lst
-      else (elem :: lst)
-    ) [] (uniq ((xch_chan :: trig.payload) @ (comp_vars program) @ (init_vars program))))
+(* handler vars modulo global state vars *)
+let handler_vars_nonstate xch_chan trig prog svars =
+  let globals =
+    List.map (fun (id, typ) -> id) svars
+  in
+  List.filter
+    (fun x -> not (List.mem x globals))
+    (handler_vars xch_chan trig prog)
 
 let coq_mkst_with_effects effecttbl vardecls =
   (fmt vardecls (fun (id, typ) ->
@@ -406,7 +394,6 @@ let coq_of_logical le =
   | LogEq (id, v) ->
       (mkstr "(nat_of_num %s) = %d" id v)
 
-
 let coq_of_condition_spec conds cond =
   let conds_str =
     (String.concat " -> " (List.map (fun cond ->
@@ -421,62 +408,39 @@ let coq_of_condition_spec conds cond =
   ) in
   (if res = "" then "" else (mkstr " %s -> " res))
 
-
-module OrderedChan =
-  struct
-    type t = chan
-    let compare = compare
-  end
-
-module ChanSet = Set.Make(OrderedChan);;
-
+(* TODO what about chans produced by Spawn ? *)
 let chans_of_cmd = function
-| Send(c, _)    -> ChanSet.singleton c
-| Call(_, _, _) -> ChanSet.empty
-| Spawn(_, _)   -> ChanSet.empty
-| Assign(_, _)  -> ChanSet.empty
+  | Send (c, _) -> [c]
+  | _ -> []
 
-let chans_of_prog p =
-  let rec chans_of_prog_aux accu = function
-  | Nop -> ChanSet.elements accu
-  | Seq(cmd, rest) ->
-    let accu = ChanSet.union accu (chans_of_cmd cmd) in
-    chans_of_prog_aux accu rest
-  in
-  chans_of_prog_aux ChanSet.empty p
-
+let rec chans_of_prog = function
+  | Nop -> []
+  | Seq (c, p) -> chans_of_cmd c @ chans_of_prog p
 
 let coq_spec_of_handler s comp xch_chan trig conds index tprog =
-  let fr = List.map (fun c -> mkstr "bound %s" c) (xch_chan :: chans_of_prog tprog.program) in
-  let sstate = sstate_of_prog s fr tprog.program in
-  let comp_vs =  (comp_vars tprog.program) in
+  let fr0 =
+    List.map
+      (fun c -> mkstr "bound %s" c)
+      (xch_chan :: chans_of_prog tprog.program)
+  in
+  let pacc = coq_of_prog s "" fr0 tprog.program in
   let hdr =
     mkstr "
-| VE_%s_%s_%d : \nforall %s, %s \nValidExchange (mkst (%s) "
-      comp
-      trig.tag
-      index
-      (String.concat " " ((handler_vars xch_chan trig s.var_decls tprog.program)))
+| VE_%s_%s_%d : \nforall %s, %s\nValidExchange (mkst (%scomps)"
+      comp trig.tag index
+      (String.concat " " ((handler_vars_nonstate xch_chan trig tprog.program s.var_decls)))
       (coq_of_condition_spec conds tprog.condition)
-      (match comp_vs with | [] -> "comps" | _ -> mkstr "%s::comps" (String.concat "::" (comp_vs)))
-  in
-  let tr =
-    if tprog.program = Nop then
-      "      (* no response *)"
-    else
-      (* let fr = [ mkstr "bound %s" xch_chan ] in *)
-      coq_trace_spec_of_prog s fr tprog.program
+      (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
   in
   let ftr =
     mkstr "(tr ~~~ ((%s RecvMsg %s (%s %s)) ++ tr))"
-      tr
+      pacc.trace_spec
       xch_chan
       trig.tag
       (String.concat " " trig.payload)
   in
-  let other_state = (coq_mkst_with_effects sstate s.var_decls) in
+  let other_state = (coq_mkst_with_effects pacc.sstate s.var_decls) in
   (lines [hdr; ftr; other_state; ")"])
-
 
 let coq_of_init s =
   let cp = coq_of_prog s "tr" [] s.init in
@@ -678,18 +642,13 @@ let coq_of_kernel_subs s =
         )
       )
   ; "KTRACE_INIT", (
-      let t = coq_trace_impl_of_prog s [] s.init in
-      let comp_vs = comp_vars s.init in
-      let init_vs = init_vars s.init in
-      let mkst = coq_init_mkst s.init s.var_decls in
-      (match (comp_vs @ init_vs) with
-      | [] -> "" (* ignore this case. What's the kernel for without any component? *)
-      | _  -> mkstr "forall %s, KInvariant (mkst (%s) [%s nil] %s) "
-          (String.concat " " (comp_vs @ init_vs))
-          (mkstr "%s::nil" (String.concat "::" (comp_vs)))
-          t
-          mkst
-      )
+      let pacc = coq_of_prog s "" [] s.init in
+      let st0 = coq_init_mkst s.init s.var_decls in
+      mkstr "forall %s,\nKInvariant (mkst (%snil) [%snil] %s)"
+        (String.concat " " (prog_vars s.init))
+        (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
+        pacc.trace_impl (* TODO should this use trace_spec ? *)
+        st0
     )
   ; "STATE_FIELDS", (
       let declstr = (String.concat ";" (List.map (fun (id, typ) ->

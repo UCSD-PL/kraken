@@ -380,11 +380,11 @@ Qed.
 
 
 Definition kstate_inv s : hprop :=
-  tr :~~ ktr s in
-  traced tr * [KInvariant s ] * all_bound (components s)
-(* __KSTATE_INVS__ *)
-.
-
+  tr :~~ ktr s in emp
+  * traced tr
+  * [KInvariant s]
+  * all_bound (components s)
+(* __KSTATE_INVS__ *).
 
 Ltac unfoldr := unfold kstate_inv.
 

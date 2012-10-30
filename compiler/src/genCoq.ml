@@ -58,7 +58,6 @@ Definition %s := %s.
  * Track current value of state var during a handler's symbolic execution.
  * For example, after [a := a + 1], [a] is mapped to [a + 1].
  *)
-
 type sstate = (id * expr) list
 
 let lkup_var st id =
@@ -300,7 +299,6 @@ send_msg %s %s
       }
   | Assign (id, expr) ->
       { pacc with code = pacc.code ^
-          (* TODO should this expr be expanded first ? *)
           mkstr "\nlet %s := %s in" id (coq_of_expr expr)
       ; sstate =
           set_var pacc.sstate id expr
@@ -434,10 +432,16 @@ let coq_of_cond index = function
         ; mkstr "if (Peano_dec.eq_nat_dec (nat_of_num %s) %d) then " id v
         ]
 
-let st_fields_in_comps k =
+let fields_in_comps k =
   k.var_decls
     |> List.filter (fun (_, typ) -> typ = Chan)
     |> List.map (fun (id, _) -> mkstr "[In %s comps]" id)
+
+let fields_in_comps_fr k =
+  fields_in_comps k
+    |> List.map (mkstr "%s * ")
+    |> String.concat ""
+    |> mkstr "%semp"
 
 let coq_of_handler k xch_chan trig index tprog =
   let tr =
@@ -445,7 +449,7 @@ let coq_of_handler k xch_chan trig index tprog =
       xch_chan trig.tag (String.concat " " trig.payload)
   in
   let fr =
-    st_fields_in_comps k @
+    fields_in_comps k @
       [ "all_bound comps"
       ; mkstr "[In %s comps]" xch_chan
       ; "(tr ~~ [KInvariant kst])"
@@ -471,12 +475,6 @@ let coq_of_exchange spec xch_chan comp =
   let var_ext =
     fmt spec.var_decls (fun (id, _) ->
       mkstr "pose (%s := (%s kst));" id id)
-  in
-  let fields_in_comps =
-    st_fields_in_comps spec
-      |> List.map (mkstr "%s * ")
-      |> String.concat ""
-      |> mkstr "%semp"
   in
   let comp_handlers =
     try List.assoc comp (snd spec.exchange)
@@ -525,7 +523,7 @@ Proof.
   );  sep unfoldr simplr.
 Qed.
 "
-  comp var_ext fields_in_comps hands kstate_vars
+  comp var_ext (fields_in_comps_fr spec) hands kstate_vars
 
 
 let coq_of_kernel_subs s =
@@ -596,25 +594,22 @@ let coq_of_kernel_subs s =
         pacc.trace_impl (* TODO should this use trace_spec ? *)
         (lkup_st_fields pacc.sstate s)
     )
-  ; "STATE_FIELDS", (
-      let declstr = (String.concat ";" (List.map (fun (id, typ) ->
-        mkstr " %s : %s " id (coq_of_typ typ)) s.var_decls)) in
-      (match (s.var_decls) with
-      | [] -> declstr
-      | _ -> mkstr ("; %s") declstr)
-  )
+  ; "STATE_FIELDS",
+      s.var_decls
+        |> List.map (fun (id, typ) -> mkstr "; %s : %s" id (coq_of_typ typ))
+        |> String.concat ""
   ; "KSTATE_INVS",
-      fmt s.var_decls (fun (id, typ) ->
-        match typ with
-        | Chan -> mkstr "* [In (%s s) (components s)]" id
-        | _    -> ""
-      )
+      (* WARNING very similar to fields_in_comps_fr *)
+      (* require all chan state fields to be in the state components *)
+      s.var_decls
+        |> List.filter (fun (_, typ) -> typ = Chan)
+        |> List.map (fun (id, _) -> mkstr "* [In (%s s) (components s)]" id)
+        |> String.concat "\n"
   ; "INIT_CODE",
       coq_of_init s
   ; "EXCHANGES",
       fmt s.components (fun (comp, _) ->
         coq_of_exchange s xch_chan comp)
-      (* fmt exchanges (coq_of_exchange s xch_chan) *)
   ; "TYPE_OF_COMP_DEFAULT",
       mkstr "\n| nil => %s (* TODO: need default or proof *)"
         (fst (List.hd s.components))
@@ -623,12 +618,6 @@ let coq_of_kernel_subs s =
         s.components
           |> List.map (fun (c, _) -> mkstr "\n| %s => exchange_%s" c c)
           |> String.concat ""
-      in
-      let fields_in_comps =
-        st_fields_in_comps s
-          |> List.map (mkstr "%s * ")
-          |> String.concat ""
-          |> mkstr "%semp"
       in
       mkstr "
   intros kst.
@@ -649,7 +638,7 @@ let coq_of_kernel_subs s =
   sep unfoldr simplr.
 "
       (fmt s.var_decls (fun (id,typ) -> (mkstr "pose (%s := (%s kst));" id id)))
-      fields_in_comps
+      (fields_in_comps_fr s)
       comp_xch
       (fmt s.var_decls (fun (id,typ) -> (mkstr "%s " id)))
   ]

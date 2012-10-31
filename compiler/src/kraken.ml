@@ -2,17 +2,14 @@ open Common
 
 let usage () =
   print "
-
-*** DO NOT RUN THIS PROGRAM DIRECTLY ***
-***     USE THE KRAKEN.SH SCRIPT     ***
+!!! You probably hit a bug in the kraken.sh driver script.
+!!! This usage info is for the core compiler which should not be run directly.
 
 Usage: kraken [options] input.krn
 
-Compile a Kraken kernel spec to Coq code and proofs and additionally produce
-client libraries. Not intended to be run directly, should be invoked by
-kraken.sh driver script.
+Compile a Kraken kernel spec to Coq code and proofs and client libraries.
 
-In options below X \\in {kernel, pylib, clib-h, clib-c}.
+In options below X \\in {message, kernel, pylib, clib-h, clib-c}.
 
 OPTIONS:
 
@@ -20,29 +17,25 @@ OPTIONS:
   --template X FILE      read template for X from FILE
   --instance X FILE      write instatiation of X to FILE
 
-A template and instance for kernel must be provided. Libraries are optional and
-will only be produced if their respective template and instance options are
-provided. A template should always be provided with a corresponding instance and
-vice versa.
+A template and instance for message and kernel must be provided. Libraries are
+optional and will only be produced if their respective template and instance
+options are provided. A template should always be provided with a corresponding
+instance and vice versa.
 
 EXAMPLE:
 
-To compile kernel.krn using kernel template KT.v and write instantiation to K.v
-while producing no client library code, one would run:
+To compile kernel.krn using message template/instatiation of MT.v/M.v and kernel
+template/instantiation of KT.v/K.v, while producing no client library code, run:
 
   kraken \\
-    --template kernel KT.v \\
-    --instance kernel K.v \\
+    --template message MT.v \\
+    --instance message M.v  \\
+    --template kernel  KT.v \\
+    --instance kernel  K.v  \\
     kernel.krn
 
-!!! NOTE !!!
-
-  The fact you are reading this probably means you hit a bug in the kraken.sh
-  driver script. This usage information is for the core compiler which should
-  only be run directly for development and debugging. In particular, this is NOT
-  the usage information for the kraken.sh driver script. Hope that helps.
-
-*** SERIOUSLY, READ ABOVE TEXT ***
+!!! You probably hit a bug in the kraken.sh driver script.
+!!! This usage info is for the core compiler which should not be run directly.
 ";
   exit 1
 
@@ -62,7 +55,7 @@ let flag_is_set f =
   List.mem_assoc f !flags
 
 let valid_catg = function
-  | "kernel" | "pylib" | "clib-h" | "clib-c" -> true
+  | "message" | "kernel" | "pylib" | "clib-h" | "clib-c" -> true
   | _ -> false
 
 let parse_args () =
@@ -102,42 +95,37 @@ let parse_args () =
   in
   if args = [] then
     usage ()
-  else
-    loop args
+  else begin
+    loop args;
+    (* ensure required args are set *)
+    ignore (get_flag "input");
+    ignore (get_flag "t-message");
+    ignore (get_flag "i-message");
+    ignore (get_flag "t-kernel");
+    ignore (get_flag "i-kernel")
+  end
 
 let parse_kernel f =
   f |> readfile
     |> Lexing.from_string
     |> Parse.kernel Lex.token
 
-(* read template t, rewrite with subs, write instance i *)
-let instantiate t i subs =
-  t |> readfile
-    |> List.fold_right (uncurry Str.global_replace) subs
-    |> writefile i
+(* for catg: read template, rewrite with subs, write instance *)
+let instantiate catg (subs : (Str.regexp * string) list) =
+  if flag_is_set ("t-" ^ catg) then
+    get_flag ("t-" ^ catg)
+      |> readfile
+      |> List.fold_right (uncurry Str.global_replace) subs
+      |> writefile (get_flag ("i-" ^ catg))
 
 let main () =
   parse_args ();
   let k = parse_kernel (get_flag "input") in
-  instantiate
-    (get_flag "t-kernel")
-    (get_flag "i-kernel")
-    (GenCoq.coq_of_kernel_subs k);
-  if flag_is_set "t-pylib" then
-    instantiate
-      (get_flag "t-pylib")
-      (get_flag "i-pylib")
-      (GenPy.pylib_subs k);
-  if flag_is_set "t-clib-h" then
-    instantiate
-      (get_flag "t-clib-h")
-      (get_flag "i-clib-h")
-      (GenC.clib_h_subs k);
-  if flag_is_set "t-clib-c" then
-    instantiate
-      (get_flag "t-clib-c")
-      (get_flag "i-clib-c")
-      (GenC.clib_c_subs k)
+  instantiate "message" (GenMessage.subs k);
+  instantiate "kernel"  (GenKernel.subs k);
+  instantiate "pylib"   (GenPyLib.subs k);
+  instantiate "clib-h"  (GenCLib.subs_h k);
+  instantiate "clib-c"  (GenCLib.subs_c k)
 
 let _ =
   main ()

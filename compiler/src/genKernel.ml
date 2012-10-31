@@ -181,7 +181,7 @@ let cmd_vars = function
   | Spawn (res, path) ->
       [res]
   | Assign (id, expr) ->
-      []
+      [] (* will be bound by a let *)
 
 let rec prog_vars = function
   | Nop -> []

@@ -40,8 +40,9 @@ State {
   system:chan;
   slave:chan ;
 
-  login_cnt:nat;
-  login_succeeded:nat;
+  logincnt:num;
+  loginsucceded:num;
+  username:str;
 }
 
 Components {
@@ -63,10 +64,9 @@ Messages {
   CreatePtyerReq();
   CreatePtyerRes(fdesc, fdesc);
 
-
   # monitor <-> system
   SysLoginReq(str);
-  SysLoginRes(str);
+  SysLoginRes(num);
 
   SysPubkeyReq();
   SysPubkeyRes(str);
@@ -79,16 +79,53 @@ Messages {
 }
 
 Init {
-  system := spwan(System);
+  system := spawn(System);
   slave := spawn(Slave);
+
+  logincnt := 0;
+  loginsucceded := 0;
+  username := "";
 }
 
 Exchange(c) {
-  Tab {
 
+  System {
+    SysLoginRes(resnum) {
+      send(slave, LoginRes(resnum));
+    }
+
+    SysPubkeyRes(pubkeystr) {
+      send(slave, PubkeyRes(pubkeystr));
+    }
+
+    SysCreatePtyerRes(slavefd, masterfd) {
+      send(slave, CreatePtyerRes(slavefd, masterfd));
+    }
   }
 
-  UserInput {
-  }
+  Slave {
+    LoginReq(accstr) when (logincnt == 3) {
+      # ignore
+    } {
+      logincnt := logincnt + 1;
+      send(system, SysLoginReq(accstr));
+    }
+
+    PubkeyReq() {
+      send(system, SysPubkeyReq());
+    }
+
+    KeysignReq(datastr) when (loginsucceded == 0) {
+      # ignore
+    } {
+      send(system, SysKeysignReq(datastr));
+    }
+
+    CreatePtyerReq() when (loginsucceded == 0) {
+      # ignore
+    } {
+      send(system, SysCreatePtyerReq());
+    }
+	}
 }
 

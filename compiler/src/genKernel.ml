@@ -424,7 +424,11 @@ let subs s =
         )
       )
   ; "VE_UNHANDLED_CASES",
-      fmt exchanges (fun (comp, handlers) ->
+      fmt s.components (fun (comp, _) ->
+        let handlers =
+          try List.assoc comp exchanges
+          with Not_found -> []
+        in
         let handled m =
           List.exists (fun h -> h.trigger.tag = m.tag) handlers
         in

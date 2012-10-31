@@ -1,0 +1,14 @@
+Components {
+  Main "test.py";
+}
+
+Messages {
+  M(str);
+}
+
+Init {
+  spawn(Main);
+}
+
+Exchange(c) {
+}

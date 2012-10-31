@@ -11,10 +11,11 @@
   let _K = ref empty_kernel
 %}
 
-%token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE WHEN
-%token NUM STR FDESC CHAN CALL SEND SPAWN 
-%token EQ EQUALITY LCURL RCURL LPAREN RPAREN
-%token COMMA SEMI EOF COLON ASSIGN PLUS
+%token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
+%token NUM STR FDESC CHAN CALL SEND SPAWN WHEN
+%token EQ EQUALITY COMMA SEMI COLON ASSIGN PLUS
+%token IMMAFTER IMMBEFORE
+%token LCURL RCURL LPAREN RPAREN EOF
 
 %right PLUS
 
@@ -48,6 +49,8 @@ section :
     { _K := { !_K with init = $3 } }
   | EXCHANGE LPAREN ID RPAREN LCURL comp_handlers RCURL
     { _K := { !_K with exchange = ($3, $6) } }
+  | PROPERTIES LCURL props RCURL
+    { _K := { !_K with props = $3 } }
 ;;
 
 constants :
@@ -78,9 +81,9 @@ prog :
 
 cond_progs :
   | LCURL prog RCURL
-    { [(mk_cond_prog None $2)] }
+    { [(mk_cond_prog Always $2)] }
   | WHEN LPAREN when_cond RPAREN LCURL prog RCURL cond_progs
-    { (mk_cond_prog (Some $3) $6) :: $8 }
+    { (mk_cond_prog $3 $6) :: $8 }
 ;;
 
 cmd :
@@ -118,7 +121,7 @@ expr :
 ;;
 
 when_cond :
-  | ID EQUALITY NUMLIT { LogEq($1, $3) }
+  | ID EQUALITY NUMLIT { NumEq($1, $3) }
 ;;
 
 msg_pat :
@@ -192,7 +195,23 @@ comp_handlers :
     { [] }
   | comp_handler comp_handlers
     { $1 :: $2 }
+;;
 
 comp_handler :
   | ID LCURL handlers RCURL
     { ($1, $3) }
+;;
+
+props :
+  | /* empty */
+    { [] }
+  | ID EQ prop SEMI props
+    { ($1, $3) :: $5 }
+;;
+
+prop :
+  | IMMAFTER LCURL STRLIT RCURL LCURL STRLIT RCURL
+    { ImmAfter ($3, $6) }
+  | IMMBEFORE LCURL STRLIT RCURL LCURL STRLIT RCURL
+    { ImmBefore ($3, $6) }
+;;

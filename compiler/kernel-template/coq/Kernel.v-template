@@ -2,340 +2,11 @@ Require Import Ascii.
 Require Import List.
 Require Import String.
 Require Import Ynot.
+Require Import Message.
 
 Open Local Scope char_scope.
 Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
-
-Definition str : Set := list ascii.
-
-Inductive num : Set :=
-| Num : ascii -> num.
-
-Definition nat_of_num (n : num) : nat :=
-  match n with
-    | Num a1 => nat_of_ascii a1
-  end.
-
-Definition num_of_nat (n : nat) : num :=
-  Num (ascii_of_nat n).
-
-Lemma num_nat_embedding :
-  forall (n : num), num_of_nat (nat_of_num n) = n.
-Proof.
-  destruct n; simpl.
-  unfold num_of_nat, nat_of_num.
-  rewrite ascii_nat_embedding; auto.
-Qed.
-
-(* prevent sep tactic from unfolding *)
-Global Opaque nat_of_num num_of_nat.
-
-Fixpoint string2str (s: string): str :=
-  match s with
-  | EmptyString => nil
-  | String c rest => c :: string2str rest
-  end.
-
-(* __CONST_DECLS__ *)
-
-Inductive chan_type : Set :=
-(* __COMP_DECLS__ *)
-.
-
-Definition chan_path (t: chan_type): str :=
-  match t with
-(* __CHAN_PATHS__ *)
-  end.
-
-Axiom chan : chan_type -> Set.
-
-Definition tchan := sigT (fun t : chan_type => chan t).
-
-Axiom tchan_eq : forall (c1 c2 : tchan), { c1 = c2 } + { c1 <> c2 }.
-
-Lemma tchan_eq_true :
-  forall (c : tchan) (A : Type) (vT vF : A),
-  (if tchan_eq c c then vT else vF) = vT.
-Proof.
-  intros; case (tchan_eq c c); auto. congruence.
-Qed.
-
-Lemma tchan_eq_false :
-  forall (c1 c2 : tchan) (A : Type) (vT vF : A),
-  c1 <> c2 ->
-  (if tchan_eq c1 c2 then vT else vF) = vF.
-Proof.
-  intros; case (tchan_eq c1 c2); auto. congruence.
-Qed.
-
-Axiom fdesc : Set.
-
-Inductive Action : Set :=
-| Exec   : str -> tchan -> Action
-| Call   : str -> str -> fdesc -> Action
-| Select : list tchan -> tchan -> Action
-| Recv   : tchan -> str -> Action
-| Send   : tchan -> str -> Action
-| RecvFD : tchan -> fdesc -> Action
-| SendFD : tchan -> fdesc -> Action
-.
-
-Definition Trace : Set := list Action.
-Hint Unfold Trace.
-
-Axiom traced : Trace -> hprop.
-
-Axiom bound : tchan -> hprop.
-
-Axiom exec :
-  forall (t: chan_type) (prog : str) (tr : [Trace]),
-    STsep (tr ~~ traced tr * [prog = chan_path t])
-    (fun (c: tchan) =>
-      tr ~~ bound c * traced (Exec prog c :: tr) * [projT1 c = t]).
-
-Axiom call :
-  forall (prog arg : str) (tr : [Trace]),
-  STsep (tr ~~ traced tr)
-        (fun (f : fdesc) => tr ~~ traced (Call prog arg f :: tr)).
-
-(* TODO add non-empty precondition *)
-Axiom select :
-  forall (chans : list tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr)
-        (fun (c : tchan) => tr ~~ traced (Select chans c :: tr) * [In c chans]).
-
-Axiom recv :
-  forall (c : tchan) (n : num) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (s : str) => tr ~~ traced (Recv c s :: tr) * bound c *
-          [nat_of_num n = List.length s]).
-
-Axiom send :
-  forall (c : tchan) (s : str) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (Send c s :: tr) * bound c).
-
-Axiom recv_fd :
-  forall (c : tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (f : fdesc) => tr ~~ traced (RecvFD c f :: tr) * bound c).
-
-Axiom send_fd :
-  forall (c : tchan) (f : fdesc) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (SendFD c f :: tr) * bound c).
-
-Definition RecvNum (c : tchan) (n : num) : Trace :=
-  match n with
-  | Num a1 => Recv c (a1 :: nil) :: nil
-  end.
-
-Definition recv_num:
-  forall (c : tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (n : num) => tr ~~ traced (RecvNum c n ++ tr) * bound c).
-Proof.
-  intros; refine (
-    s <- recv c (Num "001") tr;
-    match s with
-    | a1 :: nil =>
-      {{ Return (Num a1) }}
-    | _ => (* bogus *)
-      {{ Return (Num zero) }}
-    end
-  );
-  sep fail auto.
-  compute in H; discriminate.
-  compute in H; discriminate.
-Qed.
-
-Definition SendNum (c : tchan) (n : num) : Trace :=
-  match n with
-  | Num a1 => Send c (a1 :: nil) :: nil
-  end.
-
-Definition send_num:
-  forall (c : tchan) (n : num) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (SendNum c n ++ tr) * bound c).
-Proof.
-  intros; refine (
-    match n with
-    | Num a1 =>
-      send c (a1 :: nil) tr;;
-      {{ Return tt }}
-    end
-  );
-  sep fail auto.
-Qed.
-
-Definition RecvStr (c : tchan) (s : str) : Trace :=
-  Recv c s :: RecvNum c (num_of_nat (List.length s)).
-
-Definition recv_str:
-  forall (c : tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (s : str) => tr ~~ traced (RecvStr c s ++ tr) * bound c).
-Proof.
-  intros; refine (
-    n <- recv_num c tr;
-    s <- recv c n (tr ~~~ RecvNum c n ++ tr);
-    {{ Return s }}
-  );
-  sep fail auto.
-  rewrite <- H.
-  rewrite num_nat_embedding.
-  sep fail auto.
-Qed.
-
-Definition SendStr (c : tchan) (s : str) : Trace :=
-  Send c s :: SendNum c (num_of_nat (List.length s)).
-
-Definition send_str:
-  forall (c : tchan) (s : str) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (SendStr c s ++ tr) * bound c).
-Proof.
-  intros; refine (
-    let n := num_of_nat (List.length s) in
-    send_num c n tr;;
-    send c s (tr ~~~ SendNum c n ++ tr);;
-    {{ Return tt }}
-  );
-  sep fail auto.
-Qed.
-
-(* trace versions of basic actions so we can always use app (++) *)
-
-Definition Exec_t (prog : str) (c : tchan) : Trace :=
-  Exec prog c :: nil.
-
-Definition Call_t (prog arg : str) (f : fdesc) : Trace :=
-  Call prog arg f :: nil.
-
-Definition RecvFD_t (c : tchan) (f : fdesc) : Trace :=
-  RecvFD c f :: nil.
-
-Definition SendFD_t (c : tchan) (f : fdesc) : Trace :=
-  SendFD c f :: nil.
-
-(* prevent sep tactic from unfolding *)
-Global Opaque RecvStr SendStr Exec_t Call_t RecvFD_t SendFD_t.
-
-Inductive msg : Set :=
-(* __MSG_DECL__ *)
-(* special case for errors *)
-| BadTag : num -> msg.
-
-Definition RecvMsg (c : tchan) (m : msg) : Trace :=
-  match m with
-(* __RECV_T_CASES__ *)
-  (* special case for errors *)
-  | BadTag p0 =>
-    RecvNum c p0
-  end.
-
-Definition SendMsg (c : tchan) (m : msg) : Trace :=
-  match m with
-(* __SEND_T_CASES__ *)
-  (* special case for errors *)
-  | BadTag p0 =>
-    SendNum c (Num "000")
-  end.
-
-Definition recv_msg :
-  forall (c : tchan) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (m : msg) => tr ~~ traced (RecvMsg c m ++ tr) * bound c).
-Proof.
-  intros; refine (
-    tag <- recv_num c tr;
-    match tag with
-(* __RECV_CASES__ *)
-    (* special case for errors *)
-    | m =>
-      {{ Return (BadTag m) }}
-    end
-  );
-  sep fail auto;
-  repeat rewrite app_ass; simpl;
-  sep fail auto.
-Qed.
-
-Definition send_msg :
-  forall (c : tchan) (m : msg) (tr : [Trace]),
-  STsep (tr ~~ traced tr * bound c)
-        (fun (_ : unit) => tr ~~ traced (SendMsg c m ++ tr) * bound c).
-Proof.
-  intros; refine (
-    match m with
-(* __SEND_CASES__ *)
-    (* special case for errors *)
-    | BadTag _ =>
-      send_num c (Num "000") tr;;
-      {{ Return tt }}
-    end
-  );
-  sep fail auto;
-  repeat rewrite app_ass; simpl;
-  sep fail auto.
-Qed.
-
-Record kstate : Set :=
-  mkst { components : list tchan
-       ; ktr : [Trace]
-       (* __STATE_FIELDS__ *)
-  }.
-
-(* prevent sep tactic from unfolding *)
-Global Opaque RecvMsg SendMsg.
-
-Section VEX.
-  Variable s:kstate.
-
-  Let comps := (components s).
-  Let tr := (ktr s).
-
-(* __VE_STATE_VAR_DECLS__ *)
-
-  Inductive ValidExchange : kstate -> Prop :=
-
-(* __VE_HANDLED_CASES__ *)
-(* __VE_UNHANDLED_CASES__ *)
-(* special case for errors *)
-  | VE_BadTag :
-    forall c tag,
-      ValidExchange
-      (mkst
-        comps
-        (tr ~~~ (RecvMsg c (BadTag tag) ++ tr))
-(* __VE_STATE_VAR_LISTS__ *)
-  ).
-End VEX.
-
-Hint Constructors ValidExchange.
-
-
-Inductive KInvariant : kstate -> Prop :=
-| KT_init :
-(* __KTRACE_INIT__ *)
-| KT_select :
-  forall s cs c,
-  let comps := (components s) in
-  let tr := (ktr s) in
-(* __KTRACE_VAR_DECLS__ *)
-  KInvariant s ->
-  KInvariant (mkst comps (tr ~~~ (Select cs c :: tr))
-(* __KTRACE_VAR_LISTS__ *)
-)
-| KT_exchange :
-  forall s s',
-  KInvariant s ->
-  ValidExchange s s' ->
-  KInvariant s'.
-
-Hint Constructors KInvariant.
 
 Fixpoint all_bound (cs : list tchan) : hprop :=
   match cs with
@@ -378,16 +49,6 @@ Proof.
   apply himp_comm_prem; auto.
 Qed.
 
-
-Definition kstate_inv s : hprop :=
-  tr :~~ ktr s in emp
-  * traced tr
-  * [KInvariant s]
-  * all_bound (components s)
-(* __KSTATE_INVS__ *).
-
-Ltac unfoldr := unfold kstate_inv.
-
 Ltac sep' := sep fail idtac.
 
 Ltac isolate t :=
@@ -397,8 +58,7 @@ Ltac isolate t :=
     apply himp_split
   end.
 
-Ltac simplr_fail :=
-  sep';
+Ltac bounds_packing :=
   match goal with
   | [ |- ?lhs ==> ?rhs ] =>
     match lhs with context [ all_bound_drop ?cs ?c ] =>
@@ -419,34 +79,142 @@ Ltac simplr_fail :=
       [ eapply himp_trans; [ apply repack_all_bound | apply unpack_all_bound ] | ]
     end
     end
-
-  | [ H: ktr ?kst = [?x]%inhabited |- ValidExchange ?kst ?t ] =>
-    (* puts the list in the form (a ++ b ++ c) ++ x *)
-    repeat rewrite (app_assoc _ _ x);
-    match goal with [ |- ValidExchange _ ?t ] =>
-    match t with context [?new ++ x] =>
-      unfold Trace;
-      replace ([new ++ x]%inhabited)
-      with (inhabit_unpack (ktr kst) (fun oldktr : Trace => new ++ oldktr));
-      [ econstructor; eauto | rewrite H; auto ]
-    end
-    end
-
-  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?t ] =>
-    match t with context [[?act :: ?x]%inhabited] =>
-      unfold Trace;
-      replace ([act :: x]%inhabited)
-      with (inhabit_unpack (ktr kst) (fun oldktr : Trace => act :: oldktr));
-      [ eapply KT_select; eauto | rewrite H; auto]
-    end
-
-  | [H: _ = [_]%inhabited |- _] => rewrite H in *; simpl in *
-  | [H:[_]%inhabited = [_]%inhabited |- _] => apply pack_injective in H; rewrite H in *
-  | [H:[_]%inhabited = [_]%inhabited |- _] => apply pack_injective in H; rewrite <- H in *
-  | [_: KInvariant _ |- KInvariant _ ] => econstructor; [eauto|]
 end.
 
-Ltac simplr := try simplr_fail; auto.
+Inductive KAction : Set :=
+| KExec   : str -> tchan -> KAction
+| KCall   : str -> str -> fdesc -> KAction
+| KSelect : list tchan -> tchan -> KAction
+| KSend   : tchan -> msg -> KAction
+| KRecv   : tchan -> msg -> KAction
+.
+
+Definition KTrace : Set :=
+  list KAction.
+
+Definition expand_kaction (ka : KAction) : Trace :=
+  match ka with
+  | KExec cmd c => Exec cmd c :: nil
+  | KCall cmd arg pipe => Call cmd arg pipe :: nil
+  | KSelect cs c => Select cs c :: nil
+  | KSend c m => SendMsg c m
+  | KRecv c m => RecvMsg c m
+  end.
+
+Fixpoint expand_ktrace (kt : KTrace) : Trace :=
+  match kt with
+  | nil => nil
+  | ka :: kas => expand_kaction ka ++ expand_ktrace kas
+  end.
+
+Record kstate : Set :=
+  mkst { components : list tchan
+       ; ktr : [KTrace]
+(* __KSTATE_FIELDS__ *)
+       }.
+
+Section VEX.
+
+Variable s : kstate.
+
+Let comps := components s.
+Let tr := ktr s.
+(* __VE_STATE_VAR_DECLS__ *)
+
+Inductive ValidExchange : kstate -> Prop :=
+(* __VE_HANDLED_CASES__ *)
+(* __VE_UNHANDLED_CASES__ *)
+(* special case for errors *)
+| VE_BadTag :
+  forall c tag,
+  ValidExchange (mkst
+    comps
+    (tr ~~~ KRecv c (BadTag tag) :: tr)
+(* __VE_STATE_VAR_LISTS__ *)
+  ).
+End VEX.
+
+Hint Constructors ValidExchange.
+
+Inductive KInvariant : kstate -> Prop :=
+| KI_init :
+(* __KTRACE_INIT__ *)
+| KI_select :
+  forall s cs c,
+  let comps := components s in
+  let tr := ktr s in
+(* __KTRACE_VAR_DECLS__ *)
+  KInvariant s ->
+  KInvariant (mkst
+    comps
+    (tr ~~~ KSelect cs c :: tr)
+(* __KTRACE_VAR_LISTS__ *)
+  )
+| KI_exchange :
+  forall s s',
+  KInvariant s ->
+  ValidExchange s s' ->
+  KInvariant s'.
+
+Hint Constructors KInvariant.
+
+
+Ltac dangle_from target l :=
+  match l with
+  | target =>
+      constr:(fun (x: KTrace) => x)
+  | ?h :: ?t =>
+      let dt := dangle_from target t in
+      constr:(fun x => h :: dt x)
+  end.
+
+Ltac restore_kinv :=
+  unfold KTrace in *;
+  match goal with
+  | [H : ktr ?kst = [?x]%inhabited |- ValidExchange ?kst ?kst'] =>
+      let itr := eval simpl in (ktr kst') in
+      match itr with [?tr]%inhabited =>
+        let dtr := dangle_from x tr in
+        replace itr with (inhabit_unpack (ktr kst) dtr);
+          [ econstructor; eauto
+          | rewrite H; auto
+          ]
+      end
+
+  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?kst' ] =>
+    match kst' with context [[?kact :: x]%inhabited] =>
+      replace ([kact :: x]%inhabited)
+      with (inhabit_unpack (ktr kst) (fun oldktr : KTrace => kact :: oldktr));
+        [ eapply KI_select; eauto
+        | rewrite H; auto
+        ]
+    end
+
+  | [_: KInvariant _ |- KInvariant _ ] =>
+      econstructor; [eauto|]
+
+  | [H: _ = [_]%inhabited |- _] =>
+      rewrite H in *; simpl in *
+
+  | [H:[_]%inhabited = [_]%inhabited |- _] =>
+      apply pack_injective in H;
+      rewrite -> H in * || rewrite <- H in *
+end.
+
+Definition kstate_inv s : hprop :=
+  tr :~~ ktr s in emp
+  * traced (expand_ktrace tr)
+  * [KInvariant s]
+  * all_bound (components s)
+  (* __KSTATE_INVS__ *).
+
+Ltac unfoldr :=
+  unfold kstate_inv, KTrace in *.
+
+Ltac simplr :=
+  sep';
+  try bounds_packing;
+  try restore_kinv.
 
 Definition kinit :
   forall (_ : unit),
@@ -461,14 +229,14 @@ Qed.
 
 (* __EXCHANGES__ *)
 
-Fixpoint type_of_comp
-  (c: tchan) (comps: list tchan): chan_type :=
+Fixpoint type_of_comp (c: tchan) (comps: list tchan): chan_type :=
   match comps with
 (* __TYPE_OF_COMP_DEFAULT__ *)
   | x :: rest =>
-    if tchan_eq x c
-      then projT1 x
-      else type_of_comp c rest
+    if tchan_eq x c then
+      projT1 x
+    else
+      type_of_comp c rest
   end.
 
 Definition kbody:
@@ -511,3 +279,60 @@ Proof.
   unfold kstate_inv;
   sep fail auto.
 Qed.
+
+(*
+
+(* REMEMBER : traces are in reverse chrono order
+ * so most recent event is in head position and
+ * first action is last
+ *)
+
+(* if you see aft in a trace,
+ * then it is immediately chrono preceded by bef
+ *)
+Definition ImmBefore (bef aft : KTrace) : Prop :=
+  forall tr, KTraceOK tr ->
+  forall x y, tr = x ++ aft ++ y ->
+  exists z, y = bef ++ z.
+
+(* if you see bef in a trace,
+ * then it is immediately chrono followed by aft
+ *)
+Definition ImmAfter (bef aft : KTrace) : Prop :=
+  forall tr, KTraceOK tr ->
+  forall x y, tr = x ++ bef ++ y ->
+  exists z, x = z ++ aft.
+
+Ltac inv H :=
+  inversion H; subst; clear H.
+
+Definition valid_msg (m: msg) : Prop :=
+  forall t, m <> BadTag t.
+
+Ltac imm_tac_step :=
+  match goal with
+  | |- exists z, ?x = z ++ ?x =>
+    exists nil; auto
+  | H: nil = ?x ++ ?y :: ?z |- _ =>
+    apply app_cons_not_nil in H; contradiction
+  | H: valid_msg (BadTag ?t) |- _ =>
+    unfold valid_msg in H; edestruct H; eauto
+  | H: ?e :: ?tr = ?a ++ ?b |- _ =>
+    destruct a; simpl in *; inv H
+  | H: ValidExchange ?tr |- _ =>
+    inv H; simpl in *
+  | |- exists z, ?a :: ?x = z ++ ?c =>
+    let H := fresh "H" in
+    let e := fresh "e" in
+    cut (exists z, x = z ++ c);
+      [ intro H; destruct H as [e H]; rewrite H; exists (a :: e); auto | ]
+  | _ =>
+    eauto
+  end.
+
+Ltac imm_tac :=
+  repeat progress imm_tac_step.
+
+(* __PROPERTIES__ *)
+
+*)

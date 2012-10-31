@@ -1,0 +1,34 @@
+State {
+}
+
+Components {
+  Main "test.py";
+}
+
+Messages {
+  M(str);
+}
+
+Init {
+  spawn(Main);
+}
+
+Exchange(c) {
+  Main {
+    M(y) {
+      send(c, M(y));
+    }
+  }
+}
+
+Properties {
+  AlwaysResponds =
+    ImmAfter
+      { "KRecv chan msg :: nil" }
+      { "KSend chan msg :: nil" };
+
+  OnlyResponds =
+    ImmBefore
+      { "KRecv chan msg :: nil" }
+      { "KSend chan msg :: nil" };
+}

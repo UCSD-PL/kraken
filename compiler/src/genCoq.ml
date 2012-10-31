@@ -571,19 +571,26 @@ let coq_of_kernel_subs s =
         )
       )
   ; "VE_UNHANDLED_CASES",
-      fmt exchanges (fun (comp, handlers) ->
-        let handled m =
-          List.exists (fun h -> h.trigger.tag = m.tag) handlers
-        in
+      fmt s.components (fun (comp, _) ->
         let unhandled_msgs =
-          List.filter (fun m -> not (handled m)) s.msg_decls
+          try
+            let handlers = List.assoc comp exchanges in
+            let handled m =
+              List.exists (fun h -> h.trigger.tag = m.tag) handlers
+            in
+            List.filter (fun m -> not (handled m)) s.msg_decls
+            (* if no handler is defined for that component, then all messages
+             * are unhandled
+             *)
+          with Not_found -> s.msg_decls
         in
         fmt unhandled_msgs (fun m ->
           let args = m.payload |> List.map coq_of_typ |> String.concat " " in
           mkstr "
 | VE_%s_%s:
   forall %s %s, ValidExchange (mkst comps (tr ~~~ (RecvMsg %s (%s %s) ++ tr)) %s ) "
-            comp m.tag args xch_chan xch_chan m.tag args ((fmt s.var_decls (fun (id,typ) -> (mkstr "%s " id))))
+            comp m.tag args xch_chan xch_chan m.tag args
+            (fmt s.var_decls (fun (id, _) -> mkstr "%s " id))
         )
       )
   ; "KTRACE_INIT", (

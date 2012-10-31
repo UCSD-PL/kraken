@@ -374,7 +374,7 @@ Theorem %s :
     (%s)
     (%s).
 Proof.
-  unfold ImmAfter; induction 2; intros; imm_tac.
+  unfold ImmAfter; induction 2; simpl; intros; imm_tac.
 Qed.
 " name bef aft
   | ImmBefore (bef, aft) ->
@@ -386,7 +386,7 @@ Theorem %s :
     (%s)
     (%s).
 Proof.
-  unfold ImmBefore; induction 2; intros; imm_tac.
+  unfold ImmBefore; induction 2; simpl; intros; imm_tac.
 Qed.
 " name bef aft
 

@@ -118,17 +118,19 @@ cp $INDIR/* $D/client/
 # generate code and proofs
 EXEC="$KBIN/.kraken"
 if $DEBUG; then
-  EXEC="ocamlrun -b -I $KRAKEN/compiler/src/_build $EXEC"
+  EXEC="ocamldebug -I $KRAKEN/compiler/src/_build $EXEC"
 fi
 $EXEC $INDIR/kernel.krn \
-  --template kernel "$D/coq/Kernel.v-template" \
-  --instance kernel "$D/coq/Kernel.v" \
-  --template pylib  "$D/client/msg.py-template" \
-  --instance pylib  "$D/client/msg.py" \
-  --template clib-h "$D/client/msg.h-template" \
-  --instance clib-h "$D/client/msg.h" \
-  --template clib-c "$D/client/msg.c-template" \
-  --instance clib-c "$D/client/msg.c" \
+  --template message "$D/coq/Message.v-template" \
+  --instance message "$D/coq/Message.v" \
+  --template kernel  "$D/coq/Kernel.v-template" \
+  --instance kernel  "$D/coq/Kernel.v" \
+  --template pylib   "$D/client/msg.py-template" \
+  --instance pylib   "$D/client/msg.py" \
+  --template clib-h  "$D/client/msg.h-template" \
+  --instance clib-h  "$D/client/msg.h" \
+  --template clib-c  "$D/client/msg.c-template" \
+  --instance clib-c  "$D/client/msg.c" \
   || error "Kraken compiler failed."
 
 # tell Makefile where it lives

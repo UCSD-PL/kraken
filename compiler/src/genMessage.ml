@@ -15,7 +15,10 @@ let coq_send_typ = function
   | Chan  -> "send_fd",  "SendChan_t"
 
 let coq_of_constant_decl (id, e) =
-  mkstr "Definition %s := %s." id (coq_of_expr e)
+  lcat
+    [ mkstr "Definition %s := %s." id (coq_of_expr e)
+    ; mkstr "Global Opaque %s." id
+    ]
 
 let coq_of_msg_decl m =
   mkstr "| %s : %s" m.tag

@@ -12,10 +12,10 @@
 %}
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
-%token NUM STR FDESC CHAN CALL SEND SPAWN
+%token NUM STR FDESC CHAN CALL SEND SPAWN WHEN
+%token EQ EQUALITY COMMA SEMI COLON ASSIGN PLUS
 %token IMMAFTER IMMBEFORE
-%token EQ LCURL RCURL LPAREN RPAREN
-%token COMMA SEMI EOF COLON ASSIGN PLUS
+%token LCURL RCURL LPAREN RPAREN EOF
 
 %right PLUS
 
@@ -68,8 +68,8 @@ handlers :
 ;;
 
 handler :
-  | msg_pat LCURL prog RCURL
-    { mk_handler $1 $3 }
+  | msg_pat cond_progs
+    { mk_handler $1 $2 }
 ;;
 
 prog :
@@ -77,6 +77,13 @@ prog :
     { Nop }
   | cmd SEMI prog
     { Seq ($1, $3) }
+;;
+
+cond_progs :
+  | LCURL prog RCURL
+    { [(mk_cond_prog Always $2)] }
+  | WHEN LPAREN when_cond RPAREN LCURL prog RCURL cond_progs
+    { (mk_cond_prog $3 $6) :: $8 }
 ;;
 
 cmd :
@@ -111,6 +118,10 @@ expr :
   | NUMLIT { NumLit $1 }
   | STRLIT { StrLit $1 }
   | ID { Var $1 }
+;;
+
+when_cond :
+  | ID EQUALITY NUMLIT { NumEq($1, $3) }
 ;;
 
 msg_pat :

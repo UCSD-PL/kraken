@@ -11,6 +11,10 @@ let fmt l f =
   l |> List.map f
     |> lcat
 
+let fmti l f =
+  l |> mapi f
+    |> lcat
+
 let coq_of_typ = function
   | Num   -> "num"
   | Str   -> "str"

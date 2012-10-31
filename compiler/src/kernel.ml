@@ -15,6 +15,10 @@ type expr =
   | StrLit of string
   | Plus of expr * expr
 
+type when_cond =
+  | Always
+  | NumEq of id * int
+
 type 'a msg =
   { tag : string
   ; payload : 'a list
@@ -42,19 +46,31 @@ type prog =
   | Nop
   | Seq of cmd * prog
 
+type cond_prog =
+  { condition : when_cond
+  ; program : prog
+  }
+
+let mk_cond_prog c r =
+  { condition = c
+  ; program = r
+  } 
+
 type handler =
   { trigger : msg_pat
-  ; respond : prog
+  ; responds : cond_prog list
   }
 
 let mk_handler t r =
   { trigger = t
-  ; respond = r
+  ; responds = r
   }
 
 type prop =
   | ImmAfter of string * string
   | ImmBefore of string * string
+type component =
+  string
 
 type kernel =
   { constants  : (id * expr) list
@@ -62,7 +78,7 @@ type kernel =
   ; components : (id * string) list
   ; msg_decls  : msg_decl list
   ; init       : prog
-  ; exchange   : chan * ((string * handler list) list)
+  ; exchange   : chan * ((component * handler list) list)
   ; props      : (id * prop) list
   }
 

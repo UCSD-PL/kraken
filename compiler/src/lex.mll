@@ -22,6 +22,7 @@ rule token = parse
   | "Init" { INIT }
   | "Exchange" { EXCHANGE }
   | "Properties" { PROPERTIES }
+  | "when" { WHEN }
   | "num" { NUM }
   | "str" { STR }
   | "fdesc" { FDESC }
@@ -31,6 +32,7 @@ rule token = parse
   | "spawn" { SPAWN }
   | "ImmAfter" { IMMAFTER }
   | "ImmBefore" { IMMBEFORE }
+  | "==" { EQUALITY }
   | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }

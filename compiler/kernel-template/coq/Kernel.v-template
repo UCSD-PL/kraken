@@ -8,114 +8,6 @@ Open Local Scope char_scope.
 Open Local Scope hprop_scope.
 Open Local Scope stsepi_scope.
 
-Inductive KAction : Set :=
-| KExec   : str -> tchan -> KAction
-| KCall   : str -> str -> fdesc -> KAction
-| KSelect : list tchan -> tchan -> KAction
-| KSend   : tchan -> msg -> KAction
-| KRecv   : tchan -> msg -> KAction
-.
-
-Definition KTrace : Set :=
-  list KAction.
-
-Definition expand_kaction (ka : KAction) : Trace :=
-  match ka with
-  | KExec cmd c => Exec cmd c :: nil
-  | KCall cmd arg pipe => Call cmd arg pipe :: nil
-  | KSelect cs c => Select cs c :: nil
-  | KSend c m => SendMsg c m
-  | KRecv c m => RecvMsg c m
-  end.
-
-Fixpoint expand_ktrace (kt : KTrace) : Trace :=
-  match kt with
-  | nil => nil
-  | ka :: kas => expand_kaction ka ++ expand_ktrace kas
-  end.
-
-Inductive ValidExchange : KTrace -> Prop :=
-(* __VE_HANDLED_CASES__ *)
-(* __VE_UNHANDLED_CASES__ *)
-(* special case for errors *)
-| VE_BadTag :
-  forall c tag,
-  ValidExchange (
-    KRecv c (BadTag tag) :: nil).
-
-Hint Constructors ValidExchange.
-
-Inductive KTraceOK : KTrace -> Prop :=
-| KT_init :
-(* __KTRACE_INIT__ *)
-| KT_select :
-  forall tr cs c,
-  KTraceOK tr ->
-  KTraceOK (KSelect cs c :: tr)
-| KT_exchange :
-  forall tr tEx,
-  KTraceOK tr ->
-  ValidExchange tEx ->
-  KTraceOK (tEx ++ tr).
-
-Hint Constructors KTraceOK.
-
-Ltac trace_ok :=
-  match goal with
-  | [ _: KTraceOK ?x |- KTraceOK (_ ++ ?x) ] =>
-      econstructor; [eauto|]
-
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?tr) =>
-      replace (a1 :: tr)
-      with ((a1 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?tr) =>
-      replace (a1 :: a2 :: tr)
-      with ((a1 :: a2 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?tr) =>
-      replace (a1 :: a2 :: a3 :: tr)
-      with ((a1 :: a2 :: a3 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?tr) =>
-      replace (a1 :: a2 :: a3 :: a4 :: tr)
-      with ((a1 :: a2 :: a3 :: a4 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?tr) =>
-      replace (a1 :: a2 :: a3 :: a4 :: a5 :: tr)
-      with ((a1 :: a2 :: a3 :: a4 :: a5 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?tr) =>
-      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: tr)
-      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?tr) =>
-      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: tr)
-      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?a8 :: ?tr) =>
-      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: tr)
-      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?a8 :: ?a9 :: ?tr) =>
-      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: tr)
-      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: nil) ++ tr)
-  | _: KTraceOK ?tr
-    |- KTraceOK (?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?a8 :: ?a9 :: ?a10 :: ?tr) =>
-      replace (a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: a10 :: tr)
-      with ((a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: a10 :: nil) ++ tr)
-
-  | [ _: KTraceOK ?x |- KTraceOK ?t ] =>
-      match t with context [x] =>
-        repeat (rewrite app_assoc)
-      end
-  | [ |- ValidExchange ((_ ++ _) ++ _) ] =>
-      repeat (rewrite <- app_assoc)
-  | [ |- ValidExchange _ ] =>
-      constructor
-  end.
-
 Fixpoint all_bound (cs : list tchan) : hprop :=
   match cs with
     | nil => emp
@@ -168,7 +60,6 @@ Ltac isolate t :=
 
 Ltac bounds_packing :=
   match goal with
-
   | [ |- ?lhs ==> ?rhs ] =>
     match lhs with context [ all_bound_drop ?cs ?c ] =>
       isolate (bound c * all_bound_drop cs c ==> all_bound cs);
@@ -188,7 +79,32 @@ Ltac bounds_packing :=
       [ eapply himp_trans; [ apply repack_all_bound | apply unpack_all_bound ] | ]
     end
     end
+end.
 
+Inductive KAction : Set :=
+| KExec   : str -> tchan -> KAction
+| KCall   : str -> str -> fdesc -> KAction
+| KSelect : list tchan -> tchan -> KAction
+| KSend   : tchan -> msg -> KAction
+| KRecv   : tchan -> msg -> KAction
+.
+
+Definition KTrace : Set :=
+  list KAction.
+
+Definition expand_kaction (ka : KAction) : Trace :=
+  match ka with
+  | KExec cmd c => Exec cmd c :: nil
+  | KCall cmd arg pipe => Call cmd arg pipe :: nil
+  | KSelect cs c => Select cs c :: nil
+  | KSend c m => SendMsg c m
+  | KRecv c m => RecvMsg c m
+  end.
+
+Fixpoint expand_ktrace (kt : KTrace) : Trace :=
+  match kt with
+  | nil => nil
+  | ka :: kas => expand_kaction ka ++ expand_ktrace kas
   end.
 
 Record kstate : Set :=
@@ -197,18 +113,108 @@ Record kstate : Set :=
 (* __KSTATE_FIELDS__ *)
        }.
 
-Definition kstate_inv s : hprop :=
-  tr :~~ ktr s in
-  traced (expand_ktrace tr) * [KTraceOK tr] * all_bound (components s)
-(* __KSTATE_INVS__ *)
-.
+Section VEX.
 
-Ltac unfoldr := unfold kstate_inv.
+Variable s : kstate.
+
+Let comps := components s.
+Let tr := ktr s.
+(* __VE_STATE_VAR_DECLS__ *)
+
+Inductive ValidExchange : kstate -> Prop :=
+(* __VE_HANDLED_CASES__ *)
+(* __VE_UNHANDLED_CASES__ *)
+(* special case for errors *)
+| VE_BadTag :
+  forall c tag,
+  ValidExchange (mkst
+    comps
+    (tr ~~~ KRecv c (BadTag tag) :: tr)
+(* __VE_STATE_VAR_LISTS__ *)
+  ).
+End VEX.
+
+Hint Constructors ValidExchange.
+
+Inductive KInvariant : kstate -> Prop :=
+| KI_init :
+(* __KTRACE_INIT__ *)
+| KI_select :
+  forall s cs c,
+  let comps := components s in
+  let tr := ktr s in
+(* __KTRACE_VAR_DECLS__ *)
+  KInvariant s ->
+  KInvariant (mkst
+    comps
+    (tr ~~~ KSelect cs c :: tr)
+(* __KTRACE_VAR_LISTS__ *)
+  )
+| KI_exchange :
+  forall s s',
+  KInvariant s ->
+  ValidExchange s s' ->
+  KInvariant s'.
+
+Hint Constructors KInvariant.
+
+
+Ltac dangle_from target l :=
+  match l with
+  | target =>
+      constr:(fun (x: KTrace) => x)
+  | ?h :: ?t =>
+      let dt := dangle_from target t in
+      constr:(fun x => h :: dt x)
+  end.
+
+Ltac restore_kinv :=
+  unfold KTrace in *;
+  match goal with
+  | [H : ktr ?kst = [?x]%inhabited |- ValidExchange ?kst ?kst'] =>
+      let itr := eval simpl in (ktr kst') in
+      match itr with [?tr]%inhabited =>
+        let dtr := dangle_from x tr in
+        replace itr with (inhabit_unpack (ktr kst) dtr);
+          [ econstructor; eauto
+          | rewrite H; auto
+          ]
+      end
+
+  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?kst' ] =>
+    match kst' with context [[?kact :: x]%inhabited] =>
+      replace ([kact :: x]%inhabited)
+      with (inhabit_unpack (ktr kst) (fun oldktr : KTrace => kact :: oldktr));
+        [ eapply KI_select; eauto
+        | rewrite H; auto
+        ]
+    end
+
+  | [_: KInvariant _ |- KInvariant _ ] =>
+      econstructor; [eauto|]
+
+  | [H: _ = [_]%inhabited |- _] =>
+      rewrite H in *; simpl in *
+
+  | [H:[_]%inhabited = [_]%inhabited |- _] =>
+      apply pack_injective in H;
+      rewrite -> H in * || rewrite <- H in *
+end.
+
+Definition kstate_inv s : hprop :=
+  tr :~~ ktr s in emp
+  * traced (expand_ktrace tr)
+  * [KInvariant s]
+  * all_bound (components s)
+  (* __KSTATE_INVS__ *).
+
+Ltac unfoldr :=
+  unfold kstate_inv, KTrace in *.
 
 Ltac simplr :=
   sep';
   try bounds_packing;
-  try trace_ok.
+  try restore_kinv.
 
 Definition kinit :
   forall (_ : unit),
@@ -223,14 +229,14 @@ Qed.
 
 (* __EXCHANGES__ *)
 
-Fixpoint type_of_comp
-  (c: tchan) (comps: list tchan): chan_type :=
+Fixpoint type_of_comp (c: tchan) (comps: list tchan): chan_type :=
   match comps with
 (* __TYPE_OF_COMP_DEFAULT__ *)
   | x :: rest =>
-    if tchan_eq x c
-      then projT1 x
-      else type_of_comp c rest
+    if tchan_eq x c then
+      projT1 x
+    else
+      type_of_comp c rest
   end.
 
 Definition kbody:
@@ -273,6 +279,8 @@ Proof.
   unfold kstate_inv;
   sep fail auto.
 Qed.
+
+(*
 
 (* REMEMBER : traces are in reverse chrono order
  * so most recent event is in head position and
@@ -326,3 +334,5 @@ Ltac imm_tac :=
   repeat progress imm_tac_step.
 
 (* __PROPERTIES__ *)
+
+*)

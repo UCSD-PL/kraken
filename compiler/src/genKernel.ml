@@ -2,6 +2,37 @@ open Common
 open Kernel
 open Gen
 
+(* symbolic state
+ *
+ * Track current value of state var during a handler's symbolic execution.
+ * For example, after [a := a + 1], [a] is mapped to [a + 1].
+ *)
+type sstate = (id * expr) list
+
+let lkup_var st id =
+  try
+    List.assoc id st
+  with Not_found ->
+    Var id
+
+let rec lkup_expr st = function
+  | Var id      -> lkup_var st id
+  | NumLit i    -> NumLit i
+  | StrLit s    -> StrLit s
+  | Plus (a, b) -> Plus (lkup_expr st a, lkup_expr st b)
+
+let lkup_msg_expr st m =
+  { m with payload = List.map (lkup_expr st) m.payload }
+
+let lkup_st_fields sstate kernel =
+  kernel.var_decls
+    |> List.map (fun v -> lkup_var sstate (fst v))
+    |> List.map (fun e -> mkstr "(%s)" (coq_of_expr e))
+    |> lcat
+
+let set_var st id expr =
+  (id, lkup_expr st expr) :: st
+
 let coq_of_msg_expr m =
   if m.payload = [] then
     "(" ^ m.tag ^ ")"
@@ -15,13 +46,6 @@ let coq_of_frame fr =
   fr |> List.map (mkstr "%s * ")
      |> String.concat ""
      |> mkstr "%semp"
-
-type prog_acc =
-  { code  : string
-  ; trace : string
-  ; frame : string list
-  ; comps : string list
-  }
 
 let fresh_chan_id () =
   mkstr "c%d" (tock ())
@@ -40,7 +64,17 @@ let extract_bound c fr =
   in
   aux fr
 
-let coq_of_cmd s pacc = function
+
+type prog_acc =
+  { code   : string
+  ; frame  : string list
+  ; comps  : string list
+  ; sstate : sstate
+  ; trace_impl : string
+  ; trace_spec : string
+  }
+
+let coq_of_cmd k pacc = function
   | Send (c, m) ->
       { pacc with code = pacc.code ^
           (let fr' = extract_bound c pacc.frame in
@@ -50,10 +84,14 @@ send_msg %s %s
 <@> %s;;
 "
             c (coq_of_msg_expr m)
-            pacc.trace (coq_of_frame fr'))
-      ; trace =
+            pacc.trace_impl (coq_of_frame fr'))
+      ; trace_impl =
           mkstr "KSend %s %s :: %s"
-            c (coq_of_msg_expr m) pacc.trace
+            c (coq_of_msg_expr m) pacc.trace_impl
+      ; trace_spec =
+          mkstr "KSend %s %s :: %s"
+            c (coq_of_msg_expr (lkup_msg_expr pacc.sstate m)) pacc.trace_spec
+
       }
   | Call (res, f, arg) ->
       { pacc with code = pacc.code ^
@@ -62,52 +100,79 @@ send_msg %s %s
 (tr ~~~ expand_ktrace (%s))
 <@> %s;"
             res (coq_of_expr f) (coq_of_expr arg)
-            pacc.trace (coq_of_frame pacc.frame)
-      ; trace =
+            pacc.trace_impl (coq_of_frame pacc.frame)
+      ; trace_impl =
           mkstr "KCall %s %s %s :: %s"
-            (coq_of_expr f) (coq_of_expr arg) res pacc.trace
+            (coq_of_expr f)
+            (coq_of_expr arg)
+            res pacc.trace_impl
+      ; trace_spec =
+          mkstr "KCall %s %s %s :: %s"
+            (coq_of_expr (lkup_expr pacc.sstate f))
+            (coq_of_expr (lkup_expr pacc.sstate arg))
+            res pacc.trace_spec
       }
   | Spawn (res, comp) ->
-      let path =
-        snd (List.find (fun (id, _) -> id = comp) s.components)
-      in
-      { code = pacc.code ^
+      let path = List.assoc comp k.components in
+      { pacc with code = pacc.code ^
           mkstr "
 %s <- exec %s (str_of_string \"%s\")
 (tr ~~~ expand_ktrace (%s))
 <@> %s;
 "
             res comp path
-            pacc.trace (coq_of_frame pacc.frame)
-      ; trace =
+            pacc.trace_impl (coq_of_frame pacc.frame)
+      ; trace_impl =
           mkstr "KExec (str_of_string \"%s\") %s :: %s"
-            path res pacc.trace
+            path res pacc.trace_impl
+      ; trace_spec =
+          mkstr "KExec (str_of_string \"%s\") %s :: %s"
+            path res pacc.trace_spec
       ; frame =
           mkstr "bound %s" res :: pacc.frame
       ; comps =
           res :: pacc.comps
       }
   | Assign (id, expr) ->
-      { pacc with
-         code = pacc.code ^
-           mkstr "\nlet %s := %s in" id (coq_of_expr expr)
+      { pacc with code = pacc.code ^
+          mkstr "\nlet %s := %s in" id (coq_of_expr expr)
+      ; sstate =
+          set_var pacc.sstate id expr
       }
 
 let coq_of_prog s tr0 fr0 p =
   let rec loop pacc = function
-    | Nop -> pacc
-    | Seq (c, p') -> loop (coq_of_cmd s pacc c) p'
+    | Nop ->
+        { pacc with code = pacc.code ^ "\n(* Nop *)\n" }
+    | Seq (c, p') ->
+        loop (coq_of_cmd s pacc c) p'
   in
-  loop {code = ""; trace = tr0; frame = fr0; comps = []} p
+  let pacc0 =
+    { code   = ""
+    ; frame  = fr0
+    ; comps  = []
+    ; sstate = []
+    ; trace_impl = tr0
+    ; trace_spec = tr0
+    }
+  in
+  loop pacc0 p
 
-let coq_trace_of_prog s fr p =
-  (coq_of_prog s "" fr p).trace
+let coq_trace_spec_of_prog s fr p =
+  (coq_of_prog s "" fr p).trace_spec
+
+let coq_trace_impl_of_prog s fr p =
+  (coq_of_prog s "" fr p).trace_impl
+
+let sstate_of_prog s fr p =
+  (coq_of_prog s "" fr p).sstate
 
 let rec expr_vars = function
   | Var id -> [id]
   | Plus (e1, e2) -> expr_vars e1 @ expr_vars e2
   | _ -> []
 
+(* vars that need forall binding *)
 let cmd_vars = function
   | Send (c, m) ->
       c :: List.flatten (List.map expr_vars m.payload)
@@ -126,135 +191,140 @@ let coq_of_msg_pat m =
   mkstr "| %s %s =>" m.tag
     (String.concat " " m.payload)
 
-let handler_vars xch_chan h =
-  uniq (xch_chan :: h.trigger.payload @ prog_vars h.respond)
+let handler_vars xch_chan trig prog =
+  uniq (xch_chan :: trig.payload @ prog_vars prog)
 
-module OrderedChan =
-  struct
-    type t = chan
-    let compare = compare
-  end
+(* handler vars modulo global state vars *)
+let handler_vars_nonstate xch_chan trig prog svars =
+  let globals =
+    List.map (fun (id, typ) -> id) svars
+  in
+  List.filter
+    (fun x -> not (List.mem x globals))
+    (handler_vars xch_chan trig prog)
 
-module ChanSet = Set.Make(OrderedChan);;
+let coq_of_cond_prop = function
+  | Always        -> "True"
+  | NumEq (id, i) -> mkstr "(nat_of_num %s = %d)" id i
 
+let coq_of_cond_spec prev_conds cond =
+  let context =
+    prev_conds
+      |> List.map (fun c -> mkstr "~ %s -> " (coq_of_cond_prop c))
+      |> String.concat ""
+  in
+  mkstr "%s%s ->" context (coq_of_cond_prop cond)
+
+(* TODO what about chans produced by Spawn ? *)
 let chans_of_cmd = function
-| Send(c, _)    -> ChanSet.singleton c
-| Call(_, _, _) -> ChanSet.empty
-| Spawn(_, _)   -> ChanSet.empty
-| Assign(_, _)  -> ChanSet.empty
+  | Send (c, _) -> [c]
+  | _ -> []
 
-let chans_of_prog p =
-  let rec aux acc = function
-    | Nop ->
-        ChanSet.elements acc
-    | Seq(cmd, rest) ->
-        aux (ChanSet.union acc (chans_of_cmd cmd)) rest
-  in
-  aux ChanSet.empty p
+let rec chans_of_prog = function
+  | Nop -> []
+  | Seq (c, p) -> chans_of_cmd c @ chans_of_prog p
 
-let coq_spec_of_handler s comp xch_chan h =
-  let hdr =
-    mkstr "
-| VE_%s_%s :\nforall %s,\nValidExchange ("
-      comp
-      h.trigger.tag
-      (String.concat " " (handler_vars xch_chan h))
+let coq_spec_of_handler k comp xch_chan trig conds index tprog =
+  let fr0 =
+    List.map
+      (fun c -> mkstr "bound %s" c)
+      (xch_chan :: chans_of_prog tprog.program)
   in
-  let bdy =
-    if h.respond = Nop then
-      "      (* no response *)"
-    else
-      let fr = List.map
-        (fun c -> mkstr "bound %s" c)
-        (xch_chan :: chans_of_prog h.respond)
-      in
-      coq_trace_of_prog s fr h.respond
-  in
-  let ftr =
-    mkstr "KRecv %s (%s %s) :: nil)"
-      xch_chan
-      h.trigger.tag
-      (String.concat " " h.trigger.payload)
-  in
-  lcat [hdr; bdy; ftr]
+  let pacc = coq_of_prog k "" fr0 tprog.program in
+  lcat
+    [ mkstr "| VE_%s_%s_%d :"
+        comp trig.tag index
+    ; mkstr "forall %s,"
+        (String.concat " " (handler_vars_nonstate xch_chan trig tprog.program k.var_decls))
+    ; coq_of_cond_spec conds tprog.condition
+    ; "ValidExchange (mkst"
+    ; mkstr "  (%scomps)"
+        (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
+    ; mkstr "  (tr ~~~ %sKRecv %s (%s %s) :: tr)"
+        pacc.trace_spec xch_chan trig.tag
+        (String.concat " " trig.payload)
+    ; mkstr "  %s"
+        (lkup_st_fields pacc.sstate k)
+    ; ")"
+    ]
 
-let frames_of_vars k =
+let coq_of_cond index = function
+  | Always ->
+      if index = 0 then "" else " else "
+  | NumEq (id, v) ->
+      lcat
+        [ if index > 0 then " else " else ""
+        ; mkstr "if (Peano_dec.eq_nat_dec (nat_of_num %s) %d) then " id v
+        ]
+
+let fields_in_comps k =
   k.var_decls
     |> List.filter (fun (_, typ) -> typ = Chan)
     |> List.map (fun (id, _) -> mkstr "[In %s comps]" id)
 
-let coq_of_handler k xch_chan h =
+let fields_in_comps_fr k =
+  fields_in_comps k
+    |> List.map (mkstr "%s * ")
+    |> String.concat ""
+    |> mkstr "%semp"
+
+let coq_of_handler k xch_chan trig index tprog =
   let tr =
     mkstr "KRecv %s (%s %s) :: tr"
-      xch_chan
-      h.trigger.tag
-      (String.concat " " h.trigger.payload)
+      xch_chan trig.tag (String.concat " " trig.payload)
   in
-  let fr = (
-    let acc0 =
+  let fr =
+    fields_in_comps k @
       [ "all_bound comps"
       ; mkstr "[In %s comps]" xch_chan
-      ; "(tr ~~ [KTraceOK tr])"
+      ; "(tr ~~ [KInvariant kst])"
       ]
-    in
-    (frames_of_vars k) @ acc0
-  )
   in
-  let pacc = coq_of_prog k tr fr h.respond in
-  let code =
-    if pacc.code = "" then
-      "        (* no code *)"
-    else
-      pacc.code
-  in
-  let comps =
-    pacc.comps
-      |> List.map (mkstr "%s :: ")
-      |> String.concat ""
-  in
-  let fields =
-    k.var_decls
-      |> List.map fst
-      |> String.concat " "
-  in
+  let pacc = coq_of_prog k tr fr tprog.program in
   lcat
-    [ coq_of_msg_pat h.trigger
-    ; code
+    [ coq_of_cond index tprog.condition ^ " ("
+    ; pacc.code
     ; mkstr "{{ Return (mkst (%scomps) (tr ~~~ %s) %s) }}"
-        comps pacc.trace fields
+        (String.concat "" (List.map (mkstr "%s :: ") pacc.comps))
+        pacc.trace_impl
+        (String.concat " " (List.map fst k.var_decls))
+     ;" ) "
     ]
 
-let coq_of_exchange spec xch_chan kstate_vars comp =
-  let comp_handlers = (
-    try Some (List.find (fun x -> fst x = comp) (snd (spec.exchange)))
-    with Not_found -> None
-  ) in
-  let vars_frames =
-    match frames_of_vars spec with
-    | [] -> ""
-    | l  -> " * " ^ String.concat " * " l
+let msg_pat_of_msg_decl m =
+  { tag = m.tag
+  ; payload = List.map (fun _ -> mkstr "__dummy_%d__" (tock ())) m.payload
+  }
+
+let coq_of_exchange spec xch_chan comp =
+  let var_ext =
+    fmt spec.var_decls (fun (id, _) ->
+      mkstr "pose (%s := %s kst);" id id)
+  in
+  let comp_handlers =
+    try List.assoc comp (snd spec.exchange)
+    with Not_found -> []
+  in
+  let dummy_handler t =
+    { trigger = t
+    ; responds = [{condition = Always; program = Nop}]
+    }
+  in
+  let get_handler msg =
+    try List.find (fun h -> h.trigger.tag = msg.tag) comp_handlers
+    with Not_found -> dummy_handler (msg_pat_of_msg_decl msg)
   in
   let hands =
     fmt spec.msg_decls (fun msg ->
-      let constr = mkstr "%s %s" msg.tag (coq_of_args msg) in
-      let unhandled = mkstr "
-    (* not handled *)
-    | %s =>
-      {{ Return (mkst comps (tr ~~~ KRecv c (%s) :: tr) %s) }}
-"
-        constr constr kstate_vars
-      in
-      match comp_handlers with
-      | None -> unhandled
-      | Some(exchanges) ->
-        try (
-          let handler =
-            List.find (fun h -> h.trigger.tag = msg.tag) (snd exchanges)
-          in
-          coq_of_handler spec xch_chan handler
-        )
-        with Not_found -> unhandled
+      let h = get_handler msg in
+      lcat
+        [ coq_of_msg_pat h.trigger
+        ; fmti h.responds (coq_of_handler spec xch_chan h.trigger)
+        ]
     )
+  in
+  let kstate_vars =
+    String.concat " " (List.map fst spec.var_decls)
   in
   mkstr "
 Definition exchange_%s :
@@ -262,44 +332,35 @@ Definition exchange_%s :
   STsep (kstate_inv kst * [In c (components kst)])
         (fun (kst' : kstate) => kstate_inv kst').
 Proof.
-  intros c [comps tr %s]; refine (
-    req <- recv_msg c (tr ~~~ expand_ktrace tr)
-    <@> [In c comps]%s * all_bound_drop comps c * (tr ~~ [KTraceOK tr]);
+  intros c kst;
+  pose (comps := components kst);
+  pose (tr := ktr kst);
+%s
+  refine (
+    req <- recv_msg c
+    (tr ~~~ expand_ktrace tr)
+    <@> [In c comps] * %s * all_bound_drop comps c * (tr ~~ [KInvariant kst]);
+
     match req with
 %s
     (* special case for errors *)
     | BadTag tag =>
       {{ Return (mkst comps (tr ~~~ KRecv c (BadTag tag) :: tr) %s) }}
     end
-  );
-  sep unfoldr simplr.
+  );  sep unfoldr simplr.
 Qed.
 "
-  comp kstate_vars vars_frames hands kstate_vars
+  comp var_ext (fields_in_comps_fr spec) hands kstate_vars
 
 let coq_of_init k =
-  let cp = coq_of_prog k "tr" [] k.init in
-  let code =
-    if cp.code = "" then
-      "        (* no code *)"
-    else
-      cp.code
-  in
-  let comps =
-    cp.comps
-      |> List.map (mkstr "%s :: ")
-      |> String.concat ""
-  in
-  let fields =
-    k.var_decls
-      |> List.map fst
-      |> String.concat " "
-  in
+  let pacc = coq_of_prog k "tr" [] k.init in
   lcat
     [ "let tr := inhabits nil in"
-    ; code
+    ; pacc.code
     ; mkstr "{{ Return (mkst (%snil) (tr ~~~ %s) %s) }}"
-        comps cp.trace fields
+        (String.concat "" (List.map (mkstr "%s :: ") pacc.comps))
+        pacc.trace_impl
+        (lkup_st_fields pacc.sstate k)
     ]
 
 let coq_of_prop (name, prop) : string =
@@ -329,16 +390,39 @@ Proof.
 Qed.
 " name bef aft
 
-let subs s =
-  let (xch_chan, exchanges) = s.exchange in
+(*
   let kstate_vars =
     s.var_decls |> List.map fst |> String.concat " "
   in
+*)
+
+let subs s =
+  let (xch_chan, exchanges) = s.exchange in
   List.map (fun (f, r) ->
     (Str.regexp ("(\\* *__" ^ f ^ "__ *\\*)"), r))
-  [ "VE_HANDLED_CASES",
+  [ "KTRACE_VAR_DECLS",
+      (fmt s.var_decls (fun (id,typ) -> (mkstr "let %s := (%s s) in\n" id id)))
+  ; "KTRACE_VAR_LISTS",
+      (fmt s.var_decls (fun (id,typ) -> (mkstr "%s " id)))
+  ; "VE_STATE_VAR_DECLS",
+      (fmt s.var_decls (fun (id,typ) -> (mkstr "Let %s := (%s s).\n" id id)))
+  ; "VE_STATE_VAR_LISTS",
+      (fmt s.var_decls (fun (id,typ) -> (mkstr "%s " id)))
+  ; "VE_HANDLED_CASES",
       fmt exchanges (fun (comp, handlers) ->
-        fmt handlers (coq_spec_of_handler s comp xch_chan))
+        fmt handlers (fun h ->
+          h.responds
+            |> List.fold_left
+                (fun (i, conds, res) cprog ->
+                  ( i + 1
+                  , cprog.condition :: conds
+                  , coq_spec_of_handler s comp xch_chan h.trigger conds i cprog :: res
+                  ))
+                (0, [], [])
+            |> fun (_, _, res) -> res
+            |> String.concat "\n"
+        )
+      )
   ; "VE_UNHANDLED_CASES",
       fmt exchanges (fun (comp, handlers) ->
         let handled m =
@@ -348,34 +432,42 @@ let subs s =
           List.filter (fun m -> not (handled m)) s.msg_decls
         in
         fmt unhandled_msgs (fun m ->
-          let args = m.payload |> List.map coq_of_typ |> String.concat " " in
-          mkstr "
-| VE_%s_%s:
-  forall %s %s, ValidExchange (KRecv %s (%s %s) :: nil)"
-            comp m.tag args xch_chan xch_chan m.tag args
+          let args = String.concat " " (List.map coq_of_typ m.payload) in
+          lcat
+            [ mkstr "| VE_%s_%s:" comp m.tag
+            ; mkstr "  forall %s %s," args xch_chan
+            ;       "  ValidExchange (mkst"
+            ; mkstr "    comps"
+            ; mkstr "    (tr ~~~ KRecv %s (%s %s) :: tr)" xch_chan m.tag args
+            ;       fmt s.var_decls fst
+            ;       "  )"
+            ]
         )
       )
   ; "KTRACE_INIT", (
-      let t = coq_trace_of_prog s [] s.init in
-      let v = prog_vars s.init in
-      match v with
-      | [] -> mkstr "KTraceOK (%snil)" t
-      | _  -> mkstr "forall %s, KTraceOK (%snil)" (String.concat " " v) t
+      let pacc = coq_of_prog s "" [] s.init in
+      mkstr "forall %s,\nKInvariant (mkst (%snil) [%snil] %s)"
+        (String.concat " " (prog_vars s.init))
+        (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
+        pacc.trace_impl (* TODO should this use trace_spec ? *)
+        (lkup_st_fields pacc.sstate s)
     )
   ; "KSTATE_FIELDS",
       fmt s.var_decls (fun (id, typ) ->
         mkstr "; %s : %s" id (coq_of_typ typ))
   ; "KSTATE_INVS",
-      fmt s.var_decls (fun (id, typ) ->
-        match typ with
-        | Chan -> mkstr "* [In (%s s) (components s)]" id
-        | _    -> ""
-      )
+      (* WARNING very similar to fields_in_comps_fr *)
+      (* require all chan state fields to be in the state components *)
+      s.var_decls
+        |> List.filter (fun (_, typ) -> typ = Chan)
+        |> List.map (fun (id, _) -> mkstr "* [In (%s s) (components s)]" id)
+        |> String.concat "\n"
+
   ; "INIT_CODE",
       coq_of_init s
   ; "EXCHANGES",
       fmt s.components (fun (comp, _) ->
-        coq_of_exchange s xch_chan kstate_vars comp)
+        coq_of_exchange s xch_chan comp)
   ; "TYPE_OF_COMP_DEFAULT",
       mkstr "\n| nil => %s (* TODO: need default or proof *)"
         (fst (List.hd s.components))
@@ -385,16 +477,15 @@ let subs s =
           |> List.map (fun (c, _) -> mkstr "\n| %s => exchange_%s" c c)
           |> String.concat ""
       in
-      let kstate_invs =
-        match frames_of_vars s with
-        | [] -> ""
-        | l  -> " * " ^ String.concat " * " l
-      in
       mkstr "
-  intros [comps tr %s];
+  intros kst.
+  pose (comps := components kst);
+  pose (tr := ktr kst);
+  %s
   refine (
-    comp <- select comps (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [KTraceOK tr] * all_bound comps%s);
+    comp <- select comps
+    (tr ~~~ expand_ktrace tr)
+    <@> (tr ~~ [KInvariant kst] * all_bound comps * %s);
     let handler := (
       match type_of_comp comp comps with
 %s
@@ -405,7 +496,10 @@ let subs s =
   );
   sep unfoldr simplr.
 "
-      kstate_vars kstate_invs comp_xch kstate_vars)
+      (fmt s.var_decls (fun (id,typ) -> (mkstr "pose (%s := %s kst);" id id)))
+      (fields_in_comps_fr s)
+      comp_xch
+      (fmt s.var_decls (fun (id,typ) -> (mkstr "%s " id))))
   ; "PROPERTIES",
       fmt s.props coq_of_prop
   ]

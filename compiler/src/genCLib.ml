@@ -1,10 +1,6 @@
 open Common
 open Kernel
-
-let fmt l f =
-  l |> List.map f
-    |> List.filter ((<>) "")
-    |> String.concat "\n"
+open Gen
 
 let c_mtyp tag_map m =
   mkstr "  MTYP_%s = %d,"
@@ -77,7 +73,7 @@ let c_recv_msg m =
     ;       "      break;"
     ]
 
-let clib_h_subs k =
+let subs_h k =
   let tm = gen_tag_map k in
   List.map (fun (f, r) -> (Str.regexp f, r))
   [ "__MSG_T_CASES__",
@@ -86,7 +82,7 @@ let clib_h_subs k =
       fmt k.msg_decls c_msg_ctor_proto
   ]
 
-let clib_c_subs k =
+let subs_c k =
   List.map (fun (f, r) -> (Str.regexp f, r))
   [ "__MK_MSG_FUNCS__",
       fmt k.msg_decls c_msg_ctor

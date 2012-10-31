@@ -1,22 +1,18 @@
 open Common
 open Kernel
-
-let fmt l f =
-  l |> List.map f
-    |> List.filter ((<>) "")
-    |> String.concat "\n"
+open Gen
 
 let py_recv_typ = function
-  | Num -> "recv_num"
-  | Str -> "recv_str"
+  | Num   -> "recv_num"
+  | Str   -> "recv_str"
   | Fdesc -> "recv_fd"
-  | Chan -> "recv_fd"
+  | Chan  -> "recv_fd"
 
 let py_send_typ = function
-  | Num -> "send_num"
-  | Str -> "send_str"
+  | Num   -> "send_num"
+  | Str   -> "send_str"
   | Fdesc -> "send_fd"
-  | Chan -> "send_fd"
+  | Chan  -> "send_fd"
 
 let py_recv_msg tag_map m =
   let args =
@@ -36,7 +32,7 @@ let py_send_msg tag_map m =
   mkstr "'%s' : lambda _ : [send_num(%d), %s],"
     m.tag (List.assoc m.tag tag_map) args
 
-let pylib_subs k =
+let subs k =
   let tm = gen_tag_map k in
   List.map (fun (f, r) -> (Str.regexp f, r))
   [ "__RECV_CASES__",

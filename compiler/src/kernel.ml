@@ -66,6 +66,9 @@ let mk_handler t r =
   ; responds = r
   }
 
+type prop =
+  | ImmAfter of string * string
+  | ImmBefore of string * string
 type component =
   string
 
@@ -76,15 +79,7 @@ type kernel =
   ; msg_decls  : msg_decl list
   ; init       : prog
   ; exchange   : chan * ((component * handler list) list)
-  }
-
-let mk_kernel cs vs comps ms i xch =
-  { constants  = cs
-  ; var_decls  = vs
-  ; components = comps
-  ; msg_decls  = ms
-  ; init       = i
-  ; exchange   = xch
+  ; props      : (id * prop) list
   }
 
 let empty_kernel =
@@ -94,6 +89,7 @@ let empty_kernel =
   ; msg_decls  = []
   ; init       = Nop
   ; exchange   = ("", [])
+  ; props      = []
   }
 
 let ck_kernel s =

@@ -21,7 +21,7 @@ OUTDIR="."
 BUILD=false
 FORCE=false
 PRETTY=false
-DEBUG=true
+DEBUG=false
 INDIR=""
 
 function usage {

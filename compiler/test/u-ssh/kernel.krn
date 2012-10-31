@@ -66,7 +66,7 @@ Messages {
 
   # monitor <-> system
   SysLoginReq(str);
-  SysLoginRes(num);
+  SysLoginRes(str, num);
 
   SysPubkeyReq();
   SysPubkeyRes(str);
@@ -74,7 +74,7 @@ Messages {
   SysKeysignReq(str);
   SysKeysignRes(str);
 
-  SysCreatePtyerReq();
+  SysCreatePtyerReq(str);
   SysCreatePtyerRes(fdesc, fdesc);
 }
 
@@ -90,7 +90,8 @@ Init {
 Exchange(c) {
 
   System {
-    SysLoginRes(resnum) {
+    SysLoginRes(autheduser, resnum) {
+      username := autheduser;
       send(slave, LoginRes(resnum));
     }
 
@@ -124,7 +125,7 @@ Exchange(c) {
     CreatePtyerReq() when (loginsucceded == 0) {
       # ignore
     } {
-      send(system, SysCreatePtyerReq());
+      send(system, SysCreatePtyerReq(username));
     }
 	}
 }

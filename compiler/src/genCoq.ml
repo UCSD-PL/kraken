@@ -304,7 +304,7 @@ send_msg %s %s
           set_var pacc.sstate id expr
       }
 
-let coq_of_prog s tr0 fr0 p =
+let coq_of_prog s tr0 fr0 ss0 p =
   let rec loop pacc = function
     | Nop ->
         { pacc with code = pacc.code ^ "\n(* Nop *)\n" }
@@ -315,21 +315,21 @@ let coq_of_prog s tr0 fr0 p =
     { code   = ""
     ; frame  = fr0
     ; comps  = []
-    ; sstate = []
+    ; sstate = ss0
     ; trace_impl = tr0
     ; trace_spec = tr0
     }
   in
   loop pacc0 p
 
-let coq_trace_spec_of_prog s fr p =
-  (coq_of_prog s "" fr p).trace_spec
+let coq_trace_spec_of_prog s fr ss p =
+  (coq_of_prog s "" fr ss p).trace_spec
 
-let coq_trace_impl_of_prog s fr p =
-  (coq_of_prog s "" fr p).trace_impl
+let coq_trace_impl_of_prog s fr ss p =
+  (coq_of_prog s "" fr ss p).trace_impl
 
-let sstate_of_prog s fr p =
-  (coq_of_prog s "" fr p).sstate
+let sstate_of_prog s fr ss p =
+  (coq_of_prog s "" fr ss p).sstate
 
 let rec expr_vars = function
   | Var id -> [id]
@@ -394,7 +394,11 @@ let coq_spec_of_handler k comp xch_chan trig conds index tprog =
       (fun c -> mkstr "bound %s" c)
       (xch_chan :: chans_of_prog tprog.program)
   in
-  let pacc = coq_of_prog k "" fr0 tprog.program in
+  let ss0 = List.map 
+      (fun s -> (s, Var s))
+      trig.payload
+  in
+  let pacc = coq_of_prog k "" fr0 ss0 tprog.program in
   lines
     [ mkstr "| VE_%s_%s_%d :"
         comp trig.tag index
@@ -413,7 +417,7 @@ let coq_spec_of_handler k comp xch_chan trig conds index tprog =
     ]
 
 let coq_of_init k =
-  let pacc = coq_of_prog k "tr" [] k.init in
+  let pacc = coq_of_prog k "tr" [] [] k.init in
   lines
     [ "let tr := inhabits nil in"
     ; pacc.code
@@ -448,6 +452,8 @@ let coq_of_handler k xch_chan trig index tprog =
     mkstr "RecvMsg %s (%s %s) ++ tr"
       xch_chan trig.tag (String.concat " " trig.payload)
   in
+  let ss = List.map (fun s -> (s, Var s)) trig.payload
+  in
   let fr =
     fields_in_comps k @
       [ "all_bound comps"
@@ -455,7 +461,7 @@ let coq_of_handler k xch_chan trig index tprog =
       ; "(tr ~~ [KInvariant kst])"
       ]
   in
-  let pacc = coq_of_prog k tr fr tprog.program in
+  let pacc = coq_of_prog k tr fr ss tprog.program in
   lines
     [ coq_of_cond index tprog.condition ^ " ("
     ; pacc.code
@@ -594,7 +600,7 @@ let coq_of_kernel_subs s =
         )
       )
   ; "KTRACE_INIT", (
-      let pacc = coq_of_prog s "" [] s.init in
+      let pacc = coq_of_prog s "" [] [] s.init in
       mkstr "forall %s,\nKInvariant (mkst (%snil) [%snil] %s)"
         (String.concat " " (prog_vars s.init))
         (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))

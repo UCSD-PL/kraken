@@ -1,0 +1,19 @@
+State {
+  main : chan;
+}
+
+Components {
+  Main "test.py";
+}
+
+Messages {
+  M(str);
+}
+
+Init {
+  main := spawn(Main);
+  send(main, M("Hello"));
+}
+
+Exchange(c) {
+}

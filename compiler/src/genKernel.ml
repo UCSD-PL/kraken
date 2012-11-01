@@ -451,7 +451,7 @@ let subs s =
   ; "KTRACE_INIT", (
       let pacc = coq_of_prog s "" [] s.init in
       mkstr "forall %s,\nKInvariant (mkst (%snil) [%snil] %s)"
-        (String.concat " " (prog_vars s.init))
+        (String.concat " " (uniq (prog_vars s.init)))
         (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
         pacc.trace_impl (* TODO should this use trace_spec ? *)
         (lkup_st_fields pacc.sstate s)

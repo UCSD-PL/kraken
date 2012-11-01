@@ -1,5 +1,6 @@
 State {
-  main : chan;
+  # can't use main because we define something called main in Coq...
+  mainc : chan;
 }
 
 Components {
@@ -11,8 +12,8 @@ Messages {
 }
 
 Init {
-  main := spawn(Main);
-  send(main, M("Hello"));
+  mainc := spawn(Main);
+  send(mainc, M("Hello"));
 }
 
 Exchange(c) {

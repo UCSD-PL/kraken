@@ -1,0 +1,20 @@
+State {
+  # can't use main because we define something called main in Coq...
+  mainc : chan;
+}
+
+Components {
+  Main "test.py";
+}
+
+Messages {
+  M(str);
+}
+
+Init {
+  mainc := spawn(Main);
+  send(mainc, M("Hello"));
+}
+
+Exchange(c) {
+}

@@ -158,7 +158,10 @@ Inductive KInvariant : kstate -> Prop :=
 
 Hint Constructors KInvariant.
 
-
+(* Support replacing a term deep in a list.
+ * If target is [FOO] and l is [A :: B :: C :: FOO], then
+ * [dangle_from target l] will yield [fun x => A :: B :: C :: x].
+ *)
 Ltac dangle_from target l :=
   match l with
   | target =>
@@ -280,8 +283,6 @@ Proof.
   sep fail auto.
 Qed.
 
-(*
-
 (* REMEMBER : traces are in reverse chrono order
  * so most recent event is in head position and
  * first action is last
@@ -291,16 +292,16 @@ Qed.
  * then it is immediately chrono preceded by bef
  *)
 Definition ImmBefore (bef aft : KTrace) : Prop :=
-  forall tr, KTraceOK tr ->
-  forall x y, tr = x ++ aft ++ y ->
+  forall kst, KInvariant kst ->
+  forall x y, ktr kst = [x ++ aft ++ y]%inhabited ->
   exists z, y = bef ++ z.
 
 (* if you see bef in a trace,
  * then it is immediately chrono followed by aft
  *)
 Definition ImmAfter (bef aft : KTrace) : Prop :=
-  forall tr, KTraceOK tr ->
-  forall x y, tr = x ++ bef ++ y ->
+  forall kst, KInvariant kst ->
+  forall x y, ktr kst = [x ++ bef ++ y]%inhabited ->
   exists z, x = z ++ aft.
 
 Ltac inv H :=
@@ -312,27 +313,44 @@ Definition valid_msg (m: msg) : Prop :=
 Ltac imm_tac_step :=
   match goal with
   | |- exists z, ?x = z ++ ?x =>
-    exists nil; auto
-  | H: nil = ?x ++ ?y :: ?z |- _ =>
-    apply app_cons_not_nil in H; contradiction
+      exists nil; auto
+
+  | H: nil = _ ++ _ :: _ |- _ =>
+      apply app_cons_not_nil in H; contradiction
+
   | H: valid_msg (BadTag ?t) |- _ =>
-    unfold valid_msg in H; edestruct H; eauto
-  | H: ?e :: ?tr = ?a ++ ?b |- _ =>
-    destruct a; simpl in *; inv H
-  | H: ValidExchange ?tr |- _ =>
-    inv H; simpl in *
+      unfold valid_msg in H; edestruct H; eauto
+
+  | H : inhabit_unpack ?tr _ = [_]%inhabited |- _ =>
+      match tr with
+      | ktr ?s =>
+          destruct s; simpl in *
+      | tr =>
+          unfold tr in *; clear tr
+      | tr =>
+          destruct tr; simpl in *
+      end
+
+  | H: [_]%inhabited = [_]%inhabited |- _ =>
+      apply pack_injective in H
+
+  | H: _ :: _ = ?tr ++ _ |- _ =>
+      destruct tr; simpl in *; inv H
+
+  | H: ValidExchange _  _ |- _ =>
+      inv H; simpl in *
+
   | |- exists z, ?a :: ?x = z ++ ?c =>
-    let H := fresh "H" in
-    let e := fresh "e" in
-    cut (exists z, x = z ++ c);
-      [ intro H; destruct H as [e H]; rewrite H; exists (a :: e); auto | ]
+      let H := fresh "H" in
+      let e := fresh "e" in
+      cut (exists z, x = z ++ c);
+        [ intro H; destruct H as [e H]; rewrite H; exists (a :: e); auto | ]
+
   | _ =>
-    eauto
+      eauto
   end.
 
 Ltac imm_tac :=
   repeat progress imm_tac_step.
 
 (* __PROPERTIES__ *)
-
-*)

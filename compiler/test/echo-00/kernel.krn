@@ -1,7 +1,3 @@
-State {
-  val : str;
-}
-
 Components {
   Main "test.py";
 }
@@ -17,7 +13,6 @@ Init {
 Exchange(c) {
   Main {
     M(y) {
-      val := y;
       send(c, M(y));
     }
   }

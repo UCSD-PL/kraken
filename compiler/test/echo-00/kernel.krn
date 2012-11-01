@@ -13,7 +13,6 @@ Init {
 Exchange(c) {
   Main {
     M(y) {
-      val := y;
       send(c, M(y));
     }
   }

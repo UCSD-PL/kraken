@@ -436,7 +436,7 @@ let subs s =
           List.filter (fun m -> not (handled m)) s.msg_decls
         in
         fmt unhandled_msgs (fun m ->
-          let args = String.concat " " (List.map coq_of_typ m.payload) in
+          let args = String.concat " " (mapi (fun i p -> mkstr "%s_%d" (coq_of_typ p) i) m.payload) in
           lcat
             [ mkstr "| VE_%s_%s:" comp m.tag
             ; mkstr "  forall %s %s," args xch_chan

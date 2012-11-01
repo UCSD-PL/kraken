@@ -8,10 +8,10 @@ let kroot =
     failwith "KROOT environment variable not set"
 
 let prog_path p =
-  List.fold_left
-    Filename.concat
-    ""
-    [kroot; "client"; p]
+  if Filename.is_relative p then
+    List.fold_left Filename.concat "" [kroot; "client"; p]
+  else
+    p
 
 (* Forked components need to know which file descriptor to use for
  * communicating with the kernel.

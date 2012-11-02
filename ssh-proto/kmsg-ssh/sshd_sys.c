@@ -26,13 +26,9 @@
 #include <pwd.h>
 #include "key.h"
 #include "authfile.h"
-#include "kraken_msg.h"
+#include "kraken_util.h"
 #include "sshd_mon.h"
 
-int mon_socket;
-int slv_socket;
-
-int msock;
 
 int check_login(char* user, char* passwd) {
   struct passwd *pw;
@@ -154,6 +150,7 @@ void logerror(char* str) {
 
 int load_host_keys() {
   char buf[4084];
+  char* filename = NULL;
   int read_char = 0;
 
   OpenSSL_add_all_algorithms();
@@ -162,10 +159,12 @@ int load_host_keys() {
   if(host_key == NULL) syslog (LOG_ERR, "host_key is NULL");
   public_key = key_demote(host_key);
 
-  FILE* f = fopen(TMP_KEY_FILE, "w");
+  filename = mktemp("sshd_sys_tmpkeyfileXXXXXX");
+
+  FILE* f = fopen(filename, "w");
   if(f == NULL) syslog (LOG_ERR, "tmp file open failed");
   
-  key_write(public_key, f);
+  key_write(filename, f);
   fclose(f);
 
   f = fopen(TMP_KEY_FILE, "r");
@@ -175,12 +174,6 @@ int load_host_keys() {
   public_key_serialized_len = read_char;
   
   return 0;
-}
-
-
-void send_free(msg* m) {
-  send_msg(m);
-  free_msg(m);
 }
 
 void processLoginReq(param* fp) {

@@ -48,7 +48,7 @@
 
 #include <openssl/ecdh.h>
 
-#include "interproc.h"
+#include "kraken_util.h"
 
 extern int msock;
 
@@ -79,6 +79,7 @@ kraken_key_sign(Key *key, u_char **sigp, u_int *lenp, u_char *data, u_int datale
 
 	return (0);
   */
+  /*
   char msg_buf[4096];
   int len = 0;
   write_msg(msock, KEY_SIGN_REQ, data, datalen);
@@ -87,6 +88,28 @@ kraken_key_sign(Key *key, u_char **sigp, u_int *lenp, u_char *data, u_int datale
   *sigp = xmalloc(len);
   memcpy(*sigp, msg_buf, len);  
   return 0;
+  */
+
+  pstr obuf;
+  msg* sm = NULL;
+  char msg_buf[4096];
+
+  obuf.buf = data;
+  obuf.len = datalen;
+
+  send_free(mk_KeysignReq_msg(&obuf));
+  sm = recv_msg();
+  
+  if(sm->mtyp != MTYP_KeysignRes || sm->payload->ptyp != PTYP_STR) {
+    error("check_login_via_monitor:malformed msg is received\n");
+    free_msg(sm);
+    return 0;
+  } else {
+    *lenp = sm->payload->pval.pstr->len;
+    *sigp = xmalloc(*lenp);
+    memcpy(*sigp, sm->payload->pval.pstr->buf, *lenp);
+    return 0;
+  }  
 }
 
 

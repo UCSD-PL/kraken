@@ -140,11 +140,8 @@ int deny_severity;
 
 
 #include <assert.h>
-#include "interproc.h"
 
-
-// krk
-int msock;
+#include "kraken_util.h"
 
 extern char *__progname;
 
@@ -1346,17 +1343,34 @@ void kraken_closefrom(int lowfd, int msock_fd) {
 }
 
 Key* receive_public_key_from_monitor() {
-  Key* key;
-  char msg_buf[4096];
-  int len = 0;
-  write_msg(msock, PUB_KEY_REQ, msg_buf, 0);
-  len = read_msg(msock, PUB_KEY_RES, msg_buf, 4096);
+  Key* key = NULL;
+  pstr obuf;
+  msg* sm = NULL;
 
-  FILE* f = fopen("/home/guest/tmpkey", "w");
-  fwrite(msg_buf, 1, len, f);
+  char msg_buf[4096];
+  char* filename = NULL;
+
+  char* buf = NULL;
+  int buf_len = 0;
+
+  send_free(mk_PubkeyReq_msg());
+  sm = recv_msg();
+  
+  if(sm->mtyp != MTYP_PubkeyRes || sm->payload->ptyp != PTYP_STR) {
+    error("receive_public_key_from_monitor:malformed msg is received\n");
+    free_msg(sm);
+    return 0;
+  }
+
+  buf = sm->payload->pval.pstr->buf;
+  buf_len = sm->payload->pval.pstr->len;
+
+  filename = mktemp("tmpkeyfileXXXXXX");
+  FILE* f = fopen(filename, "w");
+  fwrite(buf, 1, buf_len, f);
   fclose(f);
 
-  key = key_load_public("/home/guest/tmpkey", NULL);
+  key = key_load_public(filename, NULL);
   
   if(key == NULL) {
     fatal("failed to receive public key from the monitor properly");
@@ -1391,13 +1405,8 @@ main(int ac, char **av)
 	fatal("krk-sshd:main():HAVE_SECUREWARE is not supported");
 	(void)set_auth_parameters(ac, av);
 #endif
-	msock = atoi(av[1]);
-	
-	write(msock, 1, 0);
-	//write(msock, 1, 0);
-	//write(msock, 1, 0);
+	KCHAN = atoi(av[1]);	
 
-	//error("msock is initialized:%d", msock);
 	__progname = ssh_get_progname(av[0]);
 
 	// DON:Q: why save all the command arguments here?
@@ -1566,9 +1575,9 @@ main(int ac, char **av)
 	*/
 
 	if (rexeced_flag)
-	        kraken_closefrom(REEXEC_MIN_FREE_FD, msock);
+	        kraken_closefrom(REEXEC_MIN_FREE_FD, KCHAN);
 	else
-	        kraken_closefrom(REEXEC_DEVCRYPTO_RESERVED_FD, msock);
+	        kraken_closefrom(REEXEC_DEVCRYPTO_RESERVED_FD, KCHAN);
 
 	// DON:Q: what does this do?
 	// openbsd-compat/openssl-compat.c

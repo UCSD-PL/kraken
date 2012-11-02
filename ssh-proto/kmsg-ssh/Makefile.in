@@ -77,7 +77,7 @@ SSHOBJS= ssh.o readconf.o clientloop.o sshtty.o \
 	sshconnect.o sshconnect1.o sshconnect2.o mux.o \
 	roaming_common.o roaming_client.o
 
-SSHDOBJS=interproc.o sshd.o auth-rhosts.o auth-passwd.o auth-rsa.o auth-rh-rsa.o \
+SSHDOBJS=kraken_msg.o interproc.o sshd.o auth-rhosts.o auth-passwd.o auth-rsa.o auth-rh-rsa.o \
 	audit.o audit-bsm.o audit-linux.o platform.o \
 	sshpty.o sshlogin.o servconf.o serverloop.o \
 	auth.o auth1.o auth2.o auth-options.o session.o \

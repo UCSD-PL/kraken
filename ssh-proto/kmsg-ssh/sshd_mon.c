@@ -18,7 +18,7 @@
 #include <openssl/rand.h>
 #include "openbsd-compat/openssl-compat.h"
 
-#include "interproc.h"
+#include "kraken_util.h"
 #include "kauth.h"
 
 #include <pwd.h>
@@ -26,216 +26,219 @@
 #include "authfile.h"
 #include "sshd_mon.h"
 
-int mon_socket;
-int slv_socket;
+/*
+(*
+  # slave <-> monitor 
+  LoginReq(str);
+  LoginRes(num);
+
+  PubkeyReq();
+  PubkeyRes(str);
+
+  KeysignReq(str);
+  KeysignRes(str);
+
+  CreatePtyerReq();
+  CreatePtyerRes(fdesc, fdesc);
+*)
+*/
+
+void send_to_sys_free(msg* m) {
+  int old_kchan = KCHAN;
+  KCHAN = sys_socket;
+  send_msg(m);
+  free_msg(m);
+  KCHAN = old_kchan;
+}
+
+void send_to_slv_free(msg* m) {
+  int old_kchan = KCHAN;
+  KCHAN = slv_socket;
+  send_msg(m);
+  free_msg(m);
+  KCHAN = old_kchan;
+}
+
+void processLoginReq(param* fp) {
+  if(fp->ptyp != PTYP_STR) { logerror("mon:loginreq:payload type is unmached"); }
+  send_to_sys_free(mk_SysLoginReq_msg(fp->pval.pstr));
+}
+
+void processPubKeyReq(param* fp) {
+  if(fp != NULL) { logerror("mon:pubkeyreq:payload type is unmached"); }
+  send_to_sys_free(mk_SysPubKeyReq_msg(fp->pval.pstr));
+}
+
+void processKeysignReq(param* fp) {
+  if(fp->ptyp != PTYP_STR) { logerror("mon:keysignreq:payload type is unmached"); }
+  send_to_sys_free(mk_SysKeysignReq_msg(fp->pval.pstr));
+}
+
+void processCreatePtyerReq(param* fp, const char* username) {
+  pstr obuf;
+  if(fp != NULL) { logerror("mon:pubkeyreq:payload type is unmached"); }
+
+  obuf.buf = username;
+  obuf.len = strlen(username);
+
+  send_to_sys_free(mk_SysCreatePtyerReq_msg(&obuf));
+}
+
+int processSysLoginRes(param* fp, char* username) {
+  int result = 0;
+
+  if(fp->ptyp != PTYP_STR || fp->next == NULL || fp->next->ptyp != PTYP_NUM) {
+    logerror("mon:sysloginres:payload type is unmached"); 
+  }
+  memcpy(username, fp->pval.pstr->buf, fp->pval.pstr->len);
+  username[fp->pval.pstr->len] = 0;
+  result = fp->next->pval.num;
+  send_to_slv_free(mk_LoginRes_msg(resul));
+
+  return result;
+}
+
+void processSysPubKeyRes(param* fp) {
+  if(fp->ptyp != PTYP_STR) { logerror("mon:syspubkeyres:payload type is unmached"); }
+  send_to_slv_free(mk_PubkeyRes_msg(fp->pval.pstr));
+}
+
+void processSysKeysignRes(param* fp) {
+  if(fp->ptyp != PTYP_STR) { logerror("mon:syskeysignres:payload type is unmached"); }
+  send_to_slv_free(mk_KeysignRes_msg(fp->pval.pstr));
+}
+
+void processSysCreatePtyerRes(param* fp) {
+  char* buf = NULL;
+  char* tmp = NULL;
+  int ptyer_sock = 0;
+  int master_pty_fd = 0;
+  int slave_pty_fd = 0;
+  char line[1024];
+
+  if(fp->ptyp != PTYP_FD || fp->next == NULL || fp->next->ptyp != PTYP_FD) {
+    logerror("mon:syscreateptyerres:payload type is unmached"); 
+  }
+  send_to_slv_free(mk_CreatePtyerRes_msg(fp->pval.fd, fp->next->pval.fd));
+}
 
 
-int print_file_info(int fd) {
-  struct flock fl;
-  fcntl(fd, F_GETLK, &fl);
+void run_msg_loop(int slv_socket, int sys_socket) {
+  msg* m = NULL;
+  param* fp = NULL;
+
+  fd_set read_fd;
+  struct timeval tv;
+  int retval;
+
+  FD_ZERO(&read_fd);
+  FD_SET(slv_socket, &read_fd);
+  FD_SET(sys_socket, &read_fd);
   
-  printf("type:%d\n",(int)(fl.l_type));
-  printf("whence:%d\n",(int)(fl.l_whence));
-  printf("start:%d\n", (int)(fl.l_start));
-  printf("len:%d\n", (int)(fl.l_len));
-  printf("pid:%d\n", (int)(fl.l_pid));
-  printf("------------------------\n");
+  while(retval = select(2, &read_fd, NULL, NULL, NULL) != -1) {
+    if(FD_ISSET(slv_socket, read_fd)) {
+      KCHAN = slv_socket;
+    } else {
+      KCHAN = sys_socket;
+    }
+    FD_ZERO(&read_fd);
+    FD_SET(slv_socket, &read_fd);
+    FD_SET(sys_socket, &read_fd);
+
+    while(m = recv_msg()) {
+      fp = m->payload;
+      switch(m->mtyp) {
+      // from slave
+      case MTYP_LoginReq:
+        processLoginReq(fp); break;
+
+      case MTYP_PubkeyReq:
+        processPubKeyReq(fp); break;
+        
+      case MTYP_KeysignReq:
+        processKeysignReq(fp); break;
+
+      case MTYP_CreatePtyerReq:
+        processCreatePtyerReq(fp); break;
+
+      // from sys
+      case MTYP_SysLoginRes:
+        login_succeeded = processSysLoginRes(fp, username);
+        break;
+
+      case MTYP_SysPubkeyRes:
+        processSysPubKeyRes(fp); break;
+        
+      case MTYP_SysKeysignRes:
+        processSysKeysignRes(fp); break;
+
+      case MTYP_SysCreatePtyerRes:
+        processSysCreatePtyerRes(fp); break;
+
+        
+      default:
+        break;
+    }
+
+    free_msg(m);
+  }
 }
 
 
-uid_t name_to_uid(char const *name)
-{
-  if (!name)
-    return -1;
-  long const buflen = sysconf(_SC_GETPW_R_SIZE_MAX);
-  if (buflen == -1)
-    return -1;
-  // requires c99
-  char buf[buflen];
-  struct passwd pwbuf, *pwbufp;
-  if (0 != getpwnam_r(name, &pwbuf, buf, buflen, &pwbufp)
-      || !pwbufp)
-    return -1;
-  return pwbufp->pw_uid;
+char* sch_back(const char* str, char c) {
+  if(str == NULL) return NULL;
+
+  char* nstr = (str + strlen(str));
+
+  while(nstr >= str) {
+    if(nstr == c) return nstr;
+    --nstr;
+  }
+
+  return NULL;
 }
 
 
-void execute_ptyer(const char* logged_user, int* afd, char* line, int* amaster, int* aslave) {
-  int pid = 0;
+int exec_component(const char* path, int uid) {
   int fd[2];
+  static const int PSOCKET = 0;
+  static const int CSOCKET = 1;
+  char buf[1024];
+  char filename[1024];
+  char* tptr = NULL;
 
-  int master;
-  int slave;
-  char buf[10][128];
+  tptr = sch_back(path, '/');
+  if(tptr == NULL) filename = path;
+  else strncpy(filename, tptr+1, 1024);
 
   socketpair(PF_UNIX, SOCK_STREAM, 0, fd);
-  if (openpty(&master, &slave, line, NULL, NULL) < 0)  {
-    syslog (LOG_ERR, "Out of ptys");
-    exit (EXIT_FAILURE);
-  }
-
-  // D:this is needed for sshpty.c:208
-  // this operation can be called only by the owner.
-  // so this must be called by the monitor.
-
-  if (ioctl(slave, TIOCSCTTY, NULL) < 0) {
-    syslog (LOG_ERR, "ioctl failed over the slave tty");
-  }
 
   pid = fork();
-
+  
   if (pid < 0) {
     syslog (LOG_ERR, "Out of pid");
     exit(1);
   }
 
   if (pid == 0) {
-    // close all file descriptors
-    close(fd[0]);
-    //printf("ptyer-1\n"); fflush(stdout);
-    sprintf(buf[0], "%d", fd[1]);
-    sprintf(buf[1], "%d", slave); 
-    setuid(name_to_uid(logged_user));
-    execl(PTYER_SLV_PATH, PTYER_SLV_FILE, buf[0], buf[1], line, NULL);
-    syslog (LOG_ERR, "the monitor failed to execute ptyer");
-    exit(1);
+    close(fd[PSOCKET]);
+    sprintf(buf, "%d", fd[CSOCKET]);
+    setuid(uid);
+    execl(path, file, buf, NULL);
   } else {
-    close(fd[1]);
-    *afd = fd[0];
-    // line
-    *amaster = master;
-    *aslave = slave;
-  }  
-}
-
-
-Key* host_key;
-Key* public_key;
-char* public_key_serialized;
-int public_key_serialized_len;
-
-int sshd_monitor_run (pid_t slv_pid) {
-  char msg_buf[4096];
-  char* tmp;
-  int login_failcnt = 0;
-
-  char logged_user[128];
-  int login_succeeded = 0;
-  int regenerated;
-
-  int ptyer_sock;
-  char line[1024];
-  int master_pty_fd;
-  int slave_pty_fd;
-  int read_char = 0;
-
-  char* sig;
-  int sig_len;
-
-  logged_user[0] = 0;
-
-  while(1) {
-    read_char = read_msg_id(mon_socket);
-    if(read_char < 0) {
-      syslog (LOG_ERR, "sshd_mon has a broken socket :%d", mon_socket);
-      break;
-    }
-    
-    syslog (LOG_ERR, "read_char:%d", read_char);
-
-    switch (read_char) {
-    case LOGIN_REQ:
-      if(login_failcnt > 2) {
-	syslog (LOG_ERR, "slave(%d) issued LOGIN_REQ more than 3 times -- killed", slv_pid);
-	kill(slv_pid, SIGKILL);
-	continue;
-      }
-      ++login_failcnt;
-      read_param(mon_socket, msg_buf, 4096);
-      tmp = strchr(msg_buf, '|');
-      tmp[0] = 0; ++tmp;
-      strncpy(logged_user, msg_buf, strlen(msg_buf) + 1);
-      login_succeeded = !check_login(msg_buf, tmp);
-      syslog (LOG_ERR, "LOGIN_REQ is received:msg_buf:%s, result:%d", msg_buf, login_succeeded);
-      msg_buf[0] = login_succeeded;
-      msg_buf[1] = 0;
-      write_msg(mon_socket, LOGIN_RES, msg_buf, 1);
-      break;
-
-    case REGENERATE_REQ:
-      if (login_succeeded != 1) break;      
-      read_param(mon_socket, msg_buf, 4096);
-      execute_ptyer(logged_user, &ptyer_sock, line, &master_pty_fd, &slave_pty_fd);
-      // have to send ptyer_sock(fd) and master_pty_fd(fd) to slave.
-      // sleep(2) is to prevent a race condition from happening.
-      sleep(2);
-      _sendfd(mon_socket, ptyer_sock);
-      close(ptyer_sock);
-      _sendfd(mon_socket, master_pty_fd);
-      _sendfd(mon_socket, slave_pty_fd);
-      break;
-
-    case PUB_KEY_REQ:
-      read_param(mon_socket, msg_buf, 4096);
-      write_msg(mon_socket, PUB_KEY_RES, public_key_serialized, public_key_serialized_len);
-      break;
-
-    case KEY_SIGN_REQ:
-      read_char = read_param(mon_socket, msg_buf, 4096);      
-      ssh_rsa_sign2(host_key, &sig, &sig_len, msg_buf, read_char);
-      write_msg(mon_socket, KEY_SIGN_RES, sig, sig_len);
-      break;
-
-    default :
-      syslog (LOG_ERR, "something strange is read:%d", read_char);
-    }
+    close(fd[CSOCKET]);
+    return fd[PSOCKET];
   }
 }
 
-
-int load_host_keys() {
-  char buf[4084];
-  int read_char = 0;
-
-  OpenSSL_add_all_algorithms();
-  host_key = key_load_private(SSH_HOST_RSA_KEY, "", NULL);
-
-  if(host_key == NULL) syslog (LOG_ERR, "host_key is NULL");
-  public_key = key_demote(host_key);
-
-  FILE* f = fopen(TMP_KEY_FILE, "w");
-  if(f == NULL) syslog (LOG_ERR, "tmp file open failed");
-  
-  key_write(public_key, f);
-  fclose(f);
-
-  f = fopen(TMP_KEY_FILE, "r");
-  read_char = fread(buf, 1, 4084, f);
-  public_key_serialized = (char*)malloc(read_char * sizeof(char));
-  memcpy(public_key_serialized, buf, read_char);
-  public_key_serialized_len = read_char;
-  
-  return 0;
-}
-
-
 int main (int argc, char **argv) {
-  int index;
+  int slave_fd = 0;
+  int sys_fd = 0;
 
-  pid_t pid; 
-  int fd[2];
-  static const int PSOCKET = 0;
-  static const int CSOCKET = 1;
-  char buf[1024];
-  char nargvs[6][256];
-  char* tmp_ptr;
-  char** nargv;
+  slv_socket = exec_component(SSH_SLV_PATH);
+  sys_socket = exec_component(SSH_SYS_PATH);
 
   socketpair(PF_UNIX, SOCK_STREAM, 0, fd);
-
-  char val = 0;
-
-  load_host_keys();
 
   pid = fork();
   
@@ -250,6 +253,9 @@ int main (int argc, char **argv) {
     setuid(SLAVE_UID);
     execl(SSH_SLV_PATH, SSH_SLV_FILE, buf, NULL);
   } else {
+
+    
+    
     close(fd[CSOCKET]);
     mon_socket = fd[PSOCKET];
     slv_socket = -1;

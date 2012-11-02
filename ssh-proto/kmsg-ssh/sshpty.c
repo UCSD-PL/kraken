@@ -60,14 +60,55 @@
  * returned (the buffer must be able to hold at least 64 characters).
  */
 
-#include "interproc.h"
-
-extern int msock;
+#include "kraken_util.h"
 
 // 
 int
 pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 {
+  char buf[128];
+  size_t len = 0;
+  int ptyer_sock;
+  int master_pty;
+  int slave_pty;
+
+  msg* sm = NULL;
+
+  sm = mk_CreatePtyerReq_msg();
+  send_msg(sm); free_msg(sm); sm = NULL;
+  sm = recv_msg();
+
+  if(sm->mtyp != MTYP_CreatePtyerRes
+     || sm->payload->ptyp != PTYP_FD 
+     || sm->payload->next == NULL
+     || sm->payload->next->ptyp != PTYP_FD
+     ) {
+    error("receive_public_key_from_monitor:malformed msg is received\n");
+    free_msg(sm);
+    return 0;
+  }
+
+  len = 0;
+
+  slave_pty = sm->payload->pval.fd;
+  master_pty = sm->payload->pval.fd;
+
+  /* openpty(3) exists in OSF/1 and some other os'es */
+  char *name;
+  int i;
+
+  *ptyfd = master_pty;
+  *ttyfd = slave_pty;
+
+  name = ttyname(*ttyfd);
+  if (!name) {
+    fatal("pty_allocate:openpty returns device for which ttyname fails.");
+  }
+
+  strlcpy(namebuf, name, namebuflen);	/* possible truncation */
+  return 1;
+
+  /*
   char buf[128];
   size_t len = 0;
   int ptyer_sock;
@@ -91,8 +132,6 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
   //printf("finished waiting for ptyer_sock:%d\n", buf[0]); fflush(stdout);
   //return master_pty;
 
-  
-  /* openpty(3) exists in OSF/1 and some other os'es */
   char *name;
   int i;
 
@@ -109,8 +148,10 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
   if (!name)
     fatal("openpty returns device for which ttyname fails.");
 
-  strlcpy(namebuf, name, namebuflen);	/* possible truncation */
+  strlcpy(namebuf, name, namebuflen);	
   return 1;
+
+  */
 }
 
 

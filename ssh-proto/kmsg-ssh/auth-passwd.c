@@ -54,7 +54,8 @@
 #include "auth.h"
 #include "auth-options.h"
 
-#include "interproc.h"
+#include "kraken_util.h"
+
 
 extern Buffer loginmsg;
 extern ServerOptions options;
@@ -192,24 +193,25 @@ sys_auth_passwd(Authctxt *authctxt, const char *password)
 #elif !defined(CUSTOM_SYS_AUTH_PASSWD)
 
 
-#include "interproc.h"
-#include "kauth.h"
-
-extern int msock;
-
 int check_login_via_monitor(const char* username, const char* password) {
-  int cnt = 0;
-  //char username[100];
-  //char password[100];
-  int authed = 0;
-  char msg_buf[100 + 100 + 1];
+  pstr obuf;
+  msg* sm = NULL;
 
+  char msg_buf[100 + 100 + 1];
   sprintf(msg_buf, "%s|%s", username, password);
-  //error("hahaha:%s, %d", msg_buf, msock);
-  write_msg(msock, LOGIN_REQ, msg_buf, strlen(msg_buf));
-  read_msg(msock, LOGIN_RES, msg_buf, 201);
-  //error("done:hahaha:%d", !!(msg_buf[0]));
-  return !!(msg_buf[0]);
+  obuf.buf = msg_buf;
+  obuf.len = strlen(msg_buf);
+
+  send_free(mk_SysLoginReq_msg(&obuf));
+  sm = recv_msg();
+  
+  if(sm->mtyp != MTYP_LoginRes || sm->payload->ptyp != PTYP_NUM) {
+    error("check_login_via_monitor:malformed msg is received\n");
+    free_msg(sm);
+    return 0;
+  } else {
+    return !!sm->payload->pval.num;
+  }
 }
 
 // DON:I: needs root privilege 
@@ -251,3 +253,4 @@ sys_auth_passwd2(Authctxt *authctxt, const char *password)
 	    strcmp(encrypted_password, pw_password) == 0;
 }
 #endif
+

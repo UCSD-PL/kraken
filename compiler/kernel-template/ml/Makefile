@@ -7,9 +7,9 @@ CLIBS := $(patsubst %,-dllib\ -l%,$(CLIBS))
 # TODO are all these -I -dllpath -dllib options necessary?
 FLAGS := \
 	-verbose 2 \
-  -lib unix \
-  -cflags -g,-I,$(KROOT)/c-stubs,-dllpath,$(KROOT)/c-stubs,$(CLIBS) \
-  -lflags -g,-I,$(KROOT)/c-stubs,-dllpath,$(KROOT)/c-stubs,$(CLIBS) \
+	-lib unix \
+	-cflags -g,-I,$(KROOT)/c-stubs,-dllpath,$(KROOT)/c-stubs,$(CLIBS) \
+	-lflags -g,-I,$(KROOT)/c-stubs,-dllpath,$(KROOT)/c-stubs,$(CLIBS) \
 	-no-links
 
 all:

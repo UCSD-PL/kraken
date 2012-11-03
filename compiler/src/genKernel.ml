@@ -363,39 +363,6 @@ let coq_of_init k =
         (lkup_st_fields pacc.sstate k)
     ]
 
-let coq_of_prop (name, prop) : string =
-  match prop with
-  | ImmAfter (bef, aft) ->
-      mkstr "
-Theorem %s :
-  forall chan msg,
-  valid_msg msg ->
-  ImmAfter
-    (%s)
-    (%s).
-Proof.
-  unfold ImmAfter; induction 2; simpl; intros; imm_tac.
-Qed.
-" name bef aft
-  | ImmBefore (bef, aft) ->
-      mkstr "
-Theorem %s :
-  forall chan msg,
-  valid_msg msg ->
-  ImmBefore
-    (%s)
-    (%s).
-Proof.
-  unfold ImmBefore; induction 2; simpl; intros; imm_tac.
-Qed.
-" name bef aft
-
-(*
-  let kstate_vars =
-    s.var_decls |> List.map fst |> String.concat " "
-  in
-*)
-
 let subs s =
   let (xch_chan, exchanges) = s.exchange in
   List.map (fun (f, r) ->
@@ -504,6 +471,4 @@ let subs s =
       (fields_in_comps_fr s)
       comp_xch
       (fmt s.var_decls (fun (id,typ) -> (mkstr "%s " id))))
-  ; "PROPERTIES",
-      fmt s.props coq_of_prop
   ]

@@ -125,6 +125,8 @@ $EXEC $INDIR/kernel.krn \
   --instance message "$D/coq/Message.v" \
   --template kernel  "$D/coq/Kernel.v-template" \
   --instance kernel  "$D/coq/Kernel.v" \
+  --template kprop   "$D/coq/KProp.v-template" \
+  --instance kprop   "$D/coq/KProp.v" \
   --template pylib   "$D/client/msg.py-template" \
   --instance pylib   "$D/client/msg.py" \
   --template clib-h  "$D/client/msg.h-template" \

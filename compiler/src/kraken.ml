@@ -9,7 +9,7 @@ Usage: kraken [options] input.krn
 
 Compile a Kraken kernel spec to Coq code and proofs and client libraries.
 
-In options below X \\in {message, kernel, pylib, clib-h, clib-c}.
+In options below X \\in {message, kernel, kprop, pylib, clib-h, clib-c}.
 
 OPTIONS:
 
@@ -17,21 +17,24 @@ OPTIONS:
   --template X FILE      read template for X from FILE
   --instance X FILE      write instatiation of X to FILE
 
-A template and instance for message and kernel must be provided. Libraries are
-optional and will only be produced if their respective template and instance
-options are provided. A template should always be provided with a corresponding
-instance and vice versa.
+A template and instance for message, kernel, and kprop must be provided.
+Libraries are optional and will only be produced if their respective template
+and instance options are provided. A template should always be provided with a
+corresponding instance and vice versa.
 
 EXAMPLE:
 
 To compile kernel.krn using message template/instatiation of MT.v/M.v and kernel
-template/instantiation of KT.v/K.v, while producing no client library code, run:
+template/instantiation of KT.v/K.v and kprop template/instantiation of PT.v/P.v,
+while producing no client library code, run:
 
   kraken \\
     --template message MT.v \\
     --instance message M.v  \\
     --template kernel  KT.v \\
     --instance kernel  K.v  \\
+    --template kprop   PT.v \\
+    --instance kprop   P.v  \\
     kernel.krn
 
 !!! You probably hit a bug in the kraken.sh driver script.
@@ -55,7 +58,7 @@ let flag_is_set f =
   List.mem_assoc f !flags
 
 let valid_catg = function
-  | "message" | "kernel" | "pylib" | "clib-h" | "clib-c" -> true
+  | "message" | "kernel" | "kprop" | "pylib" | "clib-h" | "clib-c" -> true
   | _ -> false
 
 let parse_args () =
@@ -98,11 +101,12 @@ let parse_args () =
   else begin
     loop args;
     (* ensure required args are set *)
-    ignore (get_flag "input");
-    ignore (get_flag "t-message");
-    ignore (get_flag "i-message");
-    ignore (get_flag "t-kernel");
-    ignore (get_flag "i-kernel")
+    List.iter (fun x -> ignore (get_flag x))
+      [ "input"
+      ; "t-message" ; "i-message"
+      ; "t-kernel"  ; "i-kernel"
+      ; "t-kprop"   ; "i-kprop"
+      ]
   end
 
 let parse_kernel f =
@@ -121,11 +125,14 @@ let instantiate catg (subs : (Str.regexp * string) list) =
 let main () =
   parse_args ();
   let k = parse_kernel (get_flag "input") in
-  instantiate "message" (GenMessage.subs k);
-  instantiate "kernel"  (GenKernel.subs k);
-  instantiate "pylib"   (GenPyLib.subs k);
-  instantiate "clib-h"  (GenCLib.subs_h k);
-  instantiate "clib-c"  (GenCLib.subs_c k)
+  List.iter (uncurry instantiate)
+    [ "message" , GenMessage.subs k
+    ; "kernel"  , GenKernel.subs k
+    ; "kprop"   , GenKProp.subs k
+    ; "pylib"   , GenPyLib.subs k
+    ; "clib-h"  , GenCLib.subs_h k
+    ; "clib-c"  , GenCLib.subs_c k
+    ]
 
 let _ =
   main ()

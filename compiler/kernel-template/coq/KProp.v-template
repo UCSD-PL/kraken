@@ -105,18 +105,6 @@ Inductive MsgMatch : MsgPat -> msg -> Prop :=
 (* __MSGMATCH_CASES__ *)
 .
 
-(*
-Inductive MsgPat : Set :=
-| MP_M : MsgPat.
-.
-
-Inductive MsgMatch : MsgPat -> msg -> Prop :=
-| MM_M :
-  forall s,
-  MsgMatch MP_M (M s)
-.
-*)
-
 (* constrain chan in send / recv patterns *)
 Inductive KActionPat : Set :=
 | KAP_KSend : MsgPat -> KActionPat

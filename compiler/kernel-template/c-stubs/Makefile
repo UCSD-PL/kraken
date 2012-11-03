@@ -2,14 +2,13 @@ include ../Makefile.config
 
 FILES := $(wildcard *.c)
 
-all: $(FILES:.c=.cma)
+all: $(FILES:.c=.so)
 
-%.cma: %.c
-	$(CC) -I $(OCAMLH) -c $*.c
-	$(AR) rcs lib$*.a $*.o
-	$(OCAMLC) -a -o $*.cma -custom -cclib -l$*
- 
+%.so: %.c
+	$(CC) -I $(OCAMLH) -fpic -c $*.c
+	$(CC) -shared -Wl,-soname,lib$*.so -o dll$*.so $*.o
+
 clean:
-	rm -f *.cma *.a *.o
+	rm -f *.o *.so
 
 .PHONY: all clean

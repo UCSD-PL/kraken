@@ -28,12 +28,6 @@ let coq_of_msg_decl m =
       |> String.concat ""
       |> mkstr "%smsg")
 
-(* 255 becomes the string (Num ("000", "001")) *)
-let num_of_int i =
-  let l = i mod 256 in
-  let h = i / 256 in
-  mkstr "(Num (\"%03d\", \"%03d\"))" l h
-
 let coq_trace_recv_msg tag_map m =
   let hdr =
     mkstr "| %s %s =>" m.tag (coq_of_args m)
@@ -51,7 +45,7 @@ let coq_trace_recv_msg tag_map m =
   in
   let tag =
     mkstr "RecvNum c %s"
-      (num_of_int (List.assoc m.tag tag_map))
+      (coq_num_of_int (List.assoc m.tag tag_map))
   in
   lcat [hdr; pay; tag]
 
@@ -73,7 +67,7 @@ let coq_trace_send_msg tag_map m =
   in
   let tag =
     mkstr "SendNum c %s"
-      (num_of_int (List.assoc m.tag tag_map))
+      (coq_num_of_int (List.assoc m.tag tag_map))
   in
   lcat [hdr; pay; tag]
 
@@ -81,7 +75,7 @@ let coq_trace_send_msg tag_map m =
 let coq_recv_msg tag_map m =
   let hdr =
     mkstr "| %s => (* %s *)"
-      (num_of_int (List.assoc m.tag tag_map)) m.tag
+      (coq_num_of_int (List.assoc m.tag tag_map)) m.tag
   in
   let pay =
     let aux (i, code, tr) t =
@@ -93,7 +87,7 @@ let coq_recv_msg tag_map m =
     in
     let tr =
       mkstr "RecvNum c %s ++ tr"
-        (num_of_int (List.assoc m.tag tag_map))
+        (coq_num_of_int (List.assoc m.tag tag_map))
     in
     m.payload
       |> List.fold_left aux (0, [], tr)
@@ -111,7 +105,7 @@ let coq_recv_msg tag_map m =
 let coq_send_msg tag_map m =
   let hdr = lcat
     [ mkstr "| %s %s =>" m.tag (coq_of_args m)
-    ; mkstr "send_num c %s tr;;" (num_of_int (List.assoc m.tag tag_map))
+    ; mkstr "send_num c %s tr;;" (coq_num_of_int (List.assoc m.tag tag_map))
     ]
   in
   let pay =
@@ -124,7 +118,7 @@ let coq_send_msg tag_map m =
     in
     let tr =
       mkstr "SendNum c %s ++ tr"
-        (num_of_int (List.assoc m.tag tag_map))
+        (coq_num_of_int (List.assoc m.tag tag_map))
     in
     m.payload
       |> List.fold_left aux (0, [], tr)

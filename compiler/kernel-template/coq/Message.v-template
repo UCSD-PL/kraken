@@ -11,7 +11,7 @@ Open Local Scope stsepi_scope.
 Definition str : Set := list ascii.
 
 (* /!\ Making this a flat pair leads to problems in later proofs. *)
-Inductive num : Set := Num (_ : (ascii * ascii)%type).
+Inductive num : Set := Num : ascii * ascii -> num.
 
 Lemma nat_of_ascii_bound: forall x, nat_of_ascii x < 256.
 Proof.
@@ -32,9 +32,9 @@ Definition num_of_nat (n : nat) : num :=
 Lemma num_nat_embedding :
   forall (n : num), num_of_nat (nat_of_num n) = n.
 Proof with try discriminate.
-  destruct n; simpl.
+  destruct n as [[l h]]; simpl.
   unfold num_of_nat, nat_of_num.
-  destruct p as [l h]. repeat f_equal.
+  repeat f_equal.
   rewrite mod_add... rewrite mod_small. now rewrite ascii_nat_embedding.
   apply nat_of_ascii_bound.
   rewrite div_add... rewrite div_small. simpl. now rewrite ascii_nat_embedding.

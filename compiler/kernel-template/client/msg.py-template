@@ -25,7 +25,7 @@ def recv_fd():
   return f
 
 def send_num(n):
-  s = struct.pack('>B', n)
+  s = struct.pack('>H', n)
   KCHAN.send(s)
 
 def send_str(s):

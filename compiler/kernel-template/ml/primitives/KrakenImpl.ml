@@ -1,5 +1,7 @@
-let int_of_num n =
-  Char.code (MlCoq.char_of_ascii n)
+let int_of_num = function Datatypes.Coq_pair(l, h) ->
+  let l = Char.code (MlCoq.char_of_ascii l) in
+  let h = Char.code (MlCoq.char_of_ascii h) in
+  l + h * 256
 
 let kroot =
   try

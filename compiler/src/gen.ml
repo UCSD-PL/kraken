@@ -21,9 +21,15 @@ let coq_of_typ = function
   | Fdesc -> "fdesc"
   | Chan  -> "tchan"
 
+(* 255 becomes the string (Num ("000", "001")) *)
+let coq_num_of_int i =
+  let l = i mod 256 in
+  let h = i / 256 in
+  mkstr "(Num (\"%03d\", \"%03d\"))" l h
+
 let rec coq_of_expr = function
   | Var id -> id
-  | NumLit i -> mkstr "(Num \"%03d\")" i
+  | NumLit i -> coq_num_of_int i
   | StrLit s -> mkstr "(str_of_string \"%s\")" s
   | Plus (a, b) ->
     mkstr "(num_of_nat ((nat_of_num (%s)) + (nat_of_num (%s))))"

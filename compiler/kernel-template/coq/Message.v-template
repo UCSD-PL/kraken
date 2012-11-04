@@ -149,12 +149,12 @@ Definition recv_num:
         (fun (n : num) => tr ~~ traced (RecvNum c n ++ tr) * bound c).
 Proof.
   intros; refine (
-    s <- recv c (Num ("002", zero)) tr;
+    s <- recv c (Num ("002", "000")) tr;
     match s with
     | h :: l :: nil =>
       {{ Return (Num (l, h)) }}
     | _ => (* bogus *)
-      {{ Return (Num (zero, zero)) }}
+      {{ Return (Num ("000", "000")) }}
     end
   );
   sep fail auto;
@@ -252,7 +252,7 @@ Definition SendMsg (c : tchan) (m : msg) : Trace :=
 (* __SEND_T_CASES__ *)
   (* special case for errors *)
   | BadTag p0 =>
-    SendNum c (Num (zero, zero))
+    SendNum c (Num ("000", "000"))
   end.
 
 Definition recv_msg :
@@ -284,7 +284,7 @@ Proof.
 (* __SEND_CASES__ *)
     (* special case for errors *)
     | BadTag _ =>
-      send_num c (Num (zero, zero)) tr;;
+      send_num c (Num ("000", "000")) tr;;
       {{ Return tt }}
     end
   );

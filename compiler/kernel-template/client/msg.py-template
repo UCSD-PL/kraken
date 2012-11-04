@@ -10,9 +10,9 @@ def init():
   KCHAN = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
 
 def recv_num():
-  s = KCHAN.recv(1)
-  n = struct.unpack('>B', s)[0]
-  return n
+  h = struct.unpack('>B', KCHAN.recv(1))[0]
+  l = struct.unpack('>B', KCHAN.recv(1))[0]
+  return (h * 256 + l)
 
 def recv_str():
   n = recv_num()

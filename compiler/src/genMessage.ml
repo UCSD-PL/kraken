@@ -28,7 +28,7 @@ let coq_of_msg_decl m =
       |> String.concat ""
       |> mkstr "%smsg")
 
-(* 255 becomes the string (Num "000" "001") *)
+(* 255 becomes the string (Num ("000", "001")) *)
 let num_of_int i =
   let l = i mod 256 in
   let h = i / 256 in

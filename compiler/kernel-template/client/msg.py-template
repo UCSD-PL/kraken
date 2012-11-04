@@ -10,8 +10,8 @@ def init():
   KCHAN = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
 
 def recv_num():
-  s = KCHAN.recv(1)
-  n = struct.unpack('>B', s)[0]
+  s = KCHAN.recv(2)
+  n = struct.unpack('>H', s)[0]
   return n
 
 def recv_str():
@@ -25,7 +25,7 @@ def recv_fd():
   return f
 
 def send_num(n):
-  s = struct.pack('>B', n)
+  s = struct.pack('>H', n)
   KCHAN.send(s)
 
 def send_str(s):

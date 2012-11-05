@@ -204,6 +204,11 @@ Ltac ktm_step ctac :=
     replace (ka :: kt) with ((ka :: nil) ++ kt) by auto
   | [ |- KTraceMatch (KTP_Star (KTP_NegClass _)) (?ka :: ?kt) ] =>
     replace (ka :: kt) with ((ka :: nil) ++ kt) by auto
+
+  (* These cases either succeed or leave the goal unmodified.
+   * They're designed this way because they could leave a goal
+   * unsolvable otherwise
+   *)
   | [ |- KTraceMatch (KTP_Alt _ _) _] =>
     (apply KTM_Alt_l; ctac; fail) ||
     (apply KTM_Alt_r; ctac; fail) ||
@@ -215,6 +220,8 @@ Ltac ktm_step ctac :=
   | [ |- KTraceMatch (KTP_Star _) (?ka :: ?kt) ] =>
     (replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac; fail) ||
     auto
+
+  (* default - try constructors based on the shape of trace to match *)
   | _ =>
     econstructor; eauto; intros
   end.

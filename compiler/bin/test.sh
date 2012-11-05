@@ -26,7 +26,7 @@ date > $D/timestamp.txt
 for t in $TEST/*; do
   NAME=$(basename $t)
   LOG=$D/$NAME-log
-  printf "%-15s" $NAME
+  printf "%-20s" $NAME
   $KBIN/kraken.sh $t --outdir $D --build > $LOG 2>&1
   if [ $? -eq 0 ]; then
     echo $PASS

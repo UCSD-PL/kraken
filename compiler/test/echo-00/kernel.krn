@@ -1,5 +1,5 @@
 Components {
-  Main "test.py";
+  Test "test.py";
 }
 
 Messages {
@@ -7,11 +7,11 @@ Messages {
 }
 
 Init {
-  spawn(Main);
+  spawn(Test);
 }
 
 Exchange(c) {
-  Main {
+  Test {
     M(y) {
       send(c, M(y));
     }

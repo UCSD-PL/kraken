@@ -1,5 +1,6 @@
 Require Import Ascii.
 Require Import List.
+Require Import NPeano.
 Require Import String.
 Require Import Ynot.
 
@@ -9,23 +10,35 @@ Open Local Scope stsepi_scope.
 
 Definition str : Set := list ascii.
 
-Inductive num : Set :=
-| Num : ascii -> num.
+(* /!\ Making this a flat pair leads to problems in later proofs. *)
+Inductive num : Set := Num : ascii * ascii -> num.
+
+Lemma nat_of_ascii_bound: forall x, nat_of_ascii x < 256.
+Proof.
+  destruct x.
+  repeat (match goal with [b : bool |- _] => destruct b end); compute; omega.
+Qed.
 
 Definition nat_of_num (n : num) : nat :=
   match n with
-    | Num a1 => nat_of_ascii a1
+  | Num (l, h) => nat_of_ascii l + nat_of_ascii h * 256
   end.
 
 Definition num_of_nat (n : nat) : num :=
-  Num (ascii_of_nat n).
+  let l := n mod 256 in
+  let h := n / 256 in
+  Num (ascii_of_nat l, ascii_of_nat h).
 
 Lemma num_nat_embedding :
   forall (n : num), num_of_nat (nat_of_num n) = n.
-Proof.
-  destruct n; simpl.
+Proof with try discriminate.
+  destruct n as [[l h]]; simpl.
   unfold num_of_nat, nat_of_num.
-  rewrite ascii_nat_embedding; auto.
+  repeat f_equal.
+  rewrite mod_add... rewrite mod_small. now rewrite ascii_nat_embedding.
+  apply nat_of_ascii_bound.
+  rewrite div_add... rewrite div_small. simpl. now rewrite ascii_nat_embedding.
+  apply nat_of_ascii_bound.
 Qed.
 
 (* prevent sep tactic from unfolding *)
@@ -127,7 +140,7 @@ Axiom send_fd :
 
 Definition RecvNum (c : tchan) (n : num) : Trace :=
   match n with
-  | Num a1 => Recv c (a1 :: nil) :: nil
+  | Num (l, h) => Recv c (h :: l :: nil) :: nil
   end.
 
 Definition recv_num:
@@ -136,22 +149,21 @@ Definition recv_num:
         (fun (n : num) => tr ~~ traced (RecvNum c n ++ tr) * bound c).
 Proof.
   intros; refine (
-    s <- recv c (Num "001") tr;
+    s <- recv c (Num ("002", "000")) tr;
     match s with
-    | a1 :: nil =>
-      {{ Return (Num a1) }}
+    | h :: l :: nil =>
+      {{ Return (Num (l, h)) }}
     | _ => (* bogus *)
-      {{ Return (Num zero) }}
+      {{ Return (Num ("000", "000")) }}
     end
   );
-  sep fail auto.
-  compute in H; discriminate.
+  sep fail auto;
   compute in H; discriminate.
 Qed.
 
 Definition SendNum (c : tchan) (n : num) : Trace :=
   match n with
-  | Num a1 => Send c (a1 :: nil) :: nil
+  | Num (l, h) => Send c (h :: l :: nil) :: nil
   end.
 
 Definition send_num:
@@ -161,8 +173,8 @@ Definition send_num:
 Proof.
   intros; refine (
     match n with
-    | Num a1 =>
-      send c (a1 :: nil) tr;;
+    | Num (l, h) =>
+      send c (h :: l :: nil) tr;;
       {{ Return tt }}
     end
   );
@@ -240,7 +252,7 @@ Definition SendMsg (c : tchan) (m : msg) : Trace :=
 (* __SEND_T_CASES__ *)
   (* special case for errors *)
   | BadTag p0 =>
-    SendNum c (Num "000")
+    SendNum c (Num ("000", "000"))
   end.
 
 Definition recv_msg :
@@ -272,7 +284,7 @@ Proof.
 (* __SEND_CASES__ *)
     (* special case for errors *)
     | BadTag _ =>
-      send_num c (Num "000") tr;;
+      send_num c (Num ("000", "000")) tr;;
       {{ Return tt }}
     end
   );

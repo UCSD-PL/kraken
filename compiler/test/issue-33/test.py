@@ -6,5 +6,7 @@ def main():
   msg.init()
   m = msg.recv()
   print(m)
+  while True:
+    pass
 
 main()

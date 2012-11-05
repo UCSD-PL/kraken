@@ -206,20 +206,23 @@ Ltac ktm_step ctac :=
     replace (ka :: kt) with ((ka :: nil) ++ kt) by auto
 
   (* These cases either succeed or leave the goal unmodified.
-   * They're designed this way because they could leave a goal
-   * unsolvable otherwise
+   * This is to avoid unsolvable goals which can arise if we
+   * fall through to apply econstructor.
    *)
   | [ |- KTraceMatch (KTP_Alt _ _) _] =>
-    (apply KTM_Alt_l; ctac; fail) ||
-    (apply KTM_Alt_r; ctac; fail) ||
-    auto
+    solve
+      [ apply KTM_Alt_l; ctac
+      | apply KTM_Alt_r; ctac
+      ] || auto (* don't fall through *)
   | [ |- KTraceMatch (KTP_Cat _ _) (?ka :: ?kt) ] =>
-    (rewrite app_comm_cons; ctac; fail) ||
-    (replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac; fail) ||
-    auto
+    solve
+      [ rewrite app_comm_cons; ctac
+      | replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
+      ] || auto (* don't fall through *)
   | [ |- KTraceMatch (KTP_Star _) (?ka :: ?kt) ] =>
-    (replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac; fail) ||
-    auto
+    solve
+      [ replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
+      ] || auto (* don't fall through *)
 
   (* default - try constructors based on the shape of trace to match *)
   | _ =>

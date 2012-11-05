@@ -12,10 +12,11 @@
 %}
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
-%token NUM STR FDESC CHAN CALL SEND SPAWN WHEN
+%token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
 %token EQ EQUALITY COMMA SEMI COLON ASSIGN PLUS
-%token IMMAFTER IMMBEFORE
-%token LCURL RCURL LPAREN RPAREN EOF
+%token IMMAFTER IMMBEFORE MATCH
+%token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
+%token KTP_NEG KTP_DOT KTP_ALT KTP_OPT KTP_STAR
 
 %right PLUS
 
@@ -214,4 +215,87 @@ prop :
     { ImmAfter ($3, $6) }
   | IMMBEFORE LCURL STRLIT RCURL LCURL STRLIT RCURL
     { ImmBefore ($3, $6) }
+  | MATCH LCURL ktrace_pat RCURL
+    { KTracePat $3 }
+;;
+
+kap :
+  | SEND ID { KAP_KSend $2 }
+  | RECV ID { KAP_KRecv $2 }
+;;
+
+kaps :
+  | kap            { $1 :: [] }
+  | kap COMMA kaps { $1 :: $3 }
+;;
+
+kaction_pats :
+  | /* empty */  { KTP_Class    [] }
+  | kaps         { KTP_Class    $1 }
+  | KTP_NEG      { KTP_NegClass [] }
+  | KTP_NEG kaps { KTP_NegClass $2 }
+;;
+
+/* TODO
+
+Resolve conflicts w/ associativity and precedence annotations.
+
+This is how I would like to write ktrace_pat.
+
+%right    KTP_ALT
+%right    KTP_CAT
+%nonassoc KTP_OPT KTP_STAR
+
+ktrace_pat :
+  | LSQUARE kaction_pats RSQUARE
+    { $1 }
+  | KTP_DOT
+    { KTP_NegClass [] }
+  | ktrace_pat ktrace_pat %prec KTP_CAT
+    { KTP_Cat ($1, $2) }
+  | ktrace_pat KTP_ALT ktrace_pat
+    { KTP_Alt ($1, $3) }
+  | ktrace_pat KTP_STAR
+    { KTP_Star $1 }
+  | ktrace_pat KTP_OPT
+    { KTP_Alt (KTP_Empty, $1) }
+;;
+
+*/
+
+ktp_0 :
+  | LSQUARE kaction_pats RSQUARE
+    { $2 }
+  | KTP_DOT
+    { KTP_NegClass [] }
+  | LPAREN ktrace_pat RPAREN
+    { $2 }
+;;
+
+ktp_1 :
+  | ktp_0
+    { $1 }
+  | ktp_0 KTP_STAR
+    { KTP_Star $1 }
+  | ktp_0 KTP_OPT
+    { KTP_Alt (KTP_Empty, $1) }
+;;
+
+ktp_2 :
+  | ktp_1
+    { $1 }
+  | ktp_1 ktp_2
+    { KTP_Cat ($1, $2) }
+;;
+
+ktp_3 :
+  | ktp_2
+    { $1 }
+  | ktp_2 KTP_ALT ktp_3
+    { KTP_Alt ($1, $3) }
+;;
+
+ktrace_pat :
+  | ktp_3
+    { $1 }
 ;;

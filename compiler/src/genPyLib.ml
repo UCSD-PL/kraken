@@ -20,7 +20,7 @@ let py_recv_msg tag_map m =
       |> List.map (fun t -> mkstr "%s()" (py_recv_typ t))
       |> String.concat ", "
   in
-  mkstr "%d : lambda _ : ['%s', %s],"
+  mkstr "%d : lambda : ['%s', %s],"
     (List.assoc m.tag tag_map) m.tag args
 
 let py_send_msg tag_map m =
@@ -29,7 +29,7 @@ let py_send_msg tag_map m =
       |> mapi (fun i t -> mkstr "%s(m[%d])" (py_send_typ t) (i + 1))
       |> String.concat ", "
   in
-  mkstr "'%s' : lambda _ : [send_num(%d), %s],"
+  mkstr "'%s' : lambda : [send_num(%d), %s],"
     m.tag (List.assoc m.tag tag_map) args
 
 let subs k =

@@ -36,23 +36,16 @@ let string_of_fd fd =
  * LOGGING
  *)
 
-let _PID =
-  Unix.getpid ()
-
 let _LOG =
-  let name =
-    Printf.sprintf "KERNEL-%d-log" _PID in
-  let path =
-    List.fold_left Filename.concat "" [kroot; "log", name] in
-  open_out path
+  open_out (
+    List.fold_left Filename.concat ""
+      [kroot; "log"; "KERNEL-log"])
 
 let log msg =
   output_string _LOG
-    (Printf.sprintf "%f - %d - %s - KERNEL\n"
-      (Unix.time ()) _PID msg)
-
-let _ =
-  atexit (fun _ -> close_out _LOG)
+    (Printf.sprintf "%15s @ %f || %s\n"
+      "KERNEL" (Unix.gettimeofday ()) msg);
+  flush _LOG
 
 (*
  * PRIMITIVES
@@ -79,6 +72,8 @@ let exec t prog _ =
   end
   | cpid -> (* parent *) begin
       Unix.close c;
+      log (Printf.sprintf "exec : %s -> (p: %d, c: %d)"
+            prog (int_of_fd p) (int_of_fd c));
       Specif.Coq_existT(t, p)
   end
 
@@ -95,43 +90,65 @@ let call prog arg _ =
   end
   | cpid -> (* parent *) begin
       Unix.close w;
+      log (Printf.sprintf "call : %s %s -> (r: %d, w: %d)"
+            prog arg (int_of_fd r) (int_of_fd w));
       r (* TODO who closes r ? *)
   end
 
 let select chans _ =
+  let fds =
+    List.map chan_of_tchan chans in
   let r, _, _ =
     Unix.handle_unix_error (fun _ ->
-      Unix.select (List.map chan_of_tchan chans) [] [] (-1.0)) ()
-  in
+      Unix.select fds [] [] (-1.0)) () in
   let fd = List.hd r in
+  log (Printf.sprintf "select : %s -> %d"
+        (String.concat " " (List.map string_of_fd fds))
+        (int_of_fd fd));
   List.find (fun (Specif.Coq_existT(_, c)) -> c = fd) chans
 
 let recv c n _ =
+  let fd = chan_of_tchan c in
   let n = int_of_num n in
   let s = String.make n (Char.chr 0) in
   let r = 
     Unix.handle_unix_error (fun _ ->
-      Unix.recv (chan_of_tchan c) s 0 n []) ()
+      Unix.recv fd s 0 n []) ()
   in
   if r <> n then
     failwith "recv - wrong # of bytes"
-  else
+  else begin
+    log (Printf.sprintf "recv : %d %d -> \"%s\""
+          (int_of_fd fd) n (String.escaped s));
     MlCoq.str_of_string s
+  end
 
 let send c s _ =
+  let fd = chan_of_tchan c in
   let s = MlCoq.string_of_str s in
   let n = String.length s in
   let w =
     Unix.handle_unix_error (fun _ ->
-      Unix.send (chan_of_tchan c) s 0 n []) ()
+      Unix.send fd s 0 n []) ()
   in
   if w <> n then
     failwith "send - wrong # of bytes"
-  else
+  else begin
+    log (Printf.sprintf "send : %d \"%s\" -> ()"
+          (int_of_fd fd) (String.escaped s));
     ()
+  end
 
 external recv_fd_native : chan -> fdesc = "recv_fd_native"
-let recv_fd (Specif.Coq_existT(_, c)) _ = recv_fd_native c
+let recv_fd (Specif.Coq_existT(_, c)) _ =
+  let fd = recv_fd_native c in
+  log (Printf.sprintf "recv_fd : %d -> %d"
+        (int_of_fd c) (int_of_fd fd));
+  fd
 
 external send_fd_native : chan -> fdesc -> unit = "send_fd_native"
-let send_fd (Specif.Coq_existT(_, c)) fd _ = send_fd_native c fd
+let send_fd (Specif.Coq_existT(_, c)) fd _ =
+  send_fd_native c fd;
+  log (Printf.sprintf "send_fd : %d %d -> ()"
+        (int_of_fd c) (int_of_fd fd));
+  ()

@@ -3,37 +3,30 @@
 import socket, os, os.path, sys, re, time
 import struct, passfd, atexit
 
+FD    = None
 KCHAN = None
 PROG  = None
-PID   = None
 LOG   = None
 
 def init():
-  global KCHAN, PROG, PID, LOG
+  global FD, KCHAN, PROG, LOG
 
   # set up communication with kernel
-  fd = int(sys.argv[1])
-  KCHAN = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+  FD = int(sys.argv[1])
+  KCHAN = socket.fromfd(FD, socket.AF_UNIX, socket.SOCK_STREAM)
 
   # set up logging
   PROG = os.path.basename(sys.argv[0])
-  PID  = os.getpid()
-  path = os.path.join(os.environ['KROOT'], 'log', '%s-%d-log' % (PROG, PID))
+  path = os.path.join(os.environ['KROOT'], 'log', '%s-%d-log' % (PROG, FD))
   LOG  = open(path, 'w')
 
 # tear down at exit
-atexit.register(lambda _: KCHAN.close())
-atexit.register(lambda _: LOG.close())
-
-#def _atexit():
-#  global KCHAN, LOG
-#  KCHAN.close()
-#  LOG.close()
-
-atexit.register(_atexit)
+atexit.register(lambda: KCHAN.close())
+atexit.register(lambda: LOG.close())
 
 def log(msg):
-  LOG.write('%f - %d - %s - %s\n' % (time.time(), PID, msg, PROG))
+  LOG.write('%15s @ %f || %s\n' %
+      ('%s(%d)' % (PROG, FD), time.time(), msg))
 
 def recv_num():
   s = KCHAN.recv(2)
@@ -78,7 +71,7 @@ def recv():
   tag = recv_num()
   m = {
 __RECV_CASES__
-  }[tag](0)
+  }[tag]()
   log('recv : %s' % msg_str(m))
   return m
 
@@ -86,5 +79,5 @@ def send(*m):
   tag = m[0]
   {
 __SEND_CASES__
-  }[tag](0)
+  }[tag]()
   log('send : %s' % msg_str(m))

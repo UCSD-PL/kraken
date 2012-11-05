@@ -194,10 +194,17 @@ Definition KTP_NegSingle (kap : KActionPat) : KTracePat :=
 
 Ltac ktm_step ctac :=
   match goal with
-  | [ H: KTraceMatch (KTP_Alt _ _) _ |- _ ] => inv H
-  | [ H: KTraceMatch (KTP_Cat _ _) _ |- _ ] => inv H
+  (* take useful hypotheses apart *)
+  | [ H: KTraceMatch KTP_Empty _        |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Class _) _    |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_NegClass _) _ |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Alt _ _) _    |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Cat _ _) _    |- _ ] => inv H
   | [ H: (@In KActionPat ?kap (_ :: _)) |- _ ] => inv H
-  | [ H: False |- _ ] => contradiction
+
+  (* massage or solve goals arising from class / negclass *)
+  | [ H: False |- _ ] =>
+    contradiction
   | [ |- ~ KActionMatch _ _ ] =>
     let H := fresh in intro H; inv H
   | [ |- KTraceMatch (KTP_Star (KTP_Class _)) (?ka :: ?kt) ] =>

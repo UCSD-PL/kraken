@@ -1,5 +1,5 @@
 State {
-  counter : num;
+  n : num;
 }
 
 Components {
@@ -7,28 +7,23 @@ Components {
 }
 
 Messages {
-  ReqCounterValue();
-  CurCounterValue(num);
+  ReqN();
+  CurN(num);
 }
 
 Init {
-  counter := 0;
+  n := 0;
   spawn(Main);
 }
 
 Exchange(c) {
   Main {
-    ReqCounterValue() when (counter == 5) {
-      counter := counter + 1;
-      send(c, CurCounterValue(0));
-    }
-    {
-      counter := counter + 1;
-      send(c, CurCounterValue(counter));
-    }
-
-    # ignore
-    CurCounterValue(n) {
+    ReqN() when (n == 5) {
+      n := n + 1;
+      send(c, CurN(0));
+    }{
+      n := n + 1;
+      send(c, CurN(n));
     }
   }
 }

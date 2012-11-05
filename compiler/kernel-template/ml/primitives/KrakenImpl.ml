@@ -33,6 +33,28 @@ let string_of_fd fd =
   string_of_int (int_of_fd fd)
 
 (*
+ * LOGGING
+ *)
+
+let _PID =
+  Unix.getpid ()
+
+let _LOG =
+  let name =
+    Printf.sprintf "KERNEL-%d-log" _PID in
+  let path =
+    List.fold_left Filename.concat "" [kroot; "log", name] in
+  open_out path
+
+let log msg =
+  output_string _LOG
+    (Printf.sprintf "%f - %d - %s - KERNEL\n"
+      (Unix.time ()) _PID msg)
+
+let _ =
+  atexit (fun _ -> close_out _LOG)
+
+(*
  * PRIMITIVES
  *)
 

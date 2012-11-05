@@ -10,21 +10,25 @@ LOG   = None
 
 def init():
   global KCHAN, PROG, PID, LOG
+
+  # set up communication with kernel
   fd = int(sys.argv[1])
   KCHAN = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
 
+  # set up logging
   PROG = os.path.basename(sys.argv[0])
-  PID = os.getpid()
-  l = os.path.join( os.environ['KROOT']
-                  , 'log'
-                  , '%s-%d-log' % (PROG, PID)
-                  )
-  LOG = open(l, 'w')
+  PID  = os.getpid()
+  path = os.path.join(os.environ['KROOT'], 'log', '%s-%d-log' % (PROG, PID))
+  LOG  = open(path, 'w')
 
-def _atexit():
-  global KCHAN, LOG
-  KCHAN.close()
-  LOG.close()
+# tear down at exit
+atexit.register(lambda _: KCHAN.close())
+atexit.register(lambda _: LOG.close())
+
+#def _atexit():
+#  global KCHAN, LOG
+#  KCHAN.close()
+#  LOG.close()
 
 atexit.register(_atexit)
 

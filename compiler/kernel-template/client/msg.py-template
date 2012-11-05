@@ -1,13 +1,32 @@
 #!/usr/bin/env python
 
-import socket, struct, passfd, os, sys
+import socket, os, os.path, sys, re, time
+import struct, passfd, atexit
 
+FD    = None
 KCHAN = None
+PROG  = None
+LOG   = None
 
 def init():
-  global KCHAN
-  fd = int(sys.argv[1])
-  KCHAN = socket.fromfd(fd, socket.AF_UNIX, socket.SOCK_STREAM)
+  global FD, KCHAN, PROG, LOG
+
+  # set up communication with kernel
+  FD = int(sys.argv[1])
+  KCHAN = socket.fromfd(FD, socket.AF_UNIX, socket.SOCK_STREAM)
+
+  # set up logging
+  PROG = os.path.basename(sys.argv[0])
+  path = os.path.join(os.environ['KROOT'], 'log', '%s-%d-log' % (PROG, FD))
+  LOG  = open(path, 'w')
+
+# tear down at exit
+atexit.register(lambda: KCHAN.close())
+atexit.register(lambda: LOG.close())
+
+def log(msg):
+  LOG.write('%15s @ %f || %s\n' %
+      ('%s(%d)' % (PROG, FD), time.time(), msg))
 
 def recv_num():
   s = KCHAN.recv(2)
@@ -36,14 +55,29 @@ def send_fd(f):
   fd = f.fileno()
   passfd.sendfd(KCHAN, fd)
 
+def msg_str(m):
+  def param_str(p):
+    if isinstance(p, int):
+      return '%d' % p
+    elif isinstance(p, str):
+      return '"%s"' % re.escape(p)
+    else:
+      # assume fd
+      return 'fd(%d)' % p.fileno()
+  params = ", ".join(map(param_str, m[1:]))
+  return '%s(%s)' % (m[0], params)
+
 def recv():
   tag = recv_num()
-  return {
+  m = {
 __RECV_CASES__
-  }[tag](0)
+  }[tag]()
+  log('recv : %s' % msg_str(m))
+  return m
 
 def send(*m):
   tag = m[0]
   {
 __SEND_CASES__
-  }[tag](0)
+  }[tag]()
+  log('send : %s' % msg_str(m))

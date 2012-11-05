@@ -23,14 +23,20 @@ echo "Output written to $D (symlinked /tmp/kraken-test-last)"
 
 date > $D/timestamp.txt
 
+T0=$(date +%s)
 for t in $TEST/*; do
   NAME=$(basename $t)
   LOG=$D/$NAME-log
   printf "%-20s" $NAME
+  t0=$(date +%s)
   $KBIN/kraken.sh $t --outdir $D --build > $LOG 2>&1
   if [ $? -eq 0 ]; then
-    echo $PASS
+    echo -n $PASS
   else
-    echo $FAIL
+    echo -n $FAIL
   fi
+  tn=$(date +%s)
+  printf "%4s%3d\n" "" $(($tn - $t0))
 done
+TN=$(date +%s)
+printf "\nTotal time : %3d\n" $(($TN - $T0))

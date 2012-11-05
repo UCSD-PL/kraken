@@ -10,7 +10,7 @@ main(int argc, char **argv) {
   pstr *ps1, *ps2;
   char *s;
   int i;
-  
+
   msg_init(argv[1]);
   ps1 = pstr_of_string("Hello world!");
   ps2 = mk_pstr(4, "\x00\x01\x02\x03");

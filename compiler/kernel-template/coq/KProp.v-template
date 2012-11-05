@@ -210,19 +210,19 @@ Ltac ktm_step ctac :=
    * fall through to apply econstructor.
    *)
   | [ |- KTraceMatch (KTP_Alt _ _) _] =>
-    solve
+    try solve
       [ apply KTM_Alt_l; ctac
       | apply KTM_Alt_r; ctac
-      ] || auto (* don't fall through *)
+      ]
   | [ |- KTraceMatch (KTP_Cat _ _) (?ka :: ?kt) ] =>
-    solve
+    try solve
       [ rewrite app_comm_cons; ctac
       | replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
-      ] || auto (* don't fall through *)
+      ]
   | [ |- KTraceMatch (KTP_Star _) (?ka :: ?kt) ] =>
-    solve
+    try solve
       [ replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
-      ] || auto (* don't fall through *)
+      ]
 
   (* default - try constructors based on the shape of trace to match *)
   | _ =>

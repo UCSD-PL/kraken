@@ -1,5 +1,5 @@
 State {
-  curtab : num;
+  count : num;
 }
 
 Components {
@@ -7,24 +7,20 @@ Components {
 }
 
 Messages {
-  ReqCurTab();
-  CurTab(num);
+  ReqCount();
+  Count(num);
 }
 
 Init {
-  curtab := 0;
+  count := 0;
   spawn(Main);
 }
 
 Exchange(c) {
   Main {
-    ReqCurTab() {
-      curtab := curtab + 1;
-      send(c, CurTab(curtab));
-    }
-
-    # ignore
-    CurTab(n) {
+    ReqCount() {
+      count := count + 1;
+      send(c, Count(count));
     }
   }
 }

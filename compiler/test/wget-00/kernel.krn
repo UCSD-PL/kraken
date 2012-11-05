@@ -21,8 +21,5 @@ Exchange(c) {
       f := call(WGET, url);
       send(c, HTML(url, f));
     }
-
-    HTML(url, html) {
-    }
   }
 }

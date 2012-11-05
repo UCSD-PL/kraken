@@ -31,4 +31,29 @@ Properties {
     ImmBefore
       { "KRecv chan msg :: nil" }
       { "KSend chan msg :: nil" };
+
+  Any =
+    Match {
+      .*
+    };
+
+  Any2 =
+    Match {
+     .*.*
+    };
+
+  AnyOrAny =
+    Match {
+     .*|.*
+    };
+
+  AnyDisguise =
+    Match {
+      ([^send M]|[^recv M])*
+    };
+
+  NoSendTillRecv =
+    Match {
+      [^send M]*|.*[recv M][^send M]*
+    };
 }

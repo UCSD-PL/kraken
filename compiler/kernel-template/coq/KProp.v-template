@@ -28,6 +28,8 @@ Ltac uninhabit_step :=
   | [ H: [_]%inhabited = [_]%inhabited |- _ ] =>
     apply pack_injective in H;
     rewrite -> H in * || rewrite <- H in *
+  | [ IH: forall ktr, [?ktr']%inhabited = [ktr]%inhabited -> _ |- _ ] =>
+    specialize (IH ktr' (refl_equal _))
   end.
 
 Ltac uninhabit :=
@@ -190,23 +192,45 @@ Definition KTP_Single (kap : KActionPat) : KTracePat :=
 Definition KTP_NegSingle (kap : KActionPat) : KTracePat :=
   KTP_NegClass (kap :: nil).
 
-Ltac ktm_step :=
+Ltac ktm_step ctac :=
   match goal with
+  | [ H: KTraceMatch (KTP_Alt _ _) _ |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Cat _ _) _ |- _ ] => inv H
+  | [ H: (@In KActionPat ?kap (_ :: _)) |- _ ] => inv H
+  | [ H: False |- _ ] => contradiction
+  | [ |- ~ KActionMatch _ _ ] =>
+    let H := fresh in intro H; inv H
   | [ |- KTraceMatch (KTP_Star (KTP_Class _)) (?ka :: ?kt) ] =>
     replace (ka :: kt) with ((ka :: nil) ++ kt) by auto
   | [ |- KTraceMatch (KTP_Star (KTP_NegClass _)) (?ka :: ?kt) ] =>
     replace (ka :: kt) with ((ka :: nil) ++ kt) by auto
-  | [ H: In ?kap (_ :: _) |- ~ KActionMatch ?kap _ ] =>
-    inv H; try contradiction
-  | [ |- ~ KActionMatch _ _ ] =>
-    let H := fresh in
-    intro H; inv H
+
+  (* These cases either succeed or leave the goal unmodified.
+   * This is to avoid unsolvable goals which can arise if we
+   * fall through to apply econstructor.
+   *)
+  | [ |- KTraceMatch (KTP_Alt _ _) _] =>
+    try solve
+      [ apply KTM_Alt_l; ctac
+      | apply KTM_Alt_r; ctac
+      ]
+  | [ |- KTraceMatch (KTP_Cat _ _) (?ka :: ?kt) ] =>
+    try solve
+      [ rewrite app_comm_cons; ctac
+      | replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
+      ]
+  | [ |- KTraceMatch (KTP_Star _) (?ka :: ?kt) ] =>
+    try solve
+      [ replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
+      ]
+
+  (* default - try constructors based on the shape of trace to match *)
   | _ =>
     econstructor; eauto; intros
   end.
 
 Ltac ktm :=
   unfold KTP_AnyStar, KTP_Any, KTP_Single, KTP_NegSingle in *;
-  repeat ktm_step.
+  repeat ktm_step ktm.
 
 (* __PROPERTIES__ *)

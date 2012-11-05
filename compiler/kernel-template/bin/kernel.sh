@@ -4,7 +4,7 @@ export KROOT="__KROOT__"
 export PYTHONPATH="$PYTHONPATH:$KROOT/lib/python2.7/site-packages"
 
 # remove old logs
-rm $KROOT/log/*-log
+rm -f $KROOT/log/*-log
 
 EXEC="$KROOT/bin/.Main"
 if [ "$1" = "--debug" ]; then

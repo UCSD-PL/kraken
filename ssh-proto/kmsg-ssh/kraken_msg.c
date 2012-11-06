@@ -628,3 +628,8 @@ send_msg(msg *m) {
   send_num(m->mtyp);
   send_params(m->payload);
 }
+
+void send_free(msg* m) {
+  send_msg(m);
+  free_msg(m);
+}

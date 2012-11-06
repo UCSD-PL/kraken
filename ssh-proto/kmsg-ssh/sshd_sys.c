@@ -88,6 +88,18 @@ uid_t name_to_uid(char const *name)
   return pwbufp->pw_uid;
 }
 
+char* sch_back(const char* str, char c) {
+  if(str == NULL) return NULL;
+
+  char* nstr = (str + strlen(str));
+
+  while(nstr >= str) {
+    if(nstr == c) return nstr;
+    --nstr;
+  }
+  return NULL;
+}
+
 
 void execute_ptyer(const char* logged_user, int* afd, char* line, int* amaster, int* aslave) {
   int pid = 0;
@@ -96,6 +108,14 @@ void execute_ptyer(const char* logged_user, int* afd, char* line, int* amaster, 
   int master;
   int slave;
   char buf[10][128];
+  char filename[1024];
+  char* tptr = NULL;
+  const char* path = PTYER_SLV_PATH;
+
+  tptr = sch_back(path, '/');
+  if(tptr == NULL) strncpy(filename, path, 1024);
+  else strncpy(filename, tptr+1, 1024);
+
 
   socketpair(PF_UNIX, SOCK_STREAM, 0, fd);
   if (openpty(&master, &slave, line, NULL, NULL) < 0)  {
@@ -125,7 +145,7 @@ void execute_ptyer(const char* logged_user, int* afd, char* line, int* amaster, 
     sprintf(buf[0], "%d", fd[1]);
     sprintf(buf[1], "%d", slave); 
     setuid(name_to_uid(logged_user));
-    execl(PTYER_SLV_PATH, PTYER_SLV_FILE, buf[0], buf[1], line, NULL);
+    execl(PTYER_SLV_PATH, filename, buf[0], buf[1], line, NULL);
     syslog (LOG_ERR, "the monitor failed to execute ptyer");
     exit(1);
   } else {

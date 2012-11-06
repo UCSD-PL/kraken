@@ -22,3 +22,54 @@ Exchange(c) {
     }
   }
 }
+
+Properties {
+  AlwaysResponds =
+    ImmAfter {
+      "KRecv chan msg :: nil"
+    }{
+      "KSend chan msg :: nil"
+    };
+
+  OnlyResponds =
+    ImmBefore {
+      "KRecv chan msg :: nil"
+    }{
+      "KSend chan msg :: nil"
+    };
+
+  Any =
+    Match {
+      .*
+    };
+
+  Any2 =
+    Match {
+     .*.*
+    };
+
+  AnyOrAny =
+    Match {
+     .*|.*
+    };
+
+  MaybeOneOrAny =
+    Match {
+      .?|.*
+    };
+
+  AnyDisguise =
+    Match {
+      ([^send M1, send M2]|[^recv M1, recv M2])*
+    };
+
+  NoSendTillRecv =
+    Match {
+      [^send M1, send M2]*|.*[recv M1, recv M2][^send M1, send M2]*
+    };
+
+  DonTest =
+    Match {
+      (.*[recv M1, recv M2])?[^send M1, send M2]*
+    };
+}

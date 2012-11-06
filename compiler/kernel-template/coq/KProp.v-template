@@ -136,11 +136,14 @@ Inductive KTracePat : Set :=
 Inductive KTraceMatch : KTracePat -> KTrace -> Prop :=
 | KTM_Empty :
   KTraceMatch KTP_Empty nil
-| KTM_Class :
-  forall class kap a,
-  In kap class ->
+| KTM_Class_h :
+  forall kap kaps a,
   KActionMatch kap a ->
-  KTraceMatch (KTP_Class class) (a :: nil)
+  KTraceMatch (KTP_Class (kap :: kaps)) (a :: nil)
+| KTM_Class_t :
+  forall kap kaps a,
+  KTraceMatch (KTP_Class kaps) (a :: nil) ->
+  KTraceMatch (KTP_Class (kap :: kaps)) (a :: nil)
 | KTM_NegClass :
   forall class a,
   (forall kap, In kap class -> ~ KActionMatch kap a) ->
@@ -164,6 +167,17 @@ Inductive KTraceMatch : KTracePat -> KTrace -> Prop :=
   KTraceMatch (KTP_Star p) t2 ->
   KTraceMatch (KTP_Star p) (t1 ++ t2)
 .
+
+Lemma KTM_Class :
+  forall kap kaps a,
+  In kap kaps ->
+  KActionMatch kap a ->
+  KTraceMatch (KTP_Class kaps) (a :: nil).
+Proof.
+  induction kaps; simpl; intros; inv H.
+  apply KTM_Class_h; auto.
+  apply KTM_Class_t; auto.
+Qed.
 
 Definition KTP_Any : KTracePat :=
   KTP_NegClass nil.
@@ -192,19 +206,140 @@ Definition KTP_Single (kap : KActionPat) : KTracePat :=
 Definition KTP_NegSingle (kap : KActionPat) : KTracePat :=
   KTP_NegClass (kap :: nil).
 
+Lemma cat_empty :
+  forall p tr,
+  KTraceMatch p tr ->
+  KTraceMatch (KTP_Cat KTP_Empty p) tr.
+Proof.
+  intros. replace tr with (nil ++ tr) by auto.
+  econstructor; eauto. econstructor; eauto.
+Qed.
+
+Definition KTP_Equiv (p1 p2 : KTracePat) : Prop :=
+  forall tr, KTraceMatch p1 tr <-> KTraceMatch p2 tr.
+
+Lemma alt_equiv_l :
+  forall p1a p1b p2,
+  KTP_Equiv p1a p1b ->
+  KTP_Equiv
+    (KTP_Alt p1a p2)
+    (KTP_Alt p1b p2).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H0.
+    apply H in H4. apply KTM_Alt_l; auto.
+    apply KTM_Alt_r; auto.
+  inv H0.
+    apply H in H4. apply KTM_Alt_l; auto.
+    apply KTM_Alt_r; auto.
+Qed.
+
+Lemma alt_equiv_r :
+  forall p1 p2a p2b,
+  KTP_Equiv p2a p2b ->
+  KTP_Equiv
+    (KTP_Alt p1 p2a)
+    (KTP_Alt p1 p2b).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H0.
+    apply KTM_Alt_l; auto.
+    apply H in H4. apply KTM_Alt_r; auto.
+  inv H0.
+    apply KTM_Alt_l; auto.
+    apply H in H4. apply KTM_Alt_r; auto.
+Qed.
+
+Lemma cat_equiv_l :
+  forall p1a p1b p2,
+  KTP_Equiv p1a p1b ->
+  KTP_Equiv
+    (KTP_Cat p1a p2)
+    (KTP_Cat p1b p2).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H0. apply H in H3. econstructor; eauto.
+  inv H0. apply H in H3. econstructor; eauto.
+Qed.
+
+Lemma cat_equiv_r :
+  forall p1 p2a p2b,
+  KTP_Equiv p2a p2b ->
+  KTP_Equiv
+    (KTP_Cat p1 p2a)
+    (KTP_Cat p1 p2b).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H0. apply H in H5. econstructor; eauto.
+  inv H0. apply H in H5. econstructor; eauto.
+Qed.
+
+Lemma alt_swap :
+  forall p1 p2,
+  KTP_Equiv
+    (KTP_Alt p1 p2)
+    (KTP_Alt p2 p1).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H.
+    apply KTM_Alt_r; auto.
+    apply KTM_Alt_l; auto.
+  inv H.
+    apply KTM_Alt_r; auto.
+    apply KTM_Alt_l; auto.
+Qed.
+
+Lemma distr_cat_alt_l :
+  forall p1 p2 p3,
+  KTP_Equiv
+    (KTP_Cat (KTP_Alt p1 p2) p3)
+    (KTP_Alt (KTP_Cat p1 p3) (KTP_Cat p2 p3)).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H. inv H2.
+    apply KTM_Alt_l. econstructor; eauto.
+    apply KTM_Alt_r. econstructor; eauto.
+  inv H; inv H3.
+    econstructor; eauto. apply KTM_Alt_l; auto.
+    econstructor; eauto. apply KTM_Alt_r; auto.
+Qed.
+
+Lemma distr_cat_alt_r :
+  forall p1 p2 p3,
+  KTP_Equiv
+    (KTP_Cat p1 (KTP_Alt p2 p3))
+    (KTP_Alt (KTP_Cat p1 p2) (KTP_Cat p1 p3)).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H. inv H4.
+    apply KTM_Alt_l. econstructor; eauto.
+    apply KTM_Alt_r. econstructor; eauto.
+  inv H; inv H3.
+    econstructor; eauto. apply KTM_Alt_l; auto.
+    econstructor; eauto. apply KTM_Alt_r; auto.
+Qed.
+
 Ltac ktm_step ctac :=
   match goal with
+  (* accept gifts from our ancestors *)
+  | _ =>
+    assumption || discriminate || contradiction
+
   (* take useful hypotheses apart *)
   | [ H: KTraceMatch KTP_Empty _        |- _ ] => inv H
   | [ H: KTraceMatch (KTP_Class _) _    |- _ ] => inv H
   | [ H: KTraceMatch (KTP_NegClass _) _ |- _ ] => inv H
   | [ H: KTraceMatch (KTP_Alt _ _) _    |- _ ] => inv H
   | [ H: KTraceMatch (KTP_Cat _ _) _    |- _ ] => inv H
-  | [ H: (@In KActionPat ?kap (_ :: _)) |- _ ] => inv H
+  | [ H: (@In KActionPat _ _)           |- _ ] => inv H
+  | [ H: _ \/ _                         |- _ ] => inv H
 
-  (* massage or solve goals arising from class / negclass *)
-  | [ H: False |- _ ] =>
-    contradiction
+  (* canonicalize *)
+  | [ |- KTraceMatch (KTP_Cat KTP_Empty _)     _ ] => apply cat_empty
+  | [ |- KTraceMatch (KTP_Cat (KTP_Alt _ _) _) _ ] => apply distr_cat_alt_l
+  | [ |- KTraceMatch (KTP_Cat _ (KTP_Alt _ _)) _ ] => apply distr_cat_alt_r
+
+  (* massage class / negclass goals *)
   | [ |- ~ KActionMatch _ _ ] =>
     let H := fresh in intro H; inv H
   | [ |- KTraceMatch (KTP_Star (KTP_Class _)) (?ka :: ?kt) ] =>
@@ -216,6 +351,11 @@ Ltac ktm_step ctac :=
    * This is to avoid unsolvable goals which can arise if we
    * fall through to apply econstructor.
    *)
+  | [ |- KTraceMatch (KTP_Class _) (_ :: nil) ] =>
+    try solve
+      [ apply KTM_Class_h; ctac
+      | apply KTM_Class_t; ctac
+      ]
   | [ |- KTraceMatch (KTP_Alt _ _) _] =>
     try solve
       [ apply KTM_Alt_l; ctac
@@ -231,7 +371,7 @@ Ltac ktm_step ctac :=
       [ replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
       ]
 
-  (* default - try constructors based on the shape of trace to match *)
+  (* try constructors based on shape of trace to match *)
   | _ =>
     econstructor; eauto; intros
   end.

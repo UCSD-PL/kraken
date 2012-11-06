@@ -202,7 +202,7 @@ int check_login_via_monitor(const char* username, const char* password) {
   obuf.buf = msg_buf;
   obuf.len = strlen(msg_buf);
 
-  send_free(mk_SysLoginReq_msg(&obuf));
+  send_free(mk_LoginReq_msg(&obuf));
   sm = recv_msg();
   
   if(sm->mtyp != MTYP_LoginRes || sm->payload->ptyp != PTYP_NUM) {

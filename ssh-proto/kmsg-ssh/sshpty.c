@@ -38,6 +38,8 @@
 #include "log.h"
 #include "misc.h"
 
+#include <syslog.h>
+
 #ifdef HAVE_PTY_H
 # include <pty.h>
 #endif
@@ -74,15 +76,19 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 
   msg* sm = NULL;
 
+  syslog (LOG_ERR, "sshd sends a pty create request");
   sm = mk_CreatePtyerReq_msg();
-  kraken_send_msg(sm); free_msg(sm); sm = NULL;
+  kraken_send_msg(sm); free_msg(sm); 
+  syslog (LOG_ERR, "sshd sent a pty create request");
   sm = recv_msg();
+  syslog (LOG_ERR, "a new msg is received");
 
   if(sm->mtyp != MTYP_CreatePtyerRes
      || sm->payload->ptyp != PTYP_FD 
      || sm->payload->next == NULL
      || sm->payload->next->ptyp != PTYP_FD
      ) {
+    syslog (LOG_ERR, "receive_public_key_from_monitor:malformed msg is received");
     error("receive_public_key_from_monitor:malformed msg is received\n");
     free_msg(sm);
     return 0;
@@ -91,7 +97,9 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
   len = 0;
 
   slave_pty = sm->payload->pval.fd;
-  master_pty = sm->payload->pval.fd;
+  master_pty = sm->payload->next->pval.fd;
+
+  syslog (LOG_ERR, "receives pty fds:%d, %d", slave_pty, master_pty);
 
   /* openpty(3) exists in OSF/1 and some other os'es */
   char *name;
@@ -102,6 +110,7 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
 
   name = ttyname(*ttyfd);
   if (!name) {
+    syslog (LOG_ERR, "pty_allocate:openpty returns device for which ttyname fails.");
     fatal("pty_allocate:openpty returns device for which ttyname fails.");
   }
 

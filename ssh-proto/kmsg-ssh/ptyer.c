@@ -9,6 +9,9 @@
 #include <string.h>
 #include <syslog.h>
 
+#include <unistd.h>
+#include <sys/types.h>
+
 int msock;
 int ssock;
 int slave_pty;
@@ -58,7 +61,8 @@ int startslave ()
 int main(int argc, char** argv) {
   ssock = atoi(argv[1]);
   slave_pty = atoi(argv[2]);
-  syslog (LOG_ERR, "ptyer started:%d:%d\n", ssock, slave_pty); fflush(stdout);
+  syslog (LOG_ERR, "ptyer started:%d:%d, uid:%d\n", ssock, slave_pty, getuid()); fflush(stdout);
+  //sleep(15);
   line = argv[3];
   startslave();
   return 0;

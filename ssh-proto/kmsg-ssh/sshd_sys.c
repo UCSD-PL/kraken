@@ -116,19 +116,10 @@ void execute_ptyer(const char* logged_user, int* afd, char* line, int* amaster, 
   if(tptr == NULL) strncpy(filename, path, 1024);
   else strncpy(filename, tptr+1, 1024);
 
-
   socketpair(PF_UNIX, SOCK_STREAM, 0, fd);
   if (openpty(&master, &slave, line, NULL, NULL) < 0)  {
     syslog (LOG_ERR, "Out of ptys");
     exit (EXIT_FAILURE);
-  }
-
-  // D:this is needed for sshpty.c:208
-  // this operation can be called only by the owner.
-  // so this must be called by the monitor.
-
-  if (ioctl(slave, TIOCSCTTY, NULL) < 0) {
-    syslog (LOG_ERR, "ioctl failed over the slave tty");
   }
 
   pid = fork();
@@ -140,6 +131,18 @@ void execute_ptyer(const char* logged_user, int* afd, char* line, int* amaster, 
 
   if (pid == 0) {
     // close all file descriptors
+    // D:this is needed for sshpty.c:208
+    // this operation can be called only by the owner.
+    // so this must be called by the monitor.
+    //ioctl(slave, TIOCNOTTY, NULL);
+    if (setsid() < 0) {
+      syslog (LOG_ERR, "setsid failed");
+    }
+    //if (ioctl(slave, TIOCSCTTY, NULL) < 0) {
+    if (ioctl(slave, TIOCSCTTY, NULL) < 0) {
+      syslog (LOG_ERR, "ioctl failed over the slave tty:%s, %s", strerror(errno), line);
+    }
+
     close(fd[0]);
     //printf("ptyer-1\n"); fflush(stdout);
     sprintf(buf[0], "%d", fd[1]);

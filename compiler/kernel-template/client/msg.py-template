@@ -18,15 +18,16 @@ def init():
   # set up logging
   PROG = os.path.basename(sys.argv[0])
   path = os.path.join(os.environ['KROOT'], 'log', '%s-%d-log' % (PROG, FD))
-  LOG  = open(path, 'w')
+  LOG  = open(path, 'w', 0) # unbuffered
 
 # tear down at exit
 atexit.register(lambda: KCHAN.close())
 atexit.register(lambda: LOG.close())
 
 def log(msg):
+  # FD - 1 should be the kernel's pipe for this component
   LOG.write('%15s @ %f || %s\n' %
-      ('%s(%d)' % (PROG, FD), time.time(), msg))
+      ('%s(%d)' % (PROG, FD - 1), time.time(), msg))
 
 def recv_num():
   s = KCHAN.recv(2)
@@ -60,7 +61,9 @@ def msg_str(m):
     if isinstance(p, int):
       return '%d' % p
     elif isinstance(p, str):
-      return '"%s"' % re.escape(p)
+      p = re.escape(p)
+      p = p.replace('\n', '\\n')
+      return '"%s"' % p
     else:
       # assume fd
       return 'fd(%d)' % p.fileno()

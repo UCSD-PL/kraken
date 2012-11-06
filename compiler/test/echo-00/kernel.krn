@@ -62,4 +62,9 @@ Properties {
     Match {
       [^send M]*|.*[recv M][^send M]*
     };
+
+  DonTest =
+    Match {
+      (.*[recv M])?[^send M]*
+    };
 }

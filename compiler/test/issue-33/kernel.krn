@@ -1,5 +1,5 @@
 State {
-  c : chan;
+  x : chan;
 }
 
 Components {
@@ -11,6 +11,6 @@ Messages {
 }
 
 Init {
-  c := spawn(Main);
-  send(c, M("Hello"));
+  x := spawn(Main);
+  send(x, M("Hello"));
 }

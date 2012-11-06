@@ -102,7 +102,7 @@ let empty_kernel =
   ; components = []
   ; msg_decls  = []
   ; init       = Nop
-  ; exchange   = ("c", [])
+  ; exchange   = ("__xch__", [])
   ; props      = []
   }
 

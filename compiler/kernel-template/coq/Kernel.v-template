@@ -136,6 +136,12 @@ End VEX.
 
 Hint Constructors ValidExchange.
 
+Ltac ve_solve_tac :=
+  solve
+    [ eapply VE_BadTag; eauto
+(* __VE_SOLVE_TAC__ *)
+    ].
+
 Inductive KInvariant : kstate -> Prop :=
 | KI_init :
 (* __KTRACE_INIT__ *)
@@ -179,7 +185,7 @@ Ltac restore_kinv :=
       match itr with [?tr]%inhabited =>
         let dtr := dangle_from x tr in
         replace itr with (inhabit_unpack (ktr kst) dtr);
-          [ econstructor; eauto
+          [ ve_solve_tac
           | rewrite H; auto
           ]
       end

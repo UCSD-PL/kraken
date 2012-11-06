@@ -149,8 +149,8 @@ ssh$(EXEEXT): $(LIBCOMPAT) libssh.a $(SSHOBJS)
 sshd$(EXEEXT): libssh.a	$(LIBCOMPAT) $(SSHDOBJS)
 	$(LD) -o $@ $(SSHDOBJS) $(LDFLAGS) -lssh -lopenbsd-compat $(SSHDLIBS) $(LIBS)
 
-sshd_mon$(EXEEXT): libssh.a $(LIBCOMPAT) sshd_mon.o kauth.o interproc.o entropy.o
-	$(LD) -o $@ sshd_mon.o entropy.o kauth.o interproc.o $(LDFLAGS) -lssh -lopenbsd-compat $(SSHDLIBS) $(LIBS)
+sshd_mon$(EXEEXT): libssh.a $(LIBCOMPAT) sshd_mon.o kauth.o kraken_msg.o entropy.o
+	$(LD) -o $@ sshd_mon.o entropy.o kauth.o kraken_msg.o $(LDFLAGS) -lssh -lopenbsd-compat $(SSHDLIBS) $(LIBS)
 
 sshd_sys$(EXEEXT): libssh.a $(LIBCOMPAT) sshd_sys.o kraken_msg.o kauth.o interproc.o entropy.o
 	$(LD) -o $@ sshd_sys.o kraken_msg.o entropy.o interproc.o $(LDFLAGS) -lssh -lopenbsd-compat $(SSHDLIBS) $(LIBS)

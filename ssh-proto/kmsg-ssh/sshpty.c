@@ -75,7 +75,7 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, size_t namebuflen)
   msg* sm = NULL;
 
   sm = mk_CreatePtyerReq_msg();
-  send_msg(sm); free_msg(sm); sm = NULL;
+  kraken_send_msg(sm); free_msg(sm); sm = NULL;
   sm = recv_msg();
 
   if(sm->mtyp != MTYP_CreatePtyerRes

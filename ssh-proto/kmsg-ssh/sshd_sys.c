@@ -170,7 +170,7 @@ void logerror(char* str) {
 
 int load_host_keys() {
   char buf[4084];
-  char* filename = NULL;
+  char filename[1024];
   int read_char = 0;
 
   OpenSSL_add_all_algorithms();
@@ -179,7 +179,10 @@ int load_host_keys() {
   if(host_key == NULL) syslog (LOG_ERR, "host_key is NULL");
   public_key = key_demote(host_key);
 
-  filename = mktemp("sshd_sys_tmpkeyfileXXXXXX");
+  strcpy(filename, "/tmp/tempXXXXXXX");
+  mktemp(filename);
+
+  syslog (LOG_ERR, "sshd_mon_sys is initiated:%s,", filename);
 
   FILE* f = fopen(filename, "w");
   if(f == NULL) syslog (LOG_ERR, "tmp file open failed");
@@ -232,9 +235,8 @@ void processKeysignReq(param* fp) {
   obuf.buf = sig;
   obuf.len = sig_len;
 
-  send_free(mk_SysKeysignReq_msg(&obuf));
+  send_free(mk_SysKeysignRes_msg(&obuf));
 }
-
 
 void processCreatePtyerReq(param* fp) {
   char* buf = NULL;
@@ -258,8 +260,12 @@ void run_msg_loop() {
   msg* m = NULL;
   param* fp = NULL;
 
+  //sleep(15);
   while(m = recv_msg()) {
     fp = m->payload;
+
+    syslog (LOG_ERR, "sshd_mon_sys:msg is received :%d", m->mtyp);
+
     switch(m->mtyp) {
 
     case MTYP_SysLoginReq:
@@ -283,7 +289,8 @@ void run_msg_loop() {
 }
 
 int main (int argc, char **argv) {
-	KCHAN = atoi(argv[1]);
+  KCHAN = atoi(argv[1]);
+  syslog (LOG_ERR, "sshd_mon_sys is initiated:%d", KCHAN);
   load_host_keys();
   run_msg_loop();
 }

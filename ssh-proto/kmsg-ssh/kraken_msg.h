@@ -9,7 +9,8 @@
 
 #define TRUE     1
 #define FALSE    0
-#define NUM_SIZE 1
+//#define NUM_SIZE 1
+#define NUM_SIZE 4
 
 // cmsg size for 1 file descriptor
 #define FD_CMSG_SPACE CMSG_SPACE(sizeof(int))
@@ -107,4 +108,4 @@ char * string_of_msg(msg *m);
 
 msg * recv_msg(void);
 
-void send_msg(msg *m);
+void kraken_send_msg(msg *m);

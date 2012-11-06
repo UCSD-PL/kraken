@@ -364,9 +364,11 @@ recv_num(void) {
   int n;
 
   x = 0; // only some bytes of x get set, make rest 0
-  buf = ((char *)&x) + sizeof(x) - NUM_SIZE;
-  n = recv(KCHAN, buf, NUM_SIZE, 0);
-  assert(n == NUM_SIZE);
+  //buf = ((char *)&x) + sizeof(x) - NUM_SIZE;
+  buf =  ((char *)&x);
+  //n = recv(KCHAN, buf, NUM_SIZE, 0);
+  n = recv(KCHAN, buf, sizeof(x), 0);
+  //assert(n == NUM_SIZE);
   // convert to host endian
   x = ntohl(x);
   return x;
@@ -378,13 +380,15 @@ send_num(uint32_t x) {
   int n;
 
   // for now, num is only 1 byte, check bounds
-  assert(0 <= x && x <= 255);
+  //assert(0 <= x && x <= 255);
 
   // convert to big endian
   x = htonl(x);
-  buf = ((char *)&x) + sizeof(x) - NUM_SIZE;
-  n = send(KCHAN, buf, NUM_SIZE, 0);
-  assert(n == NUM_SIZE);
+  //buf = ((char *)&x) + sizeof(x) - NUM_SIZE;
+  buf =  ((char *)&x);
+  //n = send(KCHAN, buf, NUM_SIZE, 0);
+  n = send(KCHAN, buf, sizeof(x), 0);
+  //assert(n == NUM_SIZE);
 }
 
 pstr *
@@ -624,12 +628,12 @@ recv_msg(void) {
 }
 
 void
-send_msg(msg *m) {
+kraken_send_msg(msg *m) {
   send_num(m->mtyp);
   send_params(m->payload);
 }
 
 void send_free(msg* m) {
-  send_msg(m);
+  kraken_send_msg(m);
   free_msg(m);
 }

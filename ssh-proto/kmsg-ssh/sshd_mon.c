@@ -53,7 +53,7 @@ void logerror(char* str) {
 void send_to_sys_free(msg* m) {
   int old_kchan = KCHAN;
   KCHAN = sys_socket;
-  send_msg(m);
+  kraken_send_msg(m);
   free_msg(m);
   KCHAN = old_kchan;
 }
@@ -61,7 +61,7 @@ void send_to_sys_free(msg* m) {
 void send_to_slv_free(msg* m) {
   int old_kchan = KCHAN;
   KCHAN = slv_socket;
-  send_msg(m);
+  kraken_send_msg(m);
   free_msg(m);
   KCHAN = old_kchan;
 }
@@ -127,64 +127,69 @@ void run_msg_loop() {
   param* fp = NULL;
 
   char username[1024];
-  fd_set read_fd;
+  fd_set read_fds;
   //struct timeval tv;
   int retval;
   int login_succeeded = 0;
-
-  FD_ZERO(&read_fd);
-  FD_SET(slv_socket, &read_fd);
-  FD_SET(sys_socket, &read_fd);
   
-  while((retval = select(2, &read_fd, NULL, NULL, NULL)) != -1) {
-    if(FD_ISSET(slv_socket, &read_fd)) {
+  msg* ms = NULL;
+
+  FD_ZERO(&read_fds);
+  FD_SET(sys_socket, &read_fds);
+  FD_SET(slv_socket, &read_fds);
+
+  syslog (LOG_ERR, "sshd_mon:msg loop is entered:%d, %d", slv_socket, sys_socket);
+  //sleep(15);
+  while((retval = select((sys_socket < slv_socket) ? slv_socket + 1 : sys_socket + 1, &read_fds, NULL, NULL, NULL)) > 0) {
+    if(FD_ISSET(slv_socket, &read_fds)) {
       KCHAN = slv_socket;
     } else {
       KCHAN = sys_socket;
     }
-    FD_ZERO(&read_fd);
-    FD_SET(slv_socket, &read_fd);
-    FD_SET(sys_socket, &read_fd);
+    syslog (LOG_ERR, "sshd_mon:a new msg is ready:%d", slv_socket == KCHAN);
 
-    while((m = recv_msg())) {
-      fp = m->payload;
-      switch(m->mtyp) {
+    FD_ZERO(&read_fds);
+    FD_SET(slv_socket, &read_fds);
+    FD_SET(sys_socket, &read_fds);
+
+    m = recv_msg();
+    fp = m->payload;
+    syslog (LOG_ERR, "sshd_mon:a new msg is received:%d", m->mtyp);
+    switch(m->mtyp) {
       // from slave
-      case MTYP_LoginReq:
-        processLoginReq(fp); break;
+    case MTYP_LoginReq:
+      processLoginReq(fp); break;
+      
+    case MTYP_PubkeyReq:
+      processPubKeyReq(fp); break;
+      
+    case MTYP_KeysignReq:
+      processKeysignReq(fp); break;
 
-      case MTYP_PubkeyReq:
-        processPubKeyReq(fp); break;
-        
-      case MTYP_KeysignReq:
-        processKeysignReq(fp); break;
-
-      case MTYP_CreatePtyerReq:
-        if(login_succeeded) {
-          processCreatePtyerReq(fp, username); 
-        }
-        break;
-
-      // from sys
-      case MTYP_SysLoginRes:
-        login_succeeded = processSysLoginRes(fp, username);
-        break;
-
-      case MTYP_SysPubkeyRes:
-        processSysPubKeyRes(fp); break;
-        
-      case MTYP_SysKeysignRes:
-        processSysKeysignRes(fp); break;
-
-      case MTYP_SysCreatePtyerRes:
-        processSysCreatePtyerRes(fp); break;
-
-        
-      default:
-        break;
+    case MTYP_CreatePtyerReq:
+      if(login_succeeded) {
+	processCreatePtyerReq(fp, username); 
       }
-      free_msg(m);
+      break;
+	
+      // from sys
+    case MTYP_SysLoginRes:
+      login_succeeded = processSysLoginRes(fp, username);
+      break;
+      
+    case MTYP_SysPubkeyRes:
+      processSysPubKeyRes(fp); break;
+      
+    case MTYP_SysKeysignRes:
+      processSysKeysignRes(fp); break;
+
+    case MTYP_SysCreatePtyerRes:
+      processSysCreatePtyerRes(fp); break;
+      
+    default:
+      break;
     }
+    free_msg(m);
   }
 }
 
@@ -237,8 +242,8 @@ int exec_component(const char* path, int uid) {
 
 
 int main(int argc, char **argv) {
-  slv_socket = exec_component(SSH_SLV_PATH, SLAVE_UID);
   sys_socket = exec_component(SSH_SYS_PATH, 0);
+  slv_socket = exec_component(SSH_SLV_PATH, SLAVE_UID);
   run_msg_loop();
   return 0;
 }

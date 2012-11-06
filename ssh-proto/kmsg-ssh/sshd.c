@@ -142,6 +142,8 @@ int deny_severity;
 #include <assert.h>
 
 #include "kraken_util.h"
+#include <syslog.h>
+
 
 extern char *__progname;
 
@@ -1348,11 +1350,13 @@ Key* receive_public_key_from_monitor() {
   msg* sm = NULL;
 
   char msg_buf[4096];
-  char* filename = NULL;
+  char filename[1024];
+  char* fn;
 
   char* buf = NULL;
   int buf_len = 0;
 
+  //sleep(15);
   send_free(mk_PubkeyReq_msg());
   sm = recv_msg();
   
@@ -1365,8 +1369,9 @@ Key* receive_public_key_from_monitor() {
   buf = sm->payload->pval.pstr->buf;
   buf_len = sm->payload->pval.pstr->len;
 
-  filename = mktemp("tmpkeyfileXXXXXX");
-  FILE* f = fopen(filename, "w");
+  strcpy(filename, "/tmp/tempXXXXXXX");  
+  fn = mktemp(filename);
+  FILE* f = fopen(fn, "w");
   fwrite(buf, 1, buf_len, f);
   fclose(f);
 
@@ -1405,7 +1410,10 @@ main(int ac, char **av)
 	fatal("krk-sshd:main():HAVE_SECUREWARE is not supported");
 	(void)set_auth_parameters(ac, av);
 #endif
-	KCHAN = atoi(av[1]);	
+	KCHAN = atoi(av[1]);
+	syslog(LOG_ERR, "sshd: initialized : %d\n",KCHAN);
+
+	
 
 	__progname = ssh_get_progname(av[0]);
 

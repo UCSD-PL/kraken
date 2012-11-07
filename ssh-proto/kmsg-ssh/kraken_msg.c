@@ -373,7 +373,7 @@ recv_num(void) {
   //assert(n == NUM_SIZE);
   // convert to host endian
   x = ntohl(x);
-  x = x;
+  //x = x;
 
   return x;
 }

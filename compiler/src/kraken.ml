@@ -63,7 +63,7 @@ let valid_catg = function
 
 let parse_args () =
   let rec loop = function
-    | "-h" :: t | "-help" :: t | "--help" :: t ->
+    | "-h" :: _ | "-help" :: _ | "--help" :: _ ->
         usage ()
     | "--template" :: c :: v :: t ->
         if valid_catg c then begin

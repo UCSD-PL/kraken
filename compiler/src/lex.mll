@@ -34,7 +34,8 @@ rule token = parse
   | "ImmAfter" { IMMAFTER }
   | "ImmBefore" { IMMBEFORE }
   | "Match" { MATCH }
-  | "==" { EQUALITY }
+  | "=c" { EQC }
+  | "=n" { EQN }
   | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }
@@ -45,7 +46,6 @@ rule token = parse
   | "," { COMMA }
   | ";" { SEMI }
   | ":" { COLON }
-  | ":=" { ASSIGN }
   | "+" { PLUS }
   | "^" { KTP_NEG }
   | "." { KTP_DOT }

@@ -142,6 +142,7 @@ int deny_severity;
 #include <assert.h>
 
 #include "kraken_util.h"
+#include "sshd_mon.h"
 #include <syslog.h>
 
 
@@ -151,7 +152,8 @@ extern char *__progname;
 ServerOptions options;
 
 /* Name of the server configuration file. */
-char *config_file_name = _PATH_SERVER_CONFIG_FILE;
+//char *config_file_name = _PATH_SERVER_CONFIG_FILE;
+char *config_file_name = SSH_CONFIG_PATH;
 
 /*
  * Debug mode flag.  This can be set on the command line.  If debug

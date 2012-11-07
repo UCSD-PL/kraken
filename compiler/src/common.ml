@@ -56,7 +56,7 @@ let rec drop n l =
   else
     match l with
     | [] -> failwith "drop"
-    | x::xs -> drop (n - 1) xs
+    | _::xs -> drop (n - 1) xs
 
 let curry (f: 'a * 'b -> 'c) : 'a -> 'b -> 'c =
   fun a b -> f (a, b)

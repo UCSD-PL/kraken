@@ -2,7 +2,7 @@
   open Common
   open Kernel
 
-  let parse_error s =
+  let parse_error _ =
     failwith (mkstr "Parse: error on line %d" !line)
 
   (* NOTE to get commas correct, we special case empty arg lists *)

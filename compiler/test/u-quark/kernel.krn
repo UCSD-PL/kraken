@@ -16,8 +16,8 @@ Messages {
 }
 
 Init {
-  curtab := spawn(Tab);
-  screen := spawn(Screen);
+  curtab = spawn(Tab);
+  screen = spawn(Screen);
   spawn(UserInput);
 }
 

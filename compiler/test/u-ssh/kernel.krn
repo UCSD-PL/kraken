@@ -4,13 +4,13 @@
 #
 # == Login Request
 # 1) SLV asks MON to login via LoginReq, 
-# 1-1) if login_cnt == 3 then send Login_Res(0) back to SLV
+# 1-1) if login_cnt =n 3 then send Login_Res(0) back to SLV
 # 1-2) otherwise, login_cnt = login_cnt + 1, then send SysLogReq() 
 # to SYS
 #
 # 2) SYS replies to MON with SysLogRes() 
-# if the response is 1 then set login_succeded := 1; and 
-# login_account := $account and MON delivers it to SLV with LogRes  
+# if the response is 1 then set login_succeded = 1; and 
+# login_account = $account and MON delivers it to SLV with LogRes  
 #
 # == PubKey Request
 # 1) SLV asks MON for the public key via PubKeyReq
@@ -24,7 +24,7 @@
 #
 # == CreatePtyer
 # 1) SLV asks MON for a created PTYER
-# 1-1) if login_succeeded == 0 then ignore this request completely 
+# 1-1) if login_succeeded =n 0 then ignore this request completely 
 # and don't send anything back
 #
 # 2) MON creates a PTY by sending SysCreatePtyReq()
@@ -79,19 +79,19 @@ Messages {
 }
 
 Init {
-  system := spawn(System);
-  slave := spawn(Slave);
+  system = spawn(System);
+  slave = spawn(Slave);
 
-  logincnt := 0;
-  loginsucceded := 0;
-  username := "";
+  logincnt = 0;
+  loginsucceded = 0;
+  username = "";
 }
 
 Exchange(c) {
 
   System {
     SysLoginRes(autheduser, resnum) {
-      username := autheduser;
+      username = autheduser;
       send(slave, LoginRes(resnum));
     }
 
@@ -105,10 +105,10 @@ Exchange(c) {
   }
 
   Slave {
-    LoginReq(accstr) when (logincnt == 3) {
+    LoginReq(accstr) when (logincnt =n 3) {
       # ignore
     } {
-      logincnt := logincnt + 1;
+      logincnt = logincnt + 1;
       send(system, SysLoginReq(accstr));
     }
 
@@ -116,13 +116,13 @@ Exchange(c) {
       send(system, SysPubkeyReq());
     }
 
-    KeysignReq(datastr) when (loginsucceded == 0) {
+    KeysignReq(datastr) when (loginsucceded =n 0) {
       # ignore
     } {
       send(system, SysKeysignReq(datastr));
     }
 
-    CreatePtyerReq() when (loginsucceded == 0) {
+    CreatePtyerReq() when (loginsucceded =n 0) {
       # ignore
     } {
       send(system, SysCreatePtyerReq(username));

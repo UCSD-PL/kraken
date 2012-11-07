@@ -11,6 +11,6 @@ Messages {
 }
 
 Init {
-  x := spawn(Main);
+  x = spawn(Main);
   send(x, M("Hello"));
 }

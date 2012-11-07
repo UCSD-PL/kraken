@@ -19,3 +19,40 @@ Exchange(c) {
     }
   }
 }
+
+Properties {
+  Any =
+    Match {
+      .*
+    };
+
+  Any2 =
+    Match {
+     .*.*
+    };
+
+  AnyOrAny =
+    Match {
+     .*|.*
+    };
+
+  MaybeOneOrAny =
+    Match {
+      .?|.*
+    };
+
+  AnyDisguise =
+    Match {
+      ([^send M]|[^recv M])*
+    };
+
+  NoSendTillRecv =
+    Match {
+      [^send M]*|.*[recv M][^send M]*
+    };
+
+  DonTest =
+    Match {
+      (.*[recv M])?[^send M]*
+    };
+}

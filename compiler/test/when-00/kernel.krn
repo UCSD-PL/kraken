@@ -12,17 +12,17 @@ Messages {
 }
 
 Init {
-  n := 0;
+  n = 0;
   spawn(Main);
 }
 
 Exchange(c) {
   Main {
-    ReqN() when (n == 5) {
-      n := n + 1;
+    ReqN() when (n =n 5) {
+      n = n + 1;
       send(c, CurN(0));
     }{
-      n := n + 1;
+      n = n + 1;
       send(c, CurN(n));
     }
   }

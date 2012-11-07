@@ -138,7 +138,7 @@ let subs k =
   [ "CONST_DECLS",
       fmt k.constants coq_of_constant_decl
   ; "COMP_DECLS",
-      fmt k.components (fun (id, path) -> "| " ^ id)
+      fmt k.components (fun (id, _) -> "| " ^ id)
   ; "CHAN_PATHS",
       fmt k.components (fun (id, path) ->
         mkstr "  | %s => str_of_string \"%s\"" id path)

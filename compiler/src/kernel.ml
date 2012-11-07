@@ -17,7 +17,8 @@ type expr =
 
 type when_cond =
   | Always
-  | NumEq of id * int
+  | NumEq  of id * int
+  | ChanEq of id * id
 
 type 'a msg =
   { tag : string
@@ -106,7 +107,7 @@ let empty_kernel =
   ; props      = []
   }
 
-let ck_kernel s =
+let ck_kernel _ =
   (* TODO *)
   (* msg tags start with uppercase *)
   (* msg tags uniq *)

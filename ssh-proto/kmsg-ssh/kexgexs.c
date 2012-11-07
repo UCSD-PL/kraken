@@ -187,6 +187,7 @@ kexgex_server(Kex *kex)
 	}
 
 	/* sign H */
+  //exit(1);
 	if (PRIVSEP(key_sign(server_host_private, &signature, &slen, hash,
 	    hashlen)) < 0)
 		fatal("kexgex_server: key_sign failed");

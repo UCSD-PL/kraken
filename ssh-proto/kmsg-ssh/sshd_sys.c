@@ -218,7 +218,6 @@ void processLoginReq(param* fp) {
 
 void processPubKeyReq(param* fp) {
   pstr obuf;
-
   if(fp != NULL) { logerror("pubkeyreq:payload type is unmached"); }
   obuf.buf = public_key_serialized;
   obuf.len = public_key_serialized_len;

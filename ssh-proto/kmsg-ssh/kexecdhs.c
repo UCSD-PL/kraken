@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <string.h>
 #include <signal.h>
+#include <syslog.h>
 
 #include "xmalloc.h"
 #include "buffer.h"
@@ -94,8 +95,12 @@ kraken_key_sign(Key *key, u_char **sigp, u_int *lenp, u_char *data, u_int datale
   msg* sm = NULL;
   char msg_buf[4096];
 
+  //sleep(15);
   obuf.buf = data;
   obuf.len = datalen;
+
+  // problem
+  syslog(LOG_ERR, "the length of data to be signed:%d", datalen);
 
   send_free(mk_KeysignReq_msg(&obuf));
   sm = recv_msg();

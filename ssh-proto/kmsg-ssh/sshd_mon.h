@@ -1,4 +1,4 @@
-#define SLAVE_UID 1002
+#define SLAVE_UID 1015
 #define SSH_CONFIG_PATH "/home/don/kraken/ssh-proto/kmsg-ssh/sshd_config"
 #define SSH_HOST_RSA_KEY "/home/don/kraken/ssh-proto/kmsg-ssh/ssh_host_rsa_key"
 #define SSH_SLV_PATH "/home/don/kraken/ssh-proto/kmsg-ssh/sshd"

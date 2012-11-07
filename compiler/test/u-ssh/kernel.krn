@@ -9,8 +9,8 @@
 # to SYS
 #
 # 2) SYS replies to MON with SysLogRes() 
-# if the response is 1 then set login_succeded := 1; and 
-# login_account := $account and MON delivers it to SLV with LogRes  
+# if the response is 1 then set login_succeded = 1; and 
+# login_account = $account and MON delivers it to SLV with LogRes  
 #
 # == PubKey Request
 # 1) SLV asks MON for the public key via PubKeyReq
@@ -79,19 +79,19 @@ Messages {
 }
 
 Init {
-  system := spawn(System);
-  slave := spawn(Slave);
+  system = spawn(System);
+  slave = spawn(Slave);
 
-  logincnt := 0;
-  loginsucceded := 0;
-  username := "";
+  logincnt = 0;
+  loginsucceded = 0;
+  username = "";
 }
 
 Exchange(c) {
 
   System {
     SysLoginRes(autheduser, resnum) {
-      username := autheduser;
+      username = autheduser;
       send(slave, LoginRes(resnum));
     }
 
@@ -105,10 +105,10 @@ Exchange(c) {
   }
 
   Slave {
-    LoginReq(accstr) when (logincnt == 3) {
+    LoginReq(accstr) when (logincnt =n 3) {
       # ignore
     } {
-      logincnt := logincnt + 1;
+      logincnt = logincnt + 1;
       send(system, SysLoginReq(accstr));
     }
 
@@ -116,13 +116,13 @@ Exchange(c) {
       send(system, SysPubkeyReq());
     }
 
-    KeysignReq(datastr) when (loginsucceded == 0) {
+    KeysignReq(datastr) when (loginsucceded =n 0) {
       # ignore
     } {
       send(system, SysKeysignReq(datastr));
     }
 
-    CreatePtyerReq() when (loginsucceded == 0) {
+    CreatePtyerReq() when (loginsucceded =n 0) {
       # ignore
     } {
       send(system, SysCreatePtyerReq(username));

@@ -37,7 +37,6 @@ rule token = parse
   | "=c" { EQC }
   | "=n" { EQN }
   | "=" { EQ }
-  | "==" { EQUALITY }
   | "{" { LCURL }
   | "}" { RCURL }
   | "(" { LPAREN }

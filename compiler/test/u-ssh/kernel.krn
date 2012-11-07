@@ -92,11 +92,16 @@ Exchange(c) {
   System {
     SysLoginRes(autheduser, resnum) {
       username = autheduser;
+      loginsucceded = resnum;
       send(slave, LoginRes(resnum));
     }
 
     SysPubkeyRes(pubkeystr) {
       send(slave, PubkeyRes(pubkeystr));
+    }
+
+    SysKeysignRes(signedkey) {
+      send(slave, KeysignRes(signedkey));
     }
 
     SysCreatePtyerRes(slavefd, masterfd) {
@@ -116,9 +121,7 @@ Exchange(c) {
       send(system, SysPubkeyReq());
     }
 
-    KeysignReq(datastr) when (loginsucceded =n 0) {
-      # ignore
-    } {
+    KeysignReq(datastr) {
       send(system, SysKeysignReq(datastr));
     }
 

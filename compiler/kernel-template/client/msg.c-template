@@ -284,7 +284,7 @@ send_num(uint32_t x) {
   int n;
 
   // for now, num is only 1 byte, check bounds
-  assert(0 <= x && x <= 255);
+  assert(0 <= x && x <=2^ NUM_SIZE-1);
 
   // convert to big endian
   x = htonl(x);

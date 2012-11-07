@@ -1,9 +1,12 @@
 OCAMLBUILD := ocamlbuild
+
+# warning  4: fragile pattern-matching (| _ ->)
+# warning 29: unescaped newlines in string constants
 OCB_FLAGS := \
 	-lib str \
 	-lib unix \
-	-cflag -g \
-	-lflag -g \
+	-cflags -g,-w,@A,-w,-29,-w,-4 \
+	-lflags -g \
 	-no-links
 
 ifneq "$(shell which menhir)" ""

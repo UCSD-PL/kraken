@@ -106,7 +106,7 @@ let empty_kernel =
   ; props      = []
   }
 
-let ck_kernel s =
+let ck_kernel _ =
   (* TODO *)
   (* msg tags start with uppercase *)
   (* msg tags uniq *)

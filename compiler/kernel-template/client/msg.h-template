@@ -9,7 +9,7 @@
 
 #define TRUE     1
 #define FALSE    0
-#define NUM_SIZE 1
+#define NUM_SIZE 2
 
 // cmsg size for 1 file descriptor
 #define FD_CMSG_SPACE CMSG_SPACE(sizeof(int))

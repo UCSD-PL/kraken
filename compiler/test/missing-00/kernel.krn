@@ -9,6 +9,3 @@ Messages {
 Init {
   spawn(Main);
 }
-
-Exchange(c) {
-}

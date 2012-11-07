@@ -1,19 +1,24 @@
 Components {
-  Test "test.py";
+  Main "test.py";
 }
 
 Messages {
-  M(str);
+  M1(num);
+  M2(str);
 }
 
 Init {
-  spawn(Test);
+  spawn(Main);
 }
 
 Exchange(c) {
-  Test {
-    M(y) {
-      send(c, M(y));
+  Main {
+    M1(y) {
+      send(c, M1(y));
+    }
+
+    M2(y) {
+      send(c, M2(y));
     }
   }
 }
@@ -55,16 +60,16 @@ Properties {
 
   AnyDisguise =
     Match {
-      ([^send M]|[^recv M])*
+      ([^send M1, send M2]|[^recv M1, recv M2])*
     };
 
   NoSendTillRecv =
     Match {
-      [^send M]*|.*[recv M][^send M]*
+      [^send M1, send M2]*|.*[recv M1, recv M2][^send M1, send M2]*
     };
 
   DonTest =
     Match {
-      (.*[recv M])?[^send M]*
+      (.*[recv M1, recv M2])?[^send M1, send M2]*
     };
 }

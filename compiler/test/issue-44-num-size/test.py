@@ -1,13 +1,11 @@
 #!/usr/bin/env python2.7
 
-import msg, time
+import msg
 
 def main():
-  msg.init()
+  msg.init ()
   while True:
-    msg.send('ReqCount')
     m = msg.recv()
     print(m)
-    time.sleep(1)
 
 main()

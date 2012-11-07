@@ -29,20 +29,29 @@ rule token = parse
   | "chan" { CHAN }
   | "call" { CALL }
   | "send" { SEND }
+  | "recv" { RECV }
   | "spawn" { SPAWN }
   | "ImmAfter" { IMMAFTER }
   | "ImmBefore" { IMMBEFORE }
+  | "Match" { MATCH }
   | "==" { EQUALITY }
   | "=" { EQ }
   | "{" { LCURL }
   | "}" { RCURL }
   | "(" { LPAREN }
   | ")" { RPAREN }
+  | "[" { LSQUARE }
+  | "]" { RSQUARE }
   | "," { COMMA }
   | ";" { SEMI }
   | ":" { COLON }
   | ":=" { ASSIGN }
   | "+" { PLUS }
+  | "^" { KTP_NEG }
+  | "." { KTP_DOT }
+  | "|" { KTP_ALT }
+  | "?" { KTP_OPT }
+  | "*" { KTP_STAR }
   | eof { EOF }
   | num as x { NUMLIT (int_of_string x) }
   | str as x { STRLIT (chop_quotes x) }

@@ -10,10 +10,10 @@ type typ =
   | Chan
 
 type expr =
-  | Var of id
+  | Var    of id
   | NumLit of int
   | StrLit of string
-  | Plus of expr * expr
+  | Plus   of expr * expr
 
 type when_cond =
   | Always
@@ -32,14 +32,14 @@ let mk_msg t p =
 let tag m =
   m.tag
 
-type msg_pat = id msg
+type msg_pat  = id msg
 type msg_decl = typ msg
 type msg_expr = expr msg
 
 type cmd =
-  | Send of chan * msg_expr
-  | Call of id * expr * expr
-  | Spawn of id * id
+  | Send   of chan * msg_expr
+  | Call   of id * expr * expr
+  | Spawn  of id * id
   | Assign of id * expr
 
 type prog =
@@ -48,27 +48,41 @@ type prog =
 
 type cond_prog =
   { condition : when_cond
-  ; program : prog
+  ; program   : prog
   }
 
 let mk_cond_prog c r =
   { condition = c
-  ; program = r
+  ; program   = r
   } 
 
 type handler =
-  { trigger : msg_pat
+  { trigger  : msg_pat
   ; responds : cond_prog list
   }
 
 let mk_handler t r =
-  { trigger = t
+  { trigger  = t
   ; responds = r
   }
 
+type kaction_pat =
+  | KAP_KSend of string
+  | KAP_KRecv of string
+
+type ktrace_pat =
+  | KTP_Empty
+  | KTP_Class    of kaction_pat list
+  | KTP_NegClass of kaction_pat list
+  | KTP_Cat      of ktrace_pat * ktrace_pat
+  | KTP_Alt      of ktrace_pat * ktrace_pat
+  | KTP_Star     of ktrace_pat
+
 type prop =
-  | ImmAfter of string * string
+  | ImmAfter  of string * string
   | ImmBefore of string * string
+  | KTracePat of ktrace_pat
+
 type component =
   string
 
@@ -88,7 +102,7 @@ let empty_kernel =
   ; components = []
   ; msg_decls  = []
   ; init       = Nop
-  ; exchange   = ("", [])
+  ; exchange   = ("__xch__", [])
   ; props      = []
   }
 

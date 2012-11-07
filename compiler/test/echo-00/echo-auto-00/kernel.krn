@@ -1,5 +1,5 @@
 Components {
-  Test "test.py";
+  Main "test.py";
 }
 
 Messages {
@@ -7,11 +7,11 @@ Messages {
 }
 
 Init {
-  spawn(Test);
+  spawn(Main);
 }
 
 Exchange(c) {
-  Test {
+  Main {
     M(y) {
       send(c, M(y));
     }
@@ -61,10 +61,5 @@ Properties {
   NoSendTillRecv =
     Match {
       [^send M]*|.*[recv M][^send M]*
-    };
-
-  DonTest =
-    Match {
-      (.*[recv M])?[^send M]*
     };
 }

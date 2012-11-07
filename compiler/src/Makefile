@@ -6,6 +6,12 @@ OCB_FLAGS := \
 	-lflag -g \
 	-no-links
 
+ifneq "$(shell which menhir)" ""
+	# would use --trace, but it ALWAYS prints to stderr :(
+	# OCB_FLAGS := -use-menhir -yaccflags --explain,--trace $(OCB_FLAGS)
+	OCB_FLAGS := -use-menhir -yaccflags --explain $(OCB_FLAGS)
+endif
+
 SLINK := ln -s -f
 
 all:

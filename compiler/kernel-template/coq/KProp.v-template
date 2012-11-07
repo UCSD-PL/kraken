@@ -1,0 +1,383 @@
+Require Import Ascii.
+Require Import List.
+Require Import String.
+Require Import Ynot.
+Require Import Message.
+Require Import Kernel.
+
+Open Local Scope char_scope.
+Open Local Scope hprop_scope.
+Open Local Scope stsepi_scope.
+
+(* REMEMBER : traces are in reverse chrono order
+ * so most recent event is in head position and
+ * first action is last
+ *)
+
+Ltac inv H :=
+  inversion H; subst; clear H.
+
+Ltac uninhabit_step :=
+  match goal with
+  | [ H: inhabit_unpack (ktr ?s) _ = [_]%inhabited |- _ ] =>
+    destruct s; simpl in *
+  | [ H: inhabit_unpack ?itr _ = [_]%inhabited |- _ ] =>
+    unfold itr in *
+  | [ H: inhabit_unpack ?itr _ = [_]%inhabited |- _ ] =>
+    destruct itr; simpl in *
+  | [ H: [_]%inhabited = [_]%inhabited |- _ ] =>
+    apply pack_injective in H;
+    rewrite -> H in * || rewrite <- H in *
+  | [ IH: forall ktr, [?ktr']%inhabited = [ktr]%inhabited -> _ |- _ ] =>
+    specialize (IH ktr' (refl_equal _))
+  end.
+
+Ltac uninhabit :=
+  repeat uninhabit_step.
+
+(* if you see aft in a trace,
+ * then it is immediately chrono preceded by bef
+ *)
+Definition ImmBefore (bef aft : KTrace) : Prop :=
+  forall kst, KInvariant kst ->
+  forall x y, ktr kst = [x ++ aft ++ y]%inhabited ->
+  exists z, y = bef ++ z.
+
+(* if you see bef in a trace,
+ * then it is immediately chrono followed by aft
+ *)
+Definition ImmAfter (bef aft : KTrace) : Prop :=
+  forall kst, KInvariant kst ->
+  forall x y, ktr kst = [x ++ bef ++ y]%inhabited ->
+  exists z, x = z ++ aft.
+
+Definition valid_msg (m: msg) : Prop :=
+  forall t, m <> BadTag t.
+
+Ltac imm_tac_step :=
+  match goal with
+  | |- exists z, ?x = z ++ ?x =>
+      exists nil; auto
+
+  | H: nil = _ ++ _ :: _ |- _ =>
+      apply app_cons_not_nil in H; contradiction
+
+  | H: valid_msg (BadTag ?t) |- _ =>
+      unfold valid_msg in H; edestruct H; eauto
+
+  | H : inhabit_unpack ?tr _ = [_]%inhabited |- _ =>
+      match tr with
+      | ktr ?s =>
+          destruct s; simpl in *
+      | tr =>
+          unfold tr in *; clear tr
+      | tr =>
+          destruct tr; simpl in *
+      end
+
+  | H: [_]%inhabited = [_]%inhabited |- _ =>
+      apply pack_injective in H
+
+  | H: _ :: _ = ?tr ++ _ |- _ =>
+      destruct tr; simpl in *; inv H
+
+  | H: ValidExchange _  _ |- _ =>
+      inv H; simpl in *
+
+  | |- exists z, ?a :: ?x = z ++ ?c =>
+      let H := fresh "H" in
+      let e := fresh "e" in
+      cut (exists z, x = z ++ c);
+        [ intro H; destruct H as [e H]; rewrite H; exists (a :: e); auto | ]
+
+  | _ =>
+      eauto
+  end.
+
+Ltac imm_tac :=
+  repeat progress imm_tac_step.
+
+(* TODO MsgPat to match on more than just tags *)
+
+Inductive MsgPat : Set :=
+(* __MSGPAT_CASES__ *)
+.
+
+Inductive MsgMatch : MsgPat -> msg -> Prop :=
+(* __MSGMATCH_CASES__ *)
+.
+
+(* constrain chan in send / recv patterns *)
+Inductive KActionPat : Set :=
+| KAP_KSend : MsgPat -> KActionPat
+| KAP_KRecv : MsgPat -> KActionPat
+.
+
+Inductive KActionMatch : KActionPat -> KAction -> Prop :=
+| KAM_KSend :
+  forall mp c m,
+  MsgMatch mp m ->
+  KActionMatch (KAP_KSend mp) (KSend c m)
+| KAM_KRecv :
+  forall mp c m,
+  MsgMatch mp m ->
+  KActionMatch (KAP_KRecv mp) (KRecv c m)
+.
+
+Inductive KTracePat : Set :=
+| KTP_Empty : KTracePat
+| KTP_Class : list KActionPat -> KTracePat
+| KTP_NegClass : list KActionPat -> KTracePat
+| KTP_Cat : KTracePat -> KTracePat -> KTracePat
+| KTP_Alt : KTracePat -> KTracePat -> KTracePat
+| KTP_Star : KTracePat -> KTracePat
+.
+
+Inductive KTraceMatch : KTracePat -> KTrace -> Prop :=
+| KTM_Empty :
+  KTraceMatch KTP_Empty nil
+| KTM_Class_h :
+  forall kap kaps a,
+  KActionMatch kap a ->
+  KTraceMatch (KTP_Class (kap :: kaps)) (a :: nil)
+| KTM_Class_t :
+  forall kap kaps a,
+  KTraceMatch (KTP_Class kaps) (a :: nil) ->
+  KTraceMatch (KTP_Class (kap :: kaps)) (a :: nil)
+| KTM_NegClass :
+  forall class a,
+  (forall kap, In kap class -> ~ KActionMatch kap a) ->
+  KTraceMatch (KTP_NegClass class) (a :: nil)
+| KTM_Cat :
+  forall p1 t1, KTraceMatch p1 t1 ->
+  forall p2 t2, KTraceMatch p2 t2 ->
+  KTraceMatch (KTP_Cat p1 p2) (t1 ++ t2)
+| KTM_Alt_l :
+  forall p1 p2 t, KTraceMatch p1 t ->
+  KTraceMatch (KTP_Alt p1 p2) t
+| KTM_Alt_r :
+  forall p1 p2 t, KTraceMatch p2 t ->
+  KTraceMatch (KTP_Alt p1 p2) t
+| KTM_Star_0 :
+  forall p,
+  KTraceMatch (KTP_Star p) nil
+| KTM_Star_N :
+  forall p t1 t2,
+  KTraceMatch p t1 ->
+  KTraceMatch (KTP_Star p) t2 ->
+  KTraceMatch (KTP_Star p) (t1 ++ t2)
+.
+
+Lemma KTM_Class :
+  forall kap kaps a,
+  In kap kaps ->
+  KActionMatch kap a ->
+  KTraceMatch (KTP_Class kaps) (a :: nil).
+Proof.
+  induction kaps; simpl; intros; inv H.
+  apply KTM_Class_h; auto.
+  apply KTM_Class_t; auto.
+Qed.
+
+Definition KTP_Any : KTracePat :=
+  KTP_NegClass nil.
+
+Lemma KTM_Any :
+  forall a, KTraceMatch KTP_Any (a :: nil).
+Proof.
+  intros. apply KTM_NegClass; intros.
+  inv H; auto.
+Qed.
+
+Definition KTP_AnyStar : KTracePat :=
+  KTP_Star KTP_Any.
+
+Lemma KTM_AnyStar :
+  forall tr, KTraceMatch KTP_AnyStar tr.
+Proof.
+  induction tr. constructor.
+  replace (a :: tr) with ((a :: nil) ++ tr) by auto.
+  constructor; auto. apply KTM_Any; auto.
+Qed.
+
+Definition KTP_Single (kap : KActionPat) : KTracePat :=
+  KTP_Class (kap :: nil).
+
+Definition KTP_NegSingle (kap : KActionPat) : KTracePat :=
+  KTP_NegClass (kap :: nil).
+
+Lemma cat_empty :
+  forall p tr,
+  KTraceMatch p tr ->
+  KTraceMatch (KTP_Cat KTP_Empty p) tr.
+Proof.
+  intros. replace tr with (nil ++ tr) by auto.
+  econstructor; eauto. econstructor; eauto.
+Qed.
+
+Definition KTP_Equiv (p1 p2 : KTracePat) : Prop :=
+  forall tr, KTraceMatch p1 tr <-> KTraceMatch p2 tr.
+
+Lemma alt_equiv_l :
+  forall p1a p1b p2,
+  KTP_Equiv p1a p1b ->
+  KTP_Equiv
+    (KTP_Alt p1a p2)
+    (KTP_Alt p1b p2).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H0.
+    apply H in H4. apply KTM_Alt_l; auto.
+    apply KTM_Alt_r; auto.
+  inv H0.
+    apply H in H4. apply KTM_Alt_l; auto.
+    apply KTM_Alt_r; auto.
+Qed.
+
+Lemma alt_equiv_r :
+  forall p1 p2a p2b,
+  KTP_Equiv p2a p2b ->
+  KTP_Equiv
+    (KTP_Alt p1 p2a)
+    (KTP_Alt p1 p2b).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H0.
+    apply KTM_Alt_l; auto.
+    apply H in H4. apply KTM_Alt_r; auto.
+  inv H0.
+    apply KTM_Alt_l; auto.
+    apply H in H4. apply KTM_Alt_r; auto.
+Qed.
+
+Lemma cat_equiv_l :
+  forall p1a p1b p2,
+  KTP_Equiv p1a p1b ->
+  KTP_Equiv
+    (KTP_Cat p1a p2)
+    (KTP_Cat p1b p2).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H0. apply H in H3. econstructor; eauto.
+  inv H0. apply H in H3. econstructor; eauto.
+Qed.
+
+Lemma cat_equiv_r :
+  forall p1 p2a p2b,
+  KTP_Equiv p2a p2b ->
+  KTP_Equiv
+    (KTP_Cat p1 p2a)
+    (KTP_Cat p1 p2b).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H0. apply H in H5. econstructor; eauto.
+  inv H0. apply H in H5. econstructor; eauto.
+Qed.
+
+Lemma alt_swap :
+  forall p1 p2,
+  KTP_Equiv
+    (KTP_Alt p1 p2)
+    (KTP_Alt p2 p1).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H.
+    apply KTM_Alt_r; auto.
+    apply KTM_Alt_l; auto.
+  inv H.
+    apply KTM_Alt_r; auto.
+    apply KTM_Alt_l; auto.
+Qed.
+
+Lemma distr_cat_alt_l :
+  forall p1 p2 p3,
+  KTP_Equiv
+    (KTP_Cat (KTP_Alt p1 p2) p3)
+    (KTP_Alt (KTP_Cat p1 p3) (KTP_Cat p2 p3)).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H. inv H2.
+    apply KTM_Alt_l. econstructor; eauto.
+    apply KTM_Alt_r. econstructor; eauto.
+  inv H; inv H3.
+    econstructor; eauto. apply KTM_Alt_l; auto.
+    econstructor; eauto. apply KTM_Alt_r; auto.
+Qed.
+
+Lemma distr_cat_alt_r :
+  forall p1 p2 p3,
+  KTP_Equiv
+    (KTP_Cat p1 (KTP_Alt p2 p3))
+    (KTP_Alt (KTP_Cat p1 p2) (KTP_Cat p1 p3)).
+Proof.
+  unfold KTP_Equiv; split; intros.
+  inv H. inv H4.
+    apply KTM_Alt_l. econstructor; eauto.
+    apply KTM_Alt_r. econstructor; eauto.
+  inv H; inv H3.
+    econstructor; eauto. apply KTM_Alt_l; auto.
+    econstructor; eauto. apply KTM_Alt_r; auto.
+Qed.
+
+Ltac ktm_step ctac :=
+  match goal with
+  (* accept gifts from our ancestors *)
+  | _ =>
+    assumption || discriminate || contradiction
+
+  (* take useful hypotheses apart *)
+  | [ H: KTraceMatch KTP_Empty _        |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Class _) _    |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_NegClass _) _ |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Alt _ _) _    |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Cat _ _) _    |- _ ] => inv H
+  | [ H: (@In KActionPat _ _)           |- _ ] => inv H
+  | [ H: _ \/ _                         |- _ ] => inv H
+
+  (* canonicalize *)
+  | [ |- KTraceMatch (KTP_Cat KTP_Empty _)     _ ] => apply cat_empty
+  | [ |- KTraceMatch (KTP_Cat (KTP_Alt _ _) _) _ ] => apply distr_cat_alt_l
+  | [ |- KTraceMatch (KTP_Cat _ (KTP_Alt _ _)) _ ] => apply distr_cat_alt_r
+
+  (* massage class / negclass goals *)
+  | [ |- ~ KActionMatch _ _ ] =>
+    let H := fresh in intro H; inv H
+  | [ |- KTraceMatch (KTP_Star (KTP_Class _)) (?ka :: ?kt) ] =>
+    replace (ka :: kt) with ((ka :: nil) ++ kt) by auto
+  | [ |- KTraceMatch (KTP_Star (KTP_NegClass _)) (?ka :: ?kt) ] =>
+    replace (ka :: kt) with ((ka :: nil) ++ kt) by auto
+
+  (* These cases either succeed or leave the goal unmodified.
+   * This is to avoid unsolvable goals which can arise if we
+   * fall through to apply econstructor.
+   *)
+  | [ |- KTraceMatch (KTP_Class _) (_ :: nil) ] =>
+    try solve
+      [ apply KTM_Class_h; ctac
+      | apply KTM_Class_t; ctac
+      ]
+  | [ |- KTraceMatch (KTP_Alt _ _) _] =>
+    try solve
+      [ apply KTM_Alt_l; ctac
+      | apply KTM_Alt_r; ctac
+      ]
+  | [ |- KTraceMatch (KTP_Cat _ _) (?ka :: ?kt) ] =>
+    try solve
+      [ rewrite app_comm_cons; ctac
+      | replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
+      ]
+  | [ |- KTraceMatch (KTP_Star _) (?ka :: ?kt) ] =>
+    try solve
+      [ replace (ka :: kt) with ((ka :: nil) ++ kt) by auto; ctac
+      ]
+
+  (* try constructors based on shape of trace to match *)
+  | _ =>
+    econstructor; eauto; intros
+  end.
+
+Ltac ktm :=
+  unfold KTP_AnyStar, KTP_Any, KTP_Single, KTP_NegSingle in *;
+  repeat ktm_step ktm.
+
+(* __PROPERTIES__ *)

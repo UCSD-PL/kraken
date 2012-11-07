@@ -176,11 +176,11 @@ let rec expr_vars = function
 let cmd_vars = function
   | Send (c, m) ->
       c :: List.flatten (List.map expr_vars m.payload)
-  | Call (var, func, arg) ->
+  | Call (var, _, arg) ->
       var :: expr_vars arg
-  | Spawn (res, path) ->
+  | Spawn (res, _) ->
       [res]
-  | Assign (id, expr) ->
+  | Assign (_, _) ->
       [] (* will be bound by a let *)
 
 let rec prog_vars = function
@@ -197,7 +197,7 @@ let handler_vars xch_chan trig prog =
 (* handler vars modulo global state vars *)
 let handler_vars_nonstate xch_chan trig prog svars =
   let globals =
-    List.map (fun (id, typ) -> id) svars
+    List.map (fun (id, _) -> id) svars
   in
   List.filter
     (fun x -> not (List.mem x globals))
@@ -369,13 +369,13 @@ let subs k =
   List.map (fun (f, r) ->
     (Str.regexp ("(\\* *__" ^ f ^ "__ *\\*)"), r))
   [ "KTRACE_VAR_DECLS",
-      (fmt k.var_decls (fun (id,typ) -> (mkstr "let %s := %s s in\n" id id)))
+      (fmt k.var_decls (fun (id, _) -> (mkstr "let %s := %s s in\n" id id)))
   ; "KTRACE_VAR_LISTS",
-      (fmt k.var_decls (fun (id,typ) -> (mkstr "%s " id)))
+      (fmt k.var_decls (fun (id, _) -> (mkstr "%s " id)))
   ; "VE_STATE_VAR_DECLS",
-      (fmt k.var_decls (fun (id,typ) -> (mkstr "Let %s := %s s.\n" id id)))
+      (fmt k.var_decls (fun (id, _) -> (mkstr "Let %s := %s s.\n" id id)))
   ; "VE_STATE_VAR_LISTS",
-      (fmt k.var_decls (fun (id,typ) -> (mkstr "%s " id)))
+      (fmt k.var_decls (fun (id, _) -> (mkstr "%s " id)))
   ; "VE_HANDLED_CASES",
       fmt exchanges (fun (comp, handlers) ->
         fmt handlers (fun h ->
@@ -492,8 +492,8 @@ let subs k =
   );
   sep unfoldr simplr.
 "
-      (fmt k.var_decls (fun (id,typ) -> (mkstr "pose (%s := %s kst);" id id)))
+      (fmt k.var_decls (fun (id, _) -> (mkstr "pose (%s := %s kst);" id id)))
       (fields_in_comps_fr k)
       comp_xch
-      (fmt k.var_decls (fun (id,typ) -> (mkstr "%s " id))))
+      (fmt k.var_decls (fun (id, _) -> (mkstr "%s " id))))
   ]

@@ -47,11 +47,11 @@ rule token = parse
   | ";" { SEMI }
   | ":" { COLON }
   | "+" { PLUS }
-  | "^" { KTP_NEG }
-  | "." { KTP_DOT }
-  | "|" { KTP_ALT }
-  | "?" { KTP_OPT }
-  | "*" { KTP_STAR }
+  | "^" { CARET }
+  | "." { DOT }
+  | "|" { PIPE }
+  | "?" { OPT }
+  | "*" { STAR }
   | eof { EOF }
   | num as x { NUMLIT (int_of_string x) }
   | str as x { STRLIT (chop_quotes x) }

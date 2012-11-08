@@ -14,7 +14,7 @@
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
 %token EQ EQC EQN COMMA SEMI COLON
-%token PLUS BANG CARET DOT PIPE OPT STAR
+%token PLUS CARET DOT PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
 
@@ -225,40 +225,57 @@ kap :
   | RECV ID { KAP_KRecv $2 }
 ;;
 
-kaps :
-  | kap            { $1 :: [] }
-  | kap COMMA kaps { $1 :: $3 }
+pclass :
+  | kap
+    { KTP_Act $1 }
+  | kap COMMA pclass
+    { KTP_Alt (KTP_Act $1, $3) }
 ;;
+
+nclass :
+  | kap
+    { KTP_NAct $1 }
+  | kap COMMA nclass
+    { KTP_And (KTP_NAct $1, $3) }
+;;
+
 
 /* TODO resolve conflicts w/ associativity and precedence annotations. */
 
 ktp_00 :
-  | DOT                        { KTP_Any       }
-  | LSQUARE kaps RSQUARE       { KTP_Class  $2 }
-  | LSQUARE CARET kaps RSQUARE { KTP_NClass $3 }
-  | LPAREN ktrace_pat RPAREN   { $2            }
-;;
-
-ktp_05 :
-  | ktp_00      { $1         }
-  | BANG ktp_05 { KTP_Not $2 }
+  | DOT
+    { KTP_Act KAP_Any }
+  | LSQUARE pclass RSQUARE
+    { $2 }
+  | LSQUARE CARET nclass RSQUARE
+    { $3 }
+  | LPAREN ktrace_pat RPAREN
+    { $2 }
 ;;
 
 ktp_10 :
-  | ktp_05      { $1          }
-  | ktp_10 OPT  { KTP_Opt  $1 }
-  | ktp_10 STAR { KTP_Star $1 }
-  | ktp_10 PLUS { KTP_Plus $1 }
+  | ktp_00
+    { $1 }
+  | ktp_10 OPT
+    { KTP_Alt (KTP_Emp, $1) }
+  | ktp_10 STAR
+    { KTP_Star $1 }
+  | ktp_10 PLUS
+    { KTP_Cat ($1, KTP_Star $1) }
 ;;
 
 ktp_20 :
-  | ktp_10        { $1               }
-  | ktp_20 ktp_20 { KTP_Cat ($1, $2) }
+  | ktp_10
+    { $1 }
+  | ktp_20 ktp_20
+    { KTP_Cat ($1, $2) }
 ;;
 
 ktp_30 :
-  | ktp_20             { $1               }
-  | ktp_30 PIPE ktp_30 { KTP_Alt ($1, $3) }
+  | ktp_20
+    { $1 }
+  | ktp_30 PIPE ktp_30
+    { KTP_Alt ($1, $3) }
 ;;
 
 ktrace_pat :

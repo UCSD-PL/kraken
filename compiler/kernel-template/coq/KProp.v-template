@@ -149,7 +149,7 @@ Inductive KTraceMatch : KTracePat -> KTrace -> Prop :=
 | KTM_NAct :
   forall kap a,
   ~ KActionMatch kap a ->
-  KTraceMatch (KTP_Act kap) (a :: nil)
+  KTraceMatch (KTP_NAct kap) (a :: nil)
 | KTM_Alt_l :
   forall p1 p2 t,
   KTraceMatch p1 t ->
@@ -267,12 +267,14 @@ Ltac ktm_basic :=
     let H := fresh in intro H; inv H
 
   (* take apart useful hypotheses *)
-  | [ H: KTraceMatch KTP_Emp       _  |- _ ] => inv H
-  | [ H: KTraceMatch (KTP_Act _)   _  |- _ ] => inv H
-  | [ H: KTraceMatch (KTP_NAct _)  _  |- _ ] => inv H
-  | [ H: KTraceMatch (KTP_Alt _ _) _  |- _ ] => inv H
-  | [ H: KTraceMatch (KTP_And _ _) _  |- _ ] => inv H
-  | [ H: KTraceMatch (KTP_Cat _ _) _  |- _ ] => inv H
+  | [ H: MsgMatch _                _ |- _ ] => inv H
+  | [ H: KActionMatch _            _ |- _ ] => inv H
+  | [ H: KTraceMatch KTP_Emp       _ |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Act _)   _ |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_NAct _)  _ |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Alt _ _) _ |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_And _ _) _ |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Cat _ _) _ |- _ ] => inv H
 
   (* canonicalize *)
   | [ |- KTraceMatch (KTP_Cat KTP_Emp _)       _ ] => apply KTM_Cat_Empty
@@ -288,8 +290,8 @@ Ltac ktm_solve :=
   | [ |- KTraceMatch (KTP_Act _) nil  ] => fail 1
   | [ |- KTraceMatch (KTP_NAct _) nil ] => fail 1
 
-  (* On KTP_Alt goals, constructor will alway hit KTM_Alt_l and
-   * therefore never try KTM_Alt_r. So special case KTM_Alt_r.
+  (* On KTP_Alt goals, constructor will alway hit KTM_Alt_l
+   * and stop, so we have to explicitly try KTM_Alt_r after.
    *)
   | _ => constructor; ktm_solve
   | _ => apply KTM_Alt_r; ktm_solve

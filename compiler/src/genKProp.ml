@@ -25,8 +25,6 @@ let ckap = function
   | KAP_KSend s -> mkstr "KAP_KSend MP_%s" s
   | KAP_KRecv s -> mkstr "KAP_KRecv MP_%s" s
 
-let coq_of_ka_pat = ckap
-
 let rec cktp = function
   | KTP_Emp    -> "KTP_Emp"
   | KTP_Act  x -> mkstr "KTP_Act (%s)"  (ckap x)
@@ -36,7 +34,9 @@ let rec cktp = function
   | KTP_And (a, b) -> mkstr "KTP_And (%s) (%s)" (cktp a) (cktp b)
   | KTP_Cat (a, b) -> mkstr "KTP_Cat (%s) (%s)" (cktp a) (cktp b)
 
-let coq_of_kt_pat = cktp
+let coq_of_kt_spec = function
+  | KTS_Pat  p -> mkstr "KTS_Pat  (%s)" (cktp p)
+  | KTS_NPat p -> mkstr "KTS_NPat (%s)" (cktp p)
 
 let coq_of_prop (name, prop) : string =
   match prop with
@@ -69,7 +69,7 @@ Qed.
 Theorem %s :
   forall kst, KInvariant kst ->
   forall tr, ktr kst = [tr]%%inhabited ->
-  KTraceMatch
+  KTraceMatchSpec
     (%s)
     tr.
 Proof.
@@ -79,7 +79,7 @@ Proof.
     end
   ]; simpl; intros; uninhabit; ktm.
 Qed.
-" name (coq_of_kt_pat p)
+" name (coq_of_kt_spec p)
 
 let subs s =
   List.map (fun (f, r) ->

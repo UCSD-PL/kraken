@@ -14,7 +14,7 @@
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
 %token EQ EQC EQN COMMA SEMI COLON
-%token PLUS CARET DOT PIPE OPT STAR
+%token PLUS BANG CARET DOT PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
 
@@ -216,7 +216,7 @@ prop :
     { ImmAfter ($3, $6) }
   | IMMBEFORE LCURL STRLIT RCURL LCURL STRLIT RCURL
     { ImmBefore ($3, $6) }
-  | MATCH LCURL ktrace_pat RCURL
+  | MATCH LCURL ktrace_spec RCURL
     { KTracePat $3 }
 ;;
 
@@ -280,4 +280,9 @@ ktp_30 :
 
 ktrace_pat :
   | ktp_30 { $1 }
+;;
+
+ktrace_spec :
+  | ktrace_pat      { KTS_Pat  $1 }
+  | BANG ktrace_pat { KTS_NPat $2 }
 ;;

@@ -47,6 +47,7 @@ rule token = parse
   | ";" { SEMI }
   | ":" { COLON }
   | "+" { PLUS }
+  | "!" { BANG }
   | "^" { CARET }
   | "." { DOT }
   | "|" { PIPE }

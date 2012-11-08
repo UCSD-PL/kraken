@@ -261,6 +261,15 @@ string_of_msg(msg *m) {
   return s;
 }
 
+void
+print_msg(msg *m) {
+  char *s;
+
+  s = string_of_msg(m);
+  printf("%s\n", s);
+  free(s);
+}
+
 // recv/send raw values
 
 uint32_t

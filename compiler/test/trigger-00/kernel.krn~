@@ -1,0 +1,75 @@
+Components {
+  Test "test.py";
+}
+
+Messages {
+  M(str);
+}
+
+Init {
+  spawn(Test);
+}
+
+Exchange(c) {
+  Test {
+    M(y) {
+      send(c, M(y));
+    }
+  }
+}
+
+Properties {
+  AlwaysResponds =
+    ImmAfter {
+      "KRecv chan msg :: nil"
+    }{
+      "KSend chan msg :: nil"
+    };
+
+  OnlyResponds =
+    ImmBefore {
+      "KRecv chan msg :: nil"
+    }{
+      "KSend chan msg :: nil"
+    };
+
+  Any =
+    Match {
+      .*
+    };
+
+  Any2 =
+    Match {
+     .*.*
+    };
+
+  AnyOrAny =
+    Match {
+     .*|.*
+    };
+
+  MaybeOneOrAny =
+    Match {
+      .?|.*
+    };
+
+  AnyDisguise =
+    Match {
+      ([^send M]|[^recv M])*
+    };
+
+  NoSendTillRecv =
+    Match {
+      [^send M]*|.*[recv M][^send M]*
+    };
+
+  DonTest =
+    Match {
+      (.*[recv M])?[^send M]*
+    };
+
+  Never2Sends =
+    Match {
+      !.*[send M][send M].*
+    };
+}

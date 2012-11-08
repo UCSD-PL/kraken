@@ -107,6 +107,258 @@ Inductive MsgMatch : MsgPat -> msg -> Prop :=
 (* __MSGMATCH_CASES__ *)
 .
 
+(* TODO constrain chan in send / recv patterns *)
+
+Inductive KActionPat : Set :=
+| KAP_Any   : KActionPat
+| KAP_KSend : MsgPat -> KActionPat
+| KAP_KRecv : MsgPat -> KActionPat
+.
+
+Inductive KActionMatch : KActionPat -> KAction -> Prop :=
+| KAM_Any :
+  forall a,
+  KActionMatch KAP_Any a
+| KAM_KSend :
+  forall mp c m,
+  MsgMatch mp m ->
+  KActionMatch (KAP_KSend mp) (KSend c m)
+| KAM_KRecv :
+  forall mp c m,
+  MsgMatch mp m ->
+  KActionMatch (KAP_KRecv mp) (KRecv c m)
+.
+
+Inductive KTracePat : Set :=
+| KTP_Emp  : KTracePat
+| KTP_Act  : KActionPat -> KTracePat
+| KTP_NAct : KActionPat -> KTracePat
+| KTP_Alt  : KTracePat -> KTracePat -> KTracePat
+| KTP_And  : KTracePat -> KTracePat -> KTracePat
+| KTP_Cat  : KTracePat -> KTracePat -> KTracePat
+| KTP_Star : KTracePat -> KTracePat
+.
+
+Inductive KTraceMatch : KTracePat -> KTrace -> Prop :=
+| KTM_Emp :
+  KTraceMatch KTP_Emp nil
+| KTM_Act :
+  forall kap a,
+  KActionMatch kap a ->
+  KTraceMatch (KTP_Act kap) (a :: nil)
+| KTM_NAct :
+  forall kap a,
+  ~ KActionMatch kap a ->
+  KTraceMatch (KTP_Act kap) (a :: nil)
+| KTM_Alt_l :
+  forall p1 p2 t,
+  KTraceMatch p1 t ->
+  KTraceMatch (KTP_Alt p1 p2) t
+| KTM_Alt_r :
+  forall p1 p2 t,
+  KTraceMatch p2 t ->
+  KTraceMatch (KTP_Alt p1 p2) t
+| KTM_And :
+  forall p1 p2 t,
+  KTraceMatch p1 t ->
+  KTraceMatch p2 t ->
+  KTraceMatch (KTP_And p1 p2) t
+| KTM_Cat :
+  forall p1 p2 t1 t2,
+  KTraceMatch p1 t1 ->
+  KTraceMatch p2 t2 ->
+  KTraceMatch (KTP_Cat p1 p2) (t1 ++ t2)
+| KTM_Star_0 :
+  forall p,
+  KTraceMatch (KTP_Star p) nil
+| KTM_Star_N :
+  forall p t1 t2,
+  KTraceMatch p t1 ->
+  KTraceMatch (KTP_Star p) t2 ->
+  KTraceMatch (KTP_Star p) (t1 ++ t2)
+.
+
+Lemma KTM_Star_app :
+  forall p t1 t2,
+  KTraceMatch (KTP_Star p) t1 ->
+  KTraceMatch (KTP_Star p) t2 ->
+  KTraceMatch (KTP_Star p) (t1 ++ t2).
+Proof.
+  intros. remember (KTP_Star p) as PAT.
+  induction H; inv HeqPAT; auto.
+  rewrite app_ass; auto. econstructor; eauto.
+Qed.
+
+Lemma KTM_Cat_Empty :
+  forall p tr,
+  KTraceMatch p tr ->
+  KTraceMatch (KTP_Cat KTP_Emp p) tr.
+Proof.
+  intros. replace tr with (nil ++ tr) by auto.
+  econstructor; eauto. econstructor; eauto.
+Qed.
+
+Lemma KTM_Any :
+  forall ka,
+  KTraceMatch (KTP_Act KAP_Any) (ka :: nil).
+Proof.
+  constructor; auto. constructor; auto.
+Qed.
+
+Lemma KTM_AnyStar :
+  forall tr,
+  KTraceMatch (KTP_Star (KTP_Act KAP_Any)) tr.
+Proof.
+  induction tr. constructor.
+  replace (a :: tr) with ((a :: nil) ++ tr) by auto.
+  constructor; auto. apply KTM_Any.
+Qed.
+
+Definition KTP_Equiv (p1 p2 : KTracePat) : Prop :=
+  forall tr, KTraceMatch p1 tr <-> KTraceMatch p2 tr.
+
+Lemma distr_cat_alt_l :
+  forall p1 p2 p3,
+  KTP_Equiv
+    (KTP_Cat (KTP_Alt p1 p2) p3)
+    (KTP_Alt (KTP_Cat p1 p3) (KTP_Cat p2 p3)).
+Proof.
+  unfold KTP_Equiv; split; intro H; inv H.
+  inv H2.
+    apply KTM_Alt_l; constructor; auto.
+    apply KTM_Alt_r; constructor; auto.
+  inv H3. constructor; auto. apply KTM_Alt_l; auto.
+  inv H3. constructor; auto. apply KTM_Alt_r; auto.
+Qed.
+
+Lemma distr_cat_alt_r :
+  forall p1 p2 p3,
+  KTP_Equiv
+    (KTP_Cat p1 (KTP_Alt p2 p3))
+    (KTP_Alt (KTP_Cat p1 p2) (KTP_Cat p1 p3)).
+Proof.
+  unfold KTP_Equiv; split; intro H; inv H.
+  inv H4.
+    apply KTM_Alt_l; constructor; auto.
+    apply KTM_Alt_r; constructor; auto.
+  inv H3. constructor; auto. apply KTM_Alt_l; auto.
+  inv H3. constructor; auto. apply KTM_Alt_r; auto.
+Qed.
+
+Ltac ktm_basic :=
+  repeat match goal with
+  (* accept gifts from our ancestors *)
+  | _ => assumption || discriminate || contradiction
+
+  (* take low hanging fruit *)
+  | [ _: KTraceMatch (KTP_Star ?p) ?t1
+    , _: KTraceMatch (KTP_Star ?p) ?t2
+      |- KTraceMatch (KTP_Star ?p) (?t1 ++ ?t2)     ] => apply KTM_Star_app
+  | [ |- KTraceMatch (KTP_Star _) nil               ] => apply KTM_Star_0
+  | [ |- KTraceMatch (KTP_Star (KTP_Act KAP_Any)) _ ] => apply KTM_AnyStar
+  | [ |- KTraceMatch (KTP_Act KAP_Any) (_ :: nil)   ] => apply KTM_Any
+
+  (* action matching goals *)
+  | [ |- MsgMatch _ _ ] =>
+    econstructor; eauto
+  | [ |- KActionMatch _ _ ] =>
+    econstructor; eauto
+  | [ |- ~ KActionMatch _ _ ] =>
+    let H := fresh in intro H; inv H
+
+  (* take apart useful hypotheses *)
+  | [ H: KTraceMatch KTP_Emp       _  |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Act _)   _  |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_NAct _)  _  |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Alt _ _) _  |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_And _ _) _  |- _ ] => inv H
+  | [ H: KTraceMatch (KTP_Cat _ _) _  |- _ ] => inv H
+
+  (* canonicalize *)
+  | [ |- KTraceMatch (KTP_Cat KTP_Emp _)       _ ] => apply KTM_Cat_Empty
+  | [ |- KTraceMatch (KTP_Cat (KTP_Alt _ _) _) _ ] => apply distr_cat_alt_l
+  | [ |- KTraceMatch (KTP_Cat _ (KTP_Alt _ _)) _ ] => apply distr_cat_alt_r
+  end.
+
+Ltac ktm_solve :=
+  ktm_basic;
+  match goal with
+  (* fail on obviously impossible goals *)
+  | [ |- KTraceMatch KTP_Emp (_ :: _) ] => fail 1
+  | [ |- KTraceMatch (KTP_Act _) nil  ] => fail 1
+  | [ |- KTraceMatch (KTP_NAct _) nil ] => fail 1
+
+  (* On KTP_Alt goals, constructor will alway hit KTM_Alt_l and
+   * therefore never try KTM_Alt_r. So special case KTM_Alt_r.
+   *)
+  | _ => constructor; ktm_solve
+  | _ => apply KTM_Alt_r; ktm_solve
+
+  (* try different list groupings *)
+  | _ =>
+    rewrite app_comm_cons; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?a8 :: ?a9 :: ?t) ] =>
+    replace (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: t)
+       with ((a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: a9 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?a8 :: ?t) ] =>
+    replace (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: t)
+       with ((a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: a8 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?a7 :: ?t) ] =>
+    replace (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: t)
+       with ((a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: a7 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?a6 :: ?t) ] =>
+    replace (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: t)
+       with ((a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: a6 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?a2 :: ?a3 :: ?a4 :: ?a5 :: ?t) ] =>
+    replace (a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: t)
+       with ((a0 :: a1 :: a2 :: a3 :: a4 :: a5 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?a2 :: ?a3 :: ?a4 :: ?t) ] =>
+    replace (a0 :: a1 :: a2 :: a3 :: a4 :: t)
+       with ((a0 :: a1 :: a2 :: a3 :: a4 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?a2 :: ?a3 :: ?t) ] =>
+    replace (a0 :: a1 :: a2 :: a3 :: t)
+       with ((a0 :: a1 :: a2 :: a3 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?a2 :: ?t) ] =>
+    replace (a0 :: a1 :: a2 :: t)
+       with ((a0 :: a1 :: a2 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?a1 :: ?t) ] =>
+    replace (a0 :: a1 :: t)
+       with ((a0 :: a1 :: nil) ++ t)
+         by auto; ktm_solve
+  | [ |- KTraceMatch _ (?a0 :: ?t) ] =>
+    replace (a0 :: t)
+       with ((a0 :: nil) ++ t)
+         by auto; ktm_solve
+
+  (* did not solve, bad search path *)
+  | _ => fail 1
+  end.
+
+Ltac ktm :=
+  ktm_basic; try ktm_solve.
+
+
+
+(*
+
+(* TODO MsgPat to match on more than just tags *)
+
+Inductive MsgPat : Set :=
+(* __MSGPAT_CASES__ *)
+.
+
+Inductive MsgMatch : MsgPat -> msg -> Prop :=
+(* __MSGMATCH_CASES__ *)
+.
+
 (* constrain chan in send / recv patterns *)
 Inductive KActionPat : Set :=
 | KAP_KSend : MsgPat -> KActionPat
@@ -342,5 +594,7 @@ Ltac ktm_solve :=
 
 Ltac ktm :=
   ktm_basic; try ktm_solve.
+
+*)
 
 (* __PROPERTIES__ *)

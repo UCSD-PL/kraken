@@ -13,10 +13,10 @@
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
-%token EQ EQC EQN COMMA SEMI COLON PLUS
+%token EQ EQC EQN COMMA SEMI COLON
+%token PLUS BANG CARET DOT PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
-%token KTP_NEG KTP_DOT KTP_ALT KTP_OPT KTP_STAR
 
 %right PLUS
 
@@ -230,73 +230,37 @@ kaps :
   | kap COMMA kaps { $1 :: $3 }
 ;;
 
-kaction_pats :
-  | /* empty */  { KTP_Class    [] }
-  | kaps         { KTP_Class    $1 }
-  | KTP_NEG      { KTP_NegClass [] }
-  | KTP_NEG kaps { KTP_NegClass $2 }
+/* TODO resolve conflicts w/ associativity and precedence annotations. */
+
+ktp_00 :
+  | DOT                        { KTP_Any       }
+  | LSQUARE kaps RSQUARE       { KTP_Class  $2 }
+  | LSQUARE CARET kaps RSQUARE { KTP_NClass $3 }
+  | LPAREN ktrace_pat RPAREN   { $2            }
 ;;
 
-/* TODO
-
-Resolve conflicts w/ associativity and precedence annotations.
-
-This is how I would like to write ktrace_pat.
-
-%right    KTP_ALT
-%right    KTP_CAT
-%nonassoc KTP_OPT KTP_STAR
-
-ktrace_pat :
-  | LSQUARE kaction_pats RSQUARE
-    { $1 }
-  | KTP_DOT
-    { KTP_NegClass [] }
-  | ktrace_pat ktrace_pat %prec KTP_CAT
-    { KTP_Cat ($1, $2) }
-  | ktrace_pat KTP_ALT ktrace_pat
-    { KTP_Alt ($1, $3) }
-  | ktrace_pat KTP_STAR
-    { KTP_Star $1 }
-  | ktrace_pat KTP_OPT
-    { KTP_Alt (KTP_Empty, $1) }
+ktp_05 :
+  | ktp_00      { $1         }
+  | BANG ktp_05 { KTP_Not $2 }
 ;;
 
-*/
-
-ktp_0 :
-  | LSQUARE kaction_pats RSQUARE
-    { $2 }
-  | KTP_DOT
-    { KTP_NegClass [] }
-  | LPAREN ktrace_pat RPAREN
-    { $2 }
+ktp_10 :
+  | ktp_05      { $1          }
+  | ktp_10 OPT  { KTP_Opt  $1 }
+  | ktp_10 STAR { KTP_Star $1 }
+  | ktp_10 PLUS { KTP_Plus $1 }
 ;;
 
-ktp_1 :
-  | ktp_0
-    { $1 }
-  | ktp_0 KTP_STAR
-    { KTP_Star $1 }
-  | ktp_0 KTP_OPT
-    { KTP_Alt (KTP_Empty, $1) }
+ktp_20 :
+  | ktp_10        { $1               }
+  | ktp_20 ktp_20 { KTP_Cat ($1, $2) }
 ;;
 
-ktp_2 :
-  | ktp_1
-    { $1 }
-  | ktp_1 ktp_2
-    { KTP_Cat ($1, $2) }
-;;
-
-ktp_3 :
-  | ktp_2
-    { $1 }
-  | ktp_2 KTP_ALT ktp_3
-    { KTP_Alt ($1, $3) }
+ktp_30 :
+  | ktp_20             { $1               }
+  | ktp_30 PIPE ktp_30 { KTP_Alt ($1, $3) }
 ;;
 
 ktrace_pat :
-  | ktp_3
-    { $1 }
+  | ktp_30 { $1 }
 ;;

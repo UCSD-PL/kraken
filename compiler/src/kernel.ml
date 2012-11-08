@@ -68,16 +68,82 @@ let mk_handler t r =
   }
 
 type kaction_pat =
+  | KAP_Any
   | KAP_KSend of string
   | KAP_KRecv of string
 
 type ktrace_pat =
-  | KTP_Empty
-  | KTP_Class    of kaction_pat list
-  | KTP_NegClass of kaction_pat list
-  | KTP_Cat      of ktrace_pat * ktrace_pat
-  | KTP_Alt      of ktrace_pat * ktrace_pat
-  | KTP_Star     of ktrace_pat
+  (* core *)
+  | KTP_Emp
+  | KTP_Act  of kaction_pat
+  | KTP_NAct of kaction_pat
+  | KTP_Alt  of ktrace_pat * ktrace_pat
+  | KTP_And  of ktrace_pat * ktrace_pat
+  | KTP_Cat  of ktrace_pat * ktrace_pat
+  | KTP_Star of ktrace_pat
+  (* sugar *)
+  | KTP_Any
+  | KTP_Opt    of ktrace_pat
+  | KTP_Plus   of ktrace_pat
+  | KTP_Class  of kaction_pat list
+  | KTP_NClass of kaction_pat list
+  | KTP_Not    of ktrace_pat
+
+let rec dktp = function
+  (* core - just recurse *)
+  | KTP_Emp    -> KTP_Emp
+  | KTP_Act  x -> KTP_Act  x
+  | KTP_NAct x -> KTP_NAct x
+  | KTP_Star p -> KTP_Star (dktp p)
+  | KTP_Alt (p1, p2) -> KTP_Alt (dktp p1, dktp p2)
+  | KTP_And (p1, p2) -> KTP_And (dktp p1, dktp p2)
+  | KTP_Cat (p1, p2) -> KTP_Cat (dktp p1, dktp p2)
+  (* desugar *)
+  | KTP_Any ->
+      KTP_Act KAP_Any
+  | KTP_Opt p ->
+      KTP_Alt (KTP_Emp, dktp p)
+  | KTP_Plus p ->
+      let p' = dktp p in
+      KTP_Cat (p', KTP_Star p')
+  | KTP_Class [] ->
+      failwith "dktp: empty KTP_Class"
+  | KTP_Class x::[] ->
+      KTP_Act x
+  | KTP_Class x::xs ->
+      KTP_Alt (KTP_Act x, dktp (KTP_Class xs))
+  | KTP_NClass [] ->
+      failwith "dktp: empty KTP_NClass"
+  | KTP_NClass x::[] ->
+      KTP_NAct x
+  | KTP_NClass x::xs ->
+      KTP_And (KTP_NAct x, dktp (KTP_NClass xs))
+  | KTP_Not (KTP_Not p) ->
+      dktp p
+  | KTP_Not p ->
+      match dktp p with (
+      | KTP_Emp -> dktp (
+          KTP_Plus KTP_Any)
+      | KTP_Act x -> dktp (
+          KTP_Alt ( KTP_Emp
+                  , KTP_Alt ( KTP_Cat (KTP_NAct x, KTP_Star KTP_Any)
+                            , KTP_Cat (KTP_Act  x, KTP_Plus KTP_Any))))
+      | KTP_NAct x -> dktp (
+          KTP_Alt ( KTP_Emp
+                  , KTP_Alt ( KTP_Cat (KTP_Act  x, KTP_Star KTP_Any)
+                            , KTP_Cat (KTP_NAct x, KTP_Plus KTP_Any))))
+      | KTP_Alt (p1, p2) -> dktp (
+          KTP_And (KTP_Not p1, KTP_Not p2))
+      | KTP_And (p1, p2) -> dktp (
+          KTP_Alt (KTP_Not p1, KTP_Not p2))
+      | KTP_Cat (p1, p2) -> dktp (
+          KTP_Alt ( KTP_Cat (KTP_Not p1, KTP_Star KTP_Any)
+                  , KTP_Cat (p1, KTP_Cat (KTP_Not p2, KTP_Star KTP_Any))))
+      | _ ->
+          failwith "dktp: KTP_Not recursive case still had sugar"
+      )
+
+let desugar_ktrace_pat = dktp
 
 type prop =
   | ImmAfter  of string * string

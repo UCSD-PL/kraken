@@ -1,0 +1,48 @@
+State {
+  n : num;
+}
+
+Components {
+  Test "test.py";
+}
+
+Messages {
+  Start();
+  GetStatus();
+  AfterStart();
+}
+
+Init {
+  spawn(Test);
+  n = 0;
+}
+
+Exchange(c) {
+  Test {
+    Start() {
+      n = 1;
+    }
+
+    GetStatus() when (n =n 1) {
+      send(c, AfterStart());
+    }
+    {
+      # ignore
+    }
+  }
+}
+
+
+Properties {
+
+  NoAfterStartTillRecvStart =
+    Match {
+      [^recv Start, send AfterStart]* |
+      .*[recv Start][^recv Start, send AfterStart]*
+    };
+
+  NoAfterStartTillRecvStart2 =
+    Match {
+      (.*[recv Start])?[^recv Start, send AfterStart]*
+    };
+}

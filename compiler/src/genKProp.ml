@@ -38,6 +38,9 @@ let coq_of_kt_spec = function
   | KTS_Pat  p -> mkstr "KTS_Pat  (%s)" (cktp p)
   | KTS_NPat p -> mkstr "KTS_NPat (%s)" (cktp p)
 
+let fold_kstate_field (id, _) =
+  mkstr "  fold (Kernel.%s s) in *;" id
+
 let coq_of_prop (name, prop) : string =
   match prop with
   | ImmAfter (bef, aft) ->
@@ -73,21 +76,19 @@ Theorem %s :
     (%s)
     tr.
 Proof.
-  induction 1; [ | |
-    match goal with
-    | H: ValidExchange _ _ |- _ => inv H
-    end
-  ]; simpl; intros; uninhabit; ktm.
+  ktmatch.
 Qed.
 " name (coq_of_kt_spec p)
 
-let subs s =
+let subs k =
   List.map (fun (f, r) ->
     (Str.regexp ("(\\* *__" ^ f ^ "__ *\\*)"), r))
   [ "MSGPAT_CASES",
-      fmt s.msg_decls msgpat_case
+      fmt k.msg_decls msgpat_case
   ; "MSGMATCH_CASES",
-      fmt s.msg_decls msgmatch_case
+      fmt k.msg_decls msgmatch_case
+  ; "FOLD_KSTATE_TAC",
+      fmt k.var_decls fold_kstate_field
   ; "PROPERTIES",
-      fmt s.props coq_of_prop
+      fmt k.props coq_of_prop
   ]

@@ -50,6 +50,7 @@ rule token = parse
   | "!" { BANG }
   | "^" { CARET }
   | "." { DOT }
+  | "&" { AMP }
   | "|" { PIPE }
   | "?" { OPT }
   | "*" { STAR }

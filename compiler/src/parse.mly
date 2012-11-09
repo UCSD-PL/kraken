@@ -14,7 +14,7 @@
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
 %token EQ EQC EQN COMMA SEMI COLON
-%token PLUS BANG CARET DOT PIPE OPT STAR
+%token PLUS BANG CARET DOT AMP PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
 
@@ -267,14 +267,20 @@ ktp_10 :
 ktp_20 :
   | ktp_10
     { $1 }
-  | ktp_20 ktp_20
+  | ktp_10 ktp_20
     { KTP_Cat ($1, $2) }
 ;;
 
-ktp_30 :
+ktp_25 :
   | ktp_20
     { $1 }
-  | ktp_30 PIPE ktp_30
+  | ktp_20 AMP ktp_25
+    { KTP_And ($1, $3) }
+
+ktp_30 :
+  | ktp_25
+    { $1 }
+  | ktp_25 PIPE ktp_30
     { KTP_Alt ($1, $3) }
 ;;
 

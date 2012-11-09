@@ -67,4 +67,9 @@ Properties {
     Match {
       (.*[recv M])?[^send M]*
     };
+
+  Never2Sends =
+    Match {
+      !.*[send M][send M].*
+    };
 }

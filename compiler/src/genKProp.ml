@@ -20,35 +20,26 @@ let msgmatch_case m =
   MsgMatch MP_%s (%s %s)"
         m.tag args m.tag m.tag args
 
-let coq_of_ka_pat = function
+let ckap = function
+  | KAP_Any     -> "KAP_Any"
   | KAP_KSend s -> mkstr "KAP_KSend MP_%s" s
   | KAP_KRecv s -> mkstr "KAP_KRecv MP_%s" s
 
-let coq_of_ka_pats kaps =
-  kaps
-    |> List.map coq_of_ka_pat
-    |> List.map (mkstr "%s :: ")
-    |> String.concat ""
-    |> mkstr "(%snil)"
+let rec cktp = function
+  | KTP_Emp    -> "KTP_Emp"
+  | KTP_Act  x -> mkstr "KTP_Act (%s)"  (ckap x)
+  | KTP_NAct x -> mkstr "KTP_NAct (%s)" (ckap x)
+  | KTP_Star a -> mkstr "KTP_Star (%s)" (cktp a)
+  | KTP_Alt (a, b) -> mkstr "KTP_Alt (%s) (%s)" (cktp a) (cktp b)
+  | KTP_And (a, b) -> mkstr "KTP_And (%s) (%s)" (cktp a) (cktp b)
+  | KTP_Cat (a, b) -> mkstr "KTP_Cat (%s) (%s)" (cktp a) (cktp b)
 
-let rec coq_of_kt_pat = function
-  | KTP_Empty ->
-      "KTP_Empty"
-  | KTP_Class kaps ->
-      mkstr "KTP_Class %s" (coq_of_ka_pats kaps)
-  | KTP_NegClass kaps ->
-      mkstr "KTP_NegClass %s" (coq_of_ka_pats kaps)
-  | KTP_Cat (p1, p2) ->
-      mkstr "KTP_Cat (%s) (%s)"
-        (coq_of_kt_pat p1)
-        (coq_of_kt_pat p2)
-  | KTP_Alt (p1, p2) ->
-      mkstr "KTP_Alt (%s) (%s)"
-        (coq_of_kt_pat p1)
-        (coq_of_kt_pat p2)
-  | KTP_Star p ->
-      mkstr "KTP_Star (%s)"
-        (coq_of_kt_pat p)
+let coq_of_kt_spec = function
+  | KTS_Pat  p -> mkstr "KTS_Pat  (%s)" (cktp p)
+  | KTS_NPat p -> mkstr "KTS_NPat (%s)" (cktp p)
+
+let fold_kstate_field (id, _) =
+  mkstr "  fold (Kernel.%s s) in *;" id
 
 let coq_of_prop (name, prop) : string =
   match prop with
@@ -81,25 +72,23 @@ Qed.
 Theorem %s :
   forall kst, KInvariant kst ->
   forall tr, ktr kst = [tr]%%inhabited ->
-  KTraceMatch
+  KTraceMatchSpec
     (%s)
     tr.
 Proof.
-  induction 1; [ | |
-    match goal with
-    | H: ValidExchange _ _ |- _ => inv H
-    end
-  ]; simpl; intros; uninhabit; ktm.
+  ktmatch.
 Qed.
-" name (coq_of_kt_pat p)
+" name (coq_of_kt_spec p)
 
-let subs s =
+let subs k =
   List.map (fun (f, r) ->
     (Str.regexp ("(\\* *__" ^ f ^ "__ *\\*)"), r))
   [ "MSGPAT_CASES",
-      fmt s.msg_decls msgpat_case
+      fmt k.msg_decls msgpat_case
   ; "MSGMATCH_CASES",
-      fmt s.msg_decls msgmatch_case
+      fmt k.msg_decls msgmatch_case
+  ; "FOLD_KSTATE_TAC",
+      fmt k.var_decls fold_kstate_field
   ; "PROPERTIES",
-      fmt s.props coq_of_prop
+      fmt k.props coq_of_prop
   ]

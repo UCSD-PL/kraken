@@ -68,21 +68,27 @@ let mk_handler t r =
   }
 
 type kaction_pat =
+  | KAP_Any
   | KAP_KSend of string
   | KAP_KRecv of string
 
 type ktrace_pat =
-  | KTP_Empty
-  | KTP_Class    of kaction_pat list
-  | KTP_NegClass of kaction_pat list
-  | KTP_Cat      of ktrace_pat * ktrace_pat
-  | KTP_Alt      of ktrace_pat * ktrace_pat
-  | KTP_Star     of ktrace_pat
+  | KTP_Emp
+  | KTP_Act  of kaction_pat
+  | KTP_NAct of kaction_pat
+  | KTP_Alt  of ktrace_pat * ktrace_pat
+  | KTP_And  of ktrace_pat * ktrace_pat
+  | KTP_Cat  of ktrace_pat * ktrace_pat
+  | KTP_Star of ktrace_pat
+
+type ktrace_spec =
+  | KTS_Pat  of ktrace_pat
+  | KTS_NPat of ktrace_pat
 
 type prop =
   | ImmAfter  of string * string
   | ImmBefore of string * string
-  | KTracePat of ktrace_pat
+  | KTracePat of ktrace_spec
 
 type component =
   string

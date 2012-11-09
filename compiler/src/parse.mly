@@ -220,9 +220,18 @@ prop :
     { KTracePat $3 }
 ;;
 
+arglist :
+  | /* empty */
+    { [] }
+  | ID arglist 
+    { $1 :: $2 }
+;;
+
 kap :
-  | SEND ID { KAP_KSend $2 }
-  | RECV ID { KAP_KRecv $2 }
+  | SEND LPAREN ID ID arglist RPAREN
+    { KAP_KSend ($3,$4,$5) }
+  | RECV LPAREN ID ID arglist RPAREN 
+    { KAP_KRecv ($3,$4,$5) }
 ;;
 
 pclass :

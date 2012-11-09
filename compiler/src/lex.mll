@@ -9,7 +9,7 @@
 
 let num = "0" | ['1'-'9']['0'-'9']*
 let str = '"'[^'"''\n']*'"'
-let id = ['a'-'z''A'-'Z']['a'-'z''A'-'Z''0'-'9']*
+let id = ['a'-'z''A'-'Z''_']['a'-'z''A'-'Z''0'-'9''_']*
 let comment = "#"[^'\n']*
 let space = [' ' '\t']
 let line = '\n'

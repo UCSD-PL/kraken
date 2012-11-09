@@ -69,8 +69,8 @@ let mk_handler t r =
 
 type kaction_pat =
   | KAP_Any
-  | KAP_KSend of string
-  | KAP_KRecv of string
+  | KAP_KSend of string * string * string list
+  | KAP_KRecv of string * string * string list
 
 type ktrace_pat =
   | KTP_Emp

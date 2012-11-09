@@ -3,7 +3,7 @@ open Kernel
 open Gen
 
 let msgpat_case m =
-  mkstr "| MP_%s" m.tag
+  mkstr "| MP_%s : MsgVar -> %s MsgPat" m.tag (fmt m.payload (fun _ -> "MsgVar -> "))
 
 let msgmatch_case m =
   match m.payload with
@@ -20,10 +20,13 @@ let msgmatch_case m =
   MsgMatch MP_%s (%s %s)"
         m.tag args m.tag m.tag args
 
+let cmsgvar varname = if varname == "_" then "MV_Any" else (mkstr "MV_Name %s" varname)
+let cmsgvars varnames = fmt varnames (fun v -> cmsgvar v)
+
 let ckap = function
   | KAP_Any     -> "KAP_Any"
-  | KAP_KSend s -> mkstr "KAP_KSend MP_%s" s
-  | KAP_KRecv s -> mkstr "KAP_KRecv MP_%s" s
+  | KAP_KSend (c,msg_tag,vars) -> mkstr "KAP_KSend %s MP_%s %s" c msg_tag (cmsgvars vars)
+  | KAP_KRecv (c,msg_tag,vars) -> mkstr "KAP_KRecv %s MP_%s %s" c msg_tag (cmsgvars vars)
 
 let rec cktp = function
   | KTP_Emp    -> "KTP_Emp"

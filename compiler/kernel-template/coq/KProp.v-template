@@ -99,6 +99,10 @@ Ltac imm_tac :=
 
 (* TODO MsgPat to match on more than just tags *)
 
+Inductive MsgVar : Set :=
+| MV_Any : MsgVar
+| MV_Name : str -> MsgVar.
+
 Inductive MsgPat : Set :=
 (* __MSGPAT_CASES__ *)
 .

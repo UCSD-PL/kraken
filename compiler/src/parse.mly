@@ -47,7 +47,7 @@ section :
   | MESSAGES LCURL msg_decls RCURL
     { _K := { !_K with msg_decls = $3 } }
   | INIT LCURL prog RCURL
-    { _K := { !_K with init = $3 } }
+    { _K := { !_K with init = ($3, []) } }
   | EXCHANGE LPAREN ID RPAREN LCURL comp_handlers RCURL
     { _K := { !_K with exchange = ($3, $6) } }
   | PROPERTIES LCURL props RCURL
@@ -82,9 +82,9 @@ prog :
 
 cond_progs :
   | LCURL prog RCURL
-    { [(mk_cond_prog Always $2)] }
+    { [(mk_cond_prog Always ($2, []))] }
   | WHEN LPAREN when_cond RPAREN LCURL prog RCURL cond_progs
-    { (mk_cond_prog $3 $6) :: $8 }
+    { (mk_cond_prog $3 ($6, [])) :: $8 }
 ;;
 
 cmd :

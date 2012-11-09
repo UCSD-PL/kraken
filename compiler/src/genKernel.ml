@@ -2,13 +2,6 @@ open Common
 open Kernel
 open Gen
 
-(* symbolic state
- *
- * Track current value of state var during a handler's symbolic execution.
- * For example, after [a := a + 1], [a] is mapped to [a + 1].
- *)
-type sstate = (id * expr) list
-
 let lkup_var st id =
   try
     List.assoc id st
@@ -69,7 +62,6 @@ type prog_acc =
   { code   : string
   ; frame  : string list
   ; comps  : string list
-  ; sstate : sstate
   ; trace_impl : string
   ; trace_spec : string
   }
@@ -90,8 +82,7 @@ send_msg %s %s
             c (coq_of_msg_expr m) pacc.trace_impl
       ; trace_spec =
           mkstr "KSend %s %s :: %s"
-            c (coq_of_msg_expr (lkup_msg_expr pacc.sstate m)) pacc.trace_spec
-
+            c (coq_of_msg_expr m) pacc.trace_spec
       }
   | Call (res, f, arg) ->
       { pacc with code = pacc.code ^
@@ -108,13 +99,13 @@ send_msg %s %s
             res pacc.trace_impl
       ; trace_spec =
           mkstr "KCall %s %s %s :: %s"
-            (coq_of_expr (lkup_expr pacc.sstate f))
-            (coq_of_expr (lkup_expr pacc.sstate arg))
+            (coq_of_expr f)
+            (coq_of_expr arg)
             res pacc.trace_spec
       }
   | Spawn (res, comp) ->
       let path = List.assoc comp k.components in
-      { pacc with code = pacc.code ^
+      { code = pacc.code ^
           mkstr "
 %s <- exec %s (str_of_string \"%s\")
 (tr ~~~ expand_ktrace (%s))
@@ -133,12 +124,7 @@ send_msg %s %s
       ; comps =
           res :: pacc.comps
       }
-  | Assign (id, expr) ->
-      { pacc with code = pacc.code ^
-          mkstr "\nlet %s := %s in" id (coq_of_expr expr)
-      ; sstate =
-          set_var pacc.sstate id expr
-      }
+  | Assign (_, _) -> failwith "Assigns should have been desugared"
 
 let coq_of_prog s tr0 fr0 p =
   let rec loop pacc = function
@@ -151,7 +137,6 @@ let coq_of_prog s tr0 fr0 p =
     { code   = ""
     ; frame  = fr0
     ; comps  = []
-    ; sstate = []
     ; trace_impl = tr0
     ; trace_spec = tr0
     }
@@ -163,9 +148,6 @@ let coq_trace_spec_of_prog s fr p =
 
 let coq_trace_impl_of_prog s fr p =
   (coq_of_prog s "" fr p).trace_impl
-
-let sstate_of_prog s fr p =
-  (coq_of_prog s "" fr p).sstate
 
 let rec expr_vars = function
   | Var id -> [id]
@@ -225,19 +207,20 @@ let rec chans_of_prog = function
   | Nop -> []
   | Seq (c, p) -> chans_of_cmd c @ chans_of_prog p
 
-let coq_spec_of_handler k comp xch_chan trig conds index tprog =
+let coq_spec_of_handler k comp xch_chan trig conds index cprog =
+  let (prog, sstate) = cprog.program in
   let fr0 =
     List.map
       (fun c -> mkstr "bound %s" c)
-      (xch_chan :: chans_of_prog tprog.program)
+      (xch_chan :: chans_of_prog prog)
   in
-  let pacc = coq_of_prog k "" fr0 tprog.program in
+  let pacc = coq_of_prog k "" fr0 prog in
   lcat
     [ mkstr "| VE_%s_%s_%d :"
         comp trig.tag index
     ; mkstr "forall %s,"
-        (String.concat " " (handler_vars_nonstate xch_chan trig tprog.program k.var_decls))
-    ; coq_of_cond_spec conds tprog.condition
+        (String.concat " " (handler_vars_nonstate xch_chan trig prog k.var_decls))
+    ; coq_of_cond_spec conds cprog.condition
     ; "ValidExchange (mkst"
     ; mkstr "  (%scomps)"
         (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
@@ -245,7 +228,7 @@ let coq_spec_of_handler k comp xch_chan trig conds index tprog =
         pacc.trace_spec xch_chan trig.tag
         (String.concat " " trig.payload)
     ; mkstr "  %s"
-        (lkup_st_fields pacc.sstate k)
+        (lkup_st_fields sstate k)
     ; ")"
     ]
 
@@ -275,6 +258,7 @@ let fields_in_comps_fr k =
     |> mkstr "%semp"
 
 let coq_of_handler k xch_chan trig index tprog =
+  let (prog, sstate) = tprog.program in
   let tr =
     mkstr "KRecv %s (%s %s) :: tr"
       xch_chan trig.tag (String.concat " " trig.payload)
@@ -286,14 +270,14 @@ let coq_of_handler k xch_chan trig index tprog =
       ; "(tr ~~ [KInvariant kst])"
       ]
   in
-  let pacc = coq_of_prog k tr fr tprog.program in
+  let pacc = coq_of_prog k tr fr prog in
   lcat
     [ coq_of_cond index tprog.condition ^ " ("
     ; pacc.code
     ; mkstr "{{ Return (mkst (%scomps) (tr ~~~ %s) %s) }}"
         (String.concat "" (List.map (mkstr "%s :: ") pacc.comps))
         pacc.trace_impl
-        (String.concat " " (List.map fst k.var_decls))
+        (lkup_st_fields sstate k)
      ;" ) "
     ]
 
@@ -313,7 +297,7 @@ let coq_of_exchange spec xch_chan comp =
   in
   let dummy_handler t =
     { trigger = t
-    ; responds = [{condition = Always; program = Nop}]
+    ; responds = [{condition = Always; program = (Nop, [])}]
     }
   in
   let get_handler msg =
@@ -360,14 +344,15 @@ let coq_of_exchange spec xch_chan comp =
     ]
 
 let coq_of_init k =
-  let pacc = coq_of_prog k "tr" [] k.init in
+  let (init, sstate) = k.init in
+  let pacc = coq_of_prog k "tr" [] init in
   lcat
     [ "let tr := inhabits nil in"
     ; pacc.code
     ; mkstr "{{ Return (mkst (%snil) (tr ~~~ %s) %s) }}"
         (String.concat "" (List.map (mkstr "%s :: ") pacc.comps))
         pacc.trace_impl
-        (lkup_st_fields pacc.sstate k)
+        (lkup_st_fields sstate k)
     ]
 
 let subs k =
@@ -447,12 +432,13 @@ let subs k =
         )
       )
   ; "KTRACE_INIT", (
-      let pacc = coq_of_prog k "" [] k.init in
+      let (init, sstate) = k.init in
+      let pacc = coq_of_prog k "" [] init in
       mkstr "forall %s,\nKInvariant (mkst (%snil) [%snil] %s)"
-        (String.concat " " (uniq (prog_vars k.init)))
+        (String.concat " " (uniq (prog_vars init)))
         (String.concat "" (List.map (fun c -> mkstr "%s :: " c) pacc.comps))
         pacc.trace_impl (* TODO should this use trace_spec ? *)
-        (lkup_st_fields pacc.sstate k)
+        (lkup_st_fields sstate k)
     )
   ; "KSTATE_FIELDS",
       fmt k.var_decls (fun (id, typ) ->

@@ -110,7 +110,7 @@ Exchange(c) {
   }
 
   Slave {
-    LoginReq(accstr) when (logincnt =n 3) {
+    LoginReq(accstr) when (logincnt =n 4) {
       # ignore
     } {
       logincnt = logincnt + 1;
@@ -133,3 +133,13 @@ Exchange(c) {
 	}
 }
 
+
+Properties {
+  Upto3LoginTrials =
+    Match {
+      [^send SysLoginReq]*|
+      [^send SysLoginReq]*[send SysLoginReq][^send SysLoginReq]*|
+      [^send SysLoginReq]*[send SysLoginReq][^send SysLoginReq]*[send SysLoginReq][^send SysLoginReq]*|
+      [^send SysLoginReq]*[send SysLoginReq][^send SysLoginReq]*[send SysLoginReq][^send SysLoginReq]*[send SysLoginReq][^send SysLoginReq]*
+    };
+}

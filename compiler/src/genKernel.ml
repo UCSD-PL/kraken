@@ -44,8 +44,6 @@ let fresh_chan_id () =
   mkstr "c%d" (tock ())
 
 let extract_bound c fr =
-  Printf.printf "Looking for %s\n" c;
-  Printf.printf "in %s\n" (String.concat " * " fr);
   let s = mkstr "bound %s" c in
   let rec aux = function
     | [] -> raise Not_found

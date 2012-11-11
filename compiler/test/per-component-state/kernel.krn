@@ -1,0 +1,23 @@
+Components {
+  Comp "comp.py" {
+    id : num;
+  }
+}
+
+Messages {
+  WhoAmI  ();
+  YouAre  (num);
+}
+
+Init {
+  spawn(Comp(1));
+  spawn(Comp(2));
+}
+
+Exchange(c) {
+  Comp {
+    WhoAmI() {
+      send(c, YouAre(id));
+    }
+  }
+}

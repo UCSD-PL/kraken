@@ -40,7 +40,7 @@ type msg_expr = expr msg
 type cmd =
   | Send   of chan * msg_expr
   | Call   of id * expr * expr
-  | Spawn  of id * id
+  | Spawn  of id * (id * expr list)
   | Assign of id * expr
 
 type prog =
@@ -103,7 +103,7 @@ type component =
 type kernel =
   { constants  : (id * expr) list
   ; var_decls  : (id * typ) list
-  ; components : (id * string) list
+  ; components : (id * (string * (id * typ) list)) list
   ; msg_decls  : msg_decl list
   ; init       : uprog
   ; exchange   : chan * ((component * handler list) list)

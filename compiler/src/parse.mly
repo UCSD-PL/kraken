@@ -92,12 +92,27 @@ cmd :
     { Call ($1, $5, $7) }
   | SEND LPAREN ID COMMA msg_expr RPAREN
     { Send ($3, $5) }
-  | ID EQ SPAWN LPAREN ID RPAREN
+  | ID EQ SPAWN LPAREN comp_constr RPAREN
     { Spawn ($1, $5) }
-  | SPAWN LPAREN ID RPAREN
+  | SPAWN LPAREN comp_constr RPAREN
     { Spawn (mkstr "c%d" (tock ()), $3) }
   | ID EQ expr
     { Assign ($1, $3) }
+;;
+
+comp_constr :
+  | ID
+    { ($1, []) }
+  | ID LPAREN comp_fields RPAREN
+    { ($1, $3) }
+
+comp_fields :
+  | /* empty */
+    { [] }
+  | expr
+    { [$1] }
+  | expr COMMA comp_fields
+    { $1 :: $3 }
 ;;
 
 msg_expr :
@@ -175,7 +190,9 @@ comp_decls :
 
 comp_decl :
   | ID STRLIT SEMI
-    { ($1, $2) }
+    { ($1, ($2, [])) }
+  | ID STRLIT LCURL var_decls RCURL
+    { ($1, ($2, $4)) }
 ;;
 
 typs :

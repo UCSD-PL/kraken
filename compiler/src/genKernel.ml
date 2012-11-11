@@ -110,8 +110,8 @@ send_msg %s %s
             (coq_of_expr arg)
             res pacc.trace_spec
       }
-  | Spawn (res, comp) ->
-      let path = List.assoc comp k.components in
+  | Spawn (res, (comp, fields)) ->
+      let (path, _) = List.assoc comp k.components in
       let is_shadowing = List.mem res pacc.scoped_chans in
       let fresh = mkstr "%s_%d" res (tock ()) in
       let bind_fresh = mkstr "let %s := %s in\n" fresh res in
@@ -123,12 +123,15 @@ send_msg %s %s
       in
       { code = pacc.code ^
           mkstr "
-%s%s <- exec %s (str_of_string \"%s\")
+%s%s <- exec %s (str_of_string \"%s\") (%s)
 (tr ~~~ expand_ktrace (%s))
 <@> %s;
 "
             (if is_shadowing then bind_fresh else "")
             fresh comp path
+            (mkstr "Build_st_%s %s" comp
+              (String.concat " " (List.map coq_of_expr fields))
+            )
             pacc.trace_impl
             (coq_of_frame patched_frame)
       ; trace_impl =
@@ -347,16 +350,25 @@ let coq_of_exchange spec xch_chan comp =
   let kstate_vars =
     String.concat " " (List.map fst spec.var_decls)
   in
+  let comp_fields =
+    List.assoc comp spec.components
+    |> snd
+    |> List.map fst
+  in
   lcat
     [ mkstr "Definition exchange_%s :" comp
-    ; mkstr "  forall (%s : tchan) (kst : kstate)," xch_chan
+    ; mkstr "  forall (%s : tchan) (COMP : projT1 %s = %s) (kst : kstate),"
+        xch_chan xch_chan comp
     ; mkstr "  STsep (kstate_inv kst * [In %s (components kst)])" xch_chan
     ; mkstr "        (fun (kst' : kstate) => kstate_inv kst')."
     ; mkstr "Proof."
-    ; mkstr "  intros %s kst;" xch_chan
+    ; mkstr "  intros %s COMP kst;" xch_chan
     ; mkstr "  pose (comps := components kst);"
     ; mkstr "  pose (tr := ktr kst);"
     ; mkstr "%s" var_ext
+    ; mkstr "  destruct (projT2 %s) as [_ ST]; rewrite COMP in ST; simpl in *;"
+      xch_chan
+    ; mkstr "  destruct ST as [%s];" (String.concat " " comp_fields)
     ; mkstr "  refine ("
     ; mkstr "    req <- recv_msg %s" xch_chan
     ; mkstr "    (tr ~~~ expand_ktrace tr)"
@@ -493,8 +505,9 @@ let subs k =
   ; "KBODY", (
       let comp_xch =
         k.components
-          |> List.map (fun (c, _) -> mkstr "\n| %s => exchange_%s" c c)
-          |> String.concat ""
+          |> List.map (fun (c, _) ->
+               mkstr "| %s => fun _ => exchange_%s comp _" c c)
+          |> String.concat "\n"
       in
       mkstr "
   intros kst.
@@ -506,11 +519,12 @@ let subs k =
     (tr ~~~ expand_ktrace tr)
     <@> (tr ~~ [KInvariant kst] * all_bound comps * %s);
     let handler := (
-      match type_of_comp comp comps with
+      let p := projT1 comp in
+      match p as p' return p = p' -> _ with
 %s
       end
     ) in
-    s' <- handler comp (mkst comps (tr ~~~ KSelect comps comp :: tr) %s);
+    s' <- handler _ (mkst comps (tr ~~~ KSelect comps comp :: tr) %s);
     {{ Return s' }}
   );
   sep unfoldr simplr.

@@ -1,0 +1,6 @@
+client: test-c
+
+test-c: msg.o test-c.o
+	$(CC) $(CFLAGS) -o test-c test-c.o msg.o
+
+.PHONY: client

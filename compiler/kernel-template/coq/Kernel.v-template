@@ -113,6 +113,23 @@ Record kstate : Set :=
 (* __KSTATE_FIELDS__ *)
        }.
 
+(*****************************************************************************)
+(* This should be axiomatized and realized by the user either as Coq or OCaml
+   code. For now, I hardcode it here for easiness. *)
+
+Definition splitAt c s :=
+  let fix splitAt_aux c s r_res :=
+    match s with
+    | nil    => (rev r_res, nil)
+    | h :: t => if ascii_dec h c then (rev r_res, t) else splitAt_aux c t (h :: r_res)
+    end
+  in splitAt_aux c s nil.
+
+Definition dom s :=
+  let url_end := snd (splitAt "." s) in
+  fst (splitAt "/" url_end).
+(*****************************************************************************)
+
 Section VEX.
 
 Variable s : kstate.

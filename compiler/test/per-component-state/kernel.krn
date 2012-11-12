@@ -1,32 +1,32 @@
 State {
-  chosenOne : str;
+  domain : str;
 }
 
 Components {
   Comp "comp.py" {
-    id : str;
+    cdom : str;
   }
 }
 
 Messages {
-  WhoAmI    ();
-  IAmChosen (str);
-  IAmNormal (str);
+  Who ();
+  Ok  (str);
+  Bad (str);
 }
 
 Init {
-  chosenOne = "A";
-  spawn(Comp("B"));
-  spawn(Comp("A"));
-  spawn(Comp("C"));
+  domain = "google.com";
+  spawn(Comp("http://www.google.com/students"));
+  spawn(Comp("http://www.facebook.com"));
+  spawn(Comp("http://www.badguy.com/www.google.com/students"));
 }
 
 Exchange(c) {
   Comp {
-    WhoAmI() when (c@id =s chosenOne) {
-      send(c, IAmChosen(c@id));
+    Who() when (dom(c@cdom) =s domain) {
+      send(c, Ok(c@cdom));
     } {
-      send(c, IAmNormal(c@id));
+      send(c, Bad(c@cdom));
     }
   }
 }

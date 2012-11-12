@@ -9,11 +9,12 @@ let lkup_var st id =
     Var id
 
 let rec lkup_expr st = function
-  | Var id         -> lkup_var st id
-  | NumLit i       -> NumLit i
-  | StrLit s       -> StrLit s
-  | Plus (a, b)    -> Plus (lkup_expr st a, lkup_expr st b)
-  | CompFld (c, f) -> CompFld (c, f)
+  | Var id            -> lkup_var st id
+  | NumLit i          -> NumLit i
+  | StrLit s          -> StrLit s
+  | Plus (a, b)       -> Plus (lkup_expr st a, lkup_expr st b)
+  | CompFld (c, f)    -> CompFld (c, f)
+  | FunCall (f, args) -> FunCall (f, List.map (lkup_expr st) args)
 
 let lkup_msg_expr st m =
   { m with payload = List.map (lkup_expr st) m.payload }

@@ -15,6 +15,7 @@ type expr =
   | StrLit  of string
   | Plus    of expr * expr
   | CompFld of id * id
+  | FunCall of id * expr list
 
 type when_cond =
   | Always

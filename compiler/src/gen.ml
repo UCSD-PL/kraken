@@ -37,6 +37,8 @@ let rec coq_of_expr = function
   | CompFld (c, fld) ->
     (* This is very dirty, I know CT : projT1 c = SomeComp will be there *)
     mkstr "(%s (snd (eq_rec _ _ (projT2 %s) _ CT)))" fld c
+  | FunCall (id, args) ->
+    mkstr "(%s %s)" id (String.concat " " (List.map coq_of_expr args))
 
 let coq_of_args m =
   m.payload

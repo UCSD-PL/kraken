@@ -134,11 +134,12 @@ commasep_exprs :
 ;;
 
 expr :
-  | expr PLUS expr { Plus($1, $3) }
-  | NUMLIT         { NumLit $1 }
-  | STRLIT         { StrLit $1 }
-  | ID             { Var $1 }
-  | ID AT ID       { CompFld($1, $3) }
+  | expr PLUS expr                  { Plus($1, $3) }
+  | NUMLIT                          { NumLit $1 }
+  | STRLIT                          { StrLit $1 }
+  | ID                              { Var $1 }
+  | ID LPAREN commasep_exprs RPAREN { FunCall($1, $3) }
+  | ID AT ID                        { CompFld($1, $3) }
 ;;
 
 when_cond :

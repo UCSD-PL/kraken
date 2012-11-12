@@ -64,8 +64,17 @@ type prog_acc =
   ; comps        : string list
   ; trace_impl   : string
   ; trace_spec   : string
+  (* sstate now contains mappings from a chan name occurence to the fresh name
+  of that same chan, in the case where is has been shadowed. The type could be
+  simplified as this does not deal anymore with other types of expressions,
+  whose let bindings are expanded after parsing, but I leveraged the existing
+  sstate code for simplicity. *)
   ; sstate       : sstate
+  (* scoped_chans keeps track of the channel names in scope, so that a binding
+  which shadows a scoped chan can be detected. *)
   ; scoped_chans : string list
+  (* fresh_vars keeps track of all the chan names introduced for disambiguating
+  shadowing, so that these can be quantified in places where it's needed. *)
   ; fresh_vars   : string list
   }
 

@@ -13,7 +13,7 @@
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
-%token EQ EQC EQN COMMA SEMI COLON PLUS AT
+%token EQ EQC EQN EQS COMMA SEMI COLON PLUS AT
 %token IMMAFTER IMMBEFORE MATCH
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
 %token KTP_NEG KTP_DOT KTP_ALT KTP_OPT KTP_STAR
@@ -116,16 +116,20 @@ comp_fields :
 ;;
 
 msg_expr :
-  | ID LPAREN RPAREN
-    { mk_msg $1 [] }
-  | ID LPAREN exprs RPAREN
+  | ID LPAREN opt_commasep_exprs RPAREN
     { mk_msg $1 $3 }
 ;;
 
-exprs :
+opt_commasep_exprs :
+  | /* empty */
+    { [] }
+  | commasep_exprs
+    { $1 }
+
+commasep_exprs :
   | expr
     { $1 :: [] }
-  | expr COMMA exprs
+  | expr COMMA commasep_exprs
     { $1 :: $3 }
 ;;
 
@@ -140,6 +144,7 @@ expr :
 when_cond :
   | ID EQN NUMLIT { NumEq($1, $3) }
   | ID EQC ID     { ChanEq($1, $3) }
+  | expr EQS expr { StrEq($1, $3) }
 ;;
 
 msg_pat :

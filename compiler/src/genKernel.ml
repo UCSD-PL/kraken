@@ -221,6 +221,7 @@ let coq_of_cond_prop = function
   | Always            -> "True"
   | NumEq (id, i)     -> mkstr "(nat_of_num %s = %d)" id i
   | ChanEq (idl, idr) -> mkstr "(%s = %s)" idl idr
+  | StrEq (l, r)      -> mkstr "(%s = %s)" (coq_of_expr l) (coq_of_expr r)
 
 let coq_of_cond_spec prev_conds cond =
   let context =
@@ -280,6 +281,12 @@ let coq_of_cond index = function
       lcat
         [ if index > 0 then " else " else ""
         ; mkstr "if (tchan_eq %s %s) then" idl idr
+        ]
+  | StrEq (l, r) ->
+      lcat
+        [ if index > 0 then " else " else ""
+        ; mkstr "if (list_eq_dec ascii_dec %s %s) then"
+            (coq_of_expr l) (coq_of_expr r)
         ]
 
 let fields_in_comps k =

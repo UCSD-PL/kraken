@@ -10,10 +10,11 @@ type typ =
   | Chan
 
 type expr =
-  | Var    of id
-  | NumLit of int
-  | StrLit of string
-  | Plus   of expr * expr
+  | Var     of id
+  | NumLit  of int
+  | StrLit  of string
+  | Plus    of expr * expr
+  | CompFld of id * id
 
 type when_cond =
   | Always

@@ -13,7 +13,7 @@
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
-%token EQ EQC EQN COMMA SEMI COLON PLUS
+%token EQ EQC EQN COMMA SEMI COLON PLUS AT
 %token IMMAFTER IMMBEFORE MATCH
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
 %token KTP_NEG KTP_DOT KTP_ALT KTP_OPT KTP_STAR
@@ -131,9 +131,10 @@ exprs :
 
 expr :
   | expr PLUS expr { Plus($1, $3) }
-  | NUMLIT { NumLit $1 }
-  | STRLIT { StrLit $1 }
-  | ID { Var $1 }
+  | NUMLIT         { NumLit $1 }
+  | STRLIT         { StrLit $1 }
+  | ID             { Var $1 }
+  | ID AT ID       { CompFld($1, $3) }
 ;;
 
 when_cond :

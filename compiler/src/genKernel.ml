@@ -9,10 +9,11 @@ let lkup_var st id =
     Var id
 
 let rec lkup_expr st = function
-  | Var id      -> lkup_var st id
-  | NumLit i    -> NumLit i
-  | StrLit s    -> StrLit s
-  | Plus (a, b) -> Plus (lkup_expr st a, lkup_expr st b)
+  | Var id         -> lkup_var st id
+  | NumLit i       -> NumLit i
+  | StrLit s       -> StrLit s
+  | Plus (a, b)    -> Plus (lkup_expr st a, lkup_expr st b)
+  | CompFld (c, f) -> CompFld (c, f)
 
 let lkup_msg_expr st m =
   { m with payload = List.map (lkup_expr st) m.payload }
@@ -252,8 +253,9 @@ let coq_spec_of_handler k comp xch_chan trig conds index cprog =
   lcat
     [ mkstr "| VE_%s_%s_%d :"
         comp trig.tag index
-    ; mkstr "forall %s,"
+    ; mkstr "forall %s (CT : projT1 %s = %s),"
         (String.concat " " (handler_vars_nonstate pacc xch_chan trig prog k.var_decls))
+        xch_chan comp
     ; coq_of_cond_spec conds cprog.condition
     ; "ValidExchange (mkst"
     ; mkstr "  (%scomps)"
@@ -350,25 +352,17 @@ let coq_of_exchange spec xch_chan comp =
   let kstate_vars =
     String.concat " " (List.map fst spec.var_decls)
   in
-  let comp_fields =
-    List.assoc comp spec.components
-    |> snd
-    |> List.map fst
-  in
   lcat
     [ mkstr "Definition exchange_%s :" comp
-    ; mkstr "  forall (%s : tchan) (COMP : projT1 %s = %s) (kst : kstate),"
+    ; mkstr "  forall (%s : tchan) (CT : projT1 %s = %s) (kst : kstate),"
         xch_chan xch_chan comp
     ; mkstr "  STsep (kstate_inv kst * [In %s (components kst)])" xch_chan
     ; mkstr "        (fun (kst' : kstate) => kstate_inv kst')."
     ; mkstr "Proof."
-    ; mkstr "  intros %s COMP kst;" xch_chan
+    ; mkstr "  intros %s CT kst;" xch_chan
     ; mkstr "  pose (comps := components kst);"
     ; mkstr "  pose (tr := ktr kst);"
     ; mkstr "%s" var_ext
-    ; mkstr "  destruct (projT2 %s) as [_ ST]; rewrite COMP in ST; simpl in *;"
-      xch_chan
-    ; mkstr "  destruct ST as [%s];" (String.concat " " comp_fields)
     ; mkstr "  refine ("
     ; mkstr "    req <- recv_msg %s" xch_chan
     ; mkstr "    (tr ~~~ expand_ktrace tr)"

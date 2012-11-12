@@ -1,3 +1,7 @@
+State {
+  chosenOne : num;
+}
+
 Components {
   Comp "comp.py" {
     id : num;
@@ -5,19 +9,24 @@ Components {
 }
 
 Messages {
-  WhoAmI  ();
-  YouAre  (num);
+  WhoAmI    ();
+  IAmChosen (num);
+  IAmNormal (num);
 }
 
 Init {
-  spawn(Comp(1));
+  chosenOne = 1;
   spawn(Comp(2));
+  spawn(Comp(1));
+  spawn(Comp(3));
 }
 
 Exchange(c) {
   Comp {
-    WhoAmI() {
-      send(c, YouAre(id));
-    }
+    WhoAmI() { #when (c@id =n 1) {
+      send(c, IAmChosen(c@id));
+    } #{
+      #send(c, IAmNormal(c@id));
+    #}
   }
 }

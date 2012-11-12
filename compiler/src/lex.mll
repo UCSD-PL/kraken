@@ -47,6 +47,7 @@ rule token = parse
   | ";" { SEMI }
   | ":" { COLON }
   | "+" { PLUS }
+  | "@" { AT }
   | "^" { KTP_NEG }
   | "." { KTP_DOT }
   | "|" { KTP_ALT }

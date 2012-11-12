@@ -13,10 +13,10 @@
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
-%token EQ EQC EQN EQS COMMA SEMI COLON PLUS AT
+%token EQ EQC EQN EQS COMMA SEMI COLON
+%token PLUS AT BANG CARET DOT AMP PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
-%token KTP_NEG KTP_DOT KTP_ALT KTP_OPT KTP_STAR
 
 %right PLUS
 
@@ -239,7 +239,7 @@ prop :
     { ImmAfter ($3, $6) }
   | IMMBEFORE LCURL STRLIT RCURL LCURL STRLIT RCURL
     { ImmBefore ($3, $6) }
-  | MATCH LCURL ktrace_pat RCURL
+  | MATCH LCURL ktrace_spec RCURL
     { KTracePat $3 }
 ;;
 
@@ -248,78 +248,70 @@ kap :
   | RECV ID { KAP_KRecv $2 }
 ;;
 
-kaps :
-  | kap            { $1 :: [] }
-  | kap COMMA kaps { $1 :: $3 }
+pclass :
+  | kap
+    { KTP_Act $1 }
+  | kap COMMA pclass
+    { KTP_Alt (KTP_Act $1, $3) }
 ;;
 
-kaction_pats :
-  | /* empty */  { KTP_Class    [] }
-  | kaps         { KTP_Class    $1 }
-  | KTP_NEG      { KTP_NegClass [] }
-  | KTP_NEG kaps { KTP_NegClass $2 }
+nclass :
+  | kap
+    { KTP_NAct $1 }
+  | kap COMMA nclass
+    { KTP_And (KTP_NAct $1, $3) }
 ;;
 
-/* TODO
 
-Resolve conflicts w/ associativity and precedence annotations.
+/* TODO resolve conflicts w/ associativity and precedence annotations. */
 
-This is how I would like to write ktrace_pat.
-
-%right    KTP_ALT
-%right    KTP_CAT
-%nonassoc KTP_OPT KTP_STAR
-
-ktrace_pat :
-  | LSQUARE kaction_pats RSQUARE
-    { $1 }
-  | KTP_DOT
-    { KTP_NegClass [] }
-  | ktrace_pat ktrace_pat %prec KTP_CAT
-    { KTP_Cat ($1, $2) }
-  | ktrace_pat KTP_ALT ktrace_pat
-    { KTP_Alt ($1, $3) }
-  | ktrace_pat KTP_STAR
-    { KTP_Star $1 }
-  | ktrace_pat KTP_OPT
-    { KTP_Alt (KTP_Empty, $1) }
-;;
-
-*/
-
-ktp_0 :
-  | LSQUARE kaction_pats RSQUARE
+ktp_00 :
+  | DOT
+    { KTP_Act KAP_Any }
+  | LSQUARE pclass RSQUARE
     { $2 }
-  | KTP_DOT
-    { KTP_NegClass [] }
+  | LSQUARE CARET nclass RSQUARE
+    { $3 }
   | LPAREN ktrace_pat RPAREN
     { $2 }
 ;;
 
-ktp_1 :
-  | ktp_0
+ktp_10 :
+  | ktp_00
     { $1 }
-  | ktp_0 KTP_STAR
+  | ktp_10 OPT
+    { KTP_Alt (KTP_Emp, $1) }
+  | ktp_10 STAR
     { KTP_Star $1 }
-  | ktp_0 KTP_OPT
-    { KTP_Alt (KTP_Empty, $1) }
+  | ktp_10 PLUS
+    { KTP_Cat ($1, KTP_Star $1) }
 ;;
 
-ktp_2 :
-  | ktp_1
+ktp_20 :
+  | ktp_10
     { $1 }
-  | ktp_1 ktp_2
+  | ktp_10 ktp_20
     { KTP_Cat ($1, $2) }
 ;;
 
-ktp_3 :
-  | ktp_2
+ktp_25 :
+  | ktp_20
     { $1 }
-  | ktp_2 KTP_ALT ktp_3
+  | ktp_20 AMP ktp_25
+    { KTP_And ($1, $3) }
+
+ktp_30 :
+  | ktp_25
+    { $1 }
+  | ktp_25 PIPE ktp_30
     { KTP_Alt ($1, $3) }
 ;;
 
 ktrace_pat :
-  | ktp_3
-    { $1 }
+  | ktp_30 { $1 }
+;;
+
+ktrace_spec :
+  | ktrace_pat      { KTS_Pat  $1 }
+  | BANG ktrace_pat { KTS_NPat $2 }
 ;;

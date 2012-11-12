@@ -49,11 +49,13 @@ rule token = parse
   | ":" { COLON }
   | "+" { PLUS }
   | "@" { AT }
-  | "^" { KTP_NEG }
-  | "." { KTP_DOT }
-  | "|" { KTP_ALT }
-  | "?" { KTP_OPT }
-  | "*" { KTP_STAR }
+  | "!" { BANG }
+  | "^" { CARET }
+  | "." { DOT }
+  | "&" { AMP }
+  | "|" { PIPE }
+  | "?" { OPT }
+  | "*" { STAR }
   | eof { EOF }
   | num as x { NUMLIT (int_of_string x) }
   | str as x { STRLIT (chop_quotes x) }

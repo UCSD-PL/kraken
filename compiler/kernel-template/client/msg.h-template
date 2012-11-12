@@ -71,9 +71,12 @@ void free_msg(msg *m);
 // get the ith param of a msg
 param * get_param(msg *m, int i);
 
-// return a nice string representation of msg m
+// return string representation of msg m
 // caller is responsible for freeing the returned string
 char * string_of_msg(msg *m);
+
+// print string representation of msg m
+void print_msg(msg *m);
 
 msg * recv_msg(void);
 

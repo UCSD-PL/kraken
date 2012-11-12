@@ -97,7 +97,33 @@ Ltac imm_tac_step :=
 Ltac imm_tac :=
   repeat progress imm_tac_step.
 
-(* TODO MsgPat to match on more than just tags *)
+
+
+Inductive ParamType : Set :=
+  Str | Num | Fdesc.
+
+Definition ParamTypeDenote (pt : ParamType) : Set :=
+  match pt with
+  | Str   => str
+  | Num   => num
+  | Fdesc => fdesc
+  end.
+
+Inductive ParamPat (pt : ParamType) : Set :=
+| PP_Any : ParamPat pt
+| PP_Lit : ParamTypeDenote pt -> ParamPat pt
+| PP_Var : nat -> ParamPat pt
+.
+
+Inductive ParamMatch (pt : ParamType) :
+  ParamPat pt -> ParamTypeDenote pt -> Prop :=
+| PM_Any :
+  forall p,
+  ParamMatch pt (PP_Any pt) p
+| PM_Lit :
+  forall p,
+  ParamMatch pt (PP_Lit pt p) p
+.
 
 Inductive MsgPat : Set :=
 (* __MSGPAT_CASES__ *)

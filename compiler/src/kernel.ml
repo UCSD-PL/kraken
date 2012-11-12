@@ -67,10 +67,18 @@ let mk_handler t r =
   ; responds = r
   }
 
+type param_pat =
+  | PP_Any of typ
+  | PP_Lit of typ * string
+  | PP_Var of typ * string
+
+type kmsg_pat =
+  string * param_pat list
+
 type kaction_pat =
   | KAP_Any
-  | KAP_KSend of string
-  | KAP_KRecv of string
+  | KAP_KSend of kmsg_pat
+  | KAP_KRecv of kmsg_pat
 
 type ktrace_pat =
   | KTP_Emp

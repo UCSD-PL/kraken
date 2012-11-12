@@ -9,12 +9,30 @@
 
   (* global kernel ref, support omitted and arbitrarily ordered sections *)
   let _K = ref empty_kernel
+
+  let set_kmp_typs tag params =
+    let set_kmp_typ = function
+      | PP_Any _     , t -> PP_Any t
+      | PP_Lit (_, l), t -> PP_Lit (t, l)
+      | PP_Var (_, x), t -> PP_Var (t, x)
+    in
+    try
+      !_K.msg_decls
+        |> List.map (fun md -> (md.tag, md.payload))
+        |> List.assoc tag
+        |> List.combine params
+        |> List.map set_kmp_typ
+    with Not_found ->
+      failwith (mkstr "set_kmp_typs: no such tag '%s'" tag)
+    | Invalid_argument _ ->
+      failwith (mkstr "set_kmp_typs: bad msg params for '%s'" tag)
+
 %}
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
 %token EQ EQC EQN COMMA SEMI COLON
-%token PLUS BANG CARET DOT AMP PIPE OPT STAR
+%token PLUS UNDER BANG CARET DOT AMP PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
 
@@ -220,9 +238,35 @@ prop :
     { KTracePat $3 }
 ;;
 
+/* all typs set to Num, fixed up in kmp */
+param_pat :
+  | UNDER
+    { PP_Any Num }
+  | STRLIT
+    { PP_Lit (Num, $1) }
+  | NUMLIT
+    { PP_Lit (Num, string_of_int $1) }
+;;
+
+param_pats :
+  | param_pat
+    { $1 :: [] }
+  | param_pat COMMA param_pats
+    { $1 :: $3 }
+;;
+
+kmp :
+  | ID LPAREN RPAREN
+    { ($1, []) }
+  | ID LPAREN param_pats RPAREN
+    { ($1, set_kmp_typs $1 $3) }
+;;
+
 kap :
-  | SEND ID { KAP_KSend $2 }
-  | RECV ID { KAP_KRecv $2 }
+  | SEND LPAREN kmp RPAREN
+    { KAP_KSend $3 }
+  | RECV LPAREN kmp RPAREN
+    { KAP_KRecv $3 }
 ;;
 
 pclass :

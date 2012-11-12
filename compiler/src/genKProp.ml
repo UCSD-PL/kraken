@@ -2,28 +2,62 @@ open Common
 open Kernel
 open Gen
 
+let coq_of_param_typ = function
+  | Num   -> "Num"
+  | Str   -> "Str"
+  | Chan  -> "Chan"
+  | Fdesc -> "Fdesc"
+
 let msgpat_case m =
-  mkstr "| MP_%s" m.tag
+  m.payload
+    |> List.map coq_of_param_typ
+    |> List.map (mkstr "ParamPat %s -> ")
+    |> String.concat ""
+    |> mkstr "| MP_%s : %sMsgPat" m.tag
 
 let msgmatch_case m =
-  match m.payload with
+  let hyps =
+    m.payload
+      |> mapi (fun i t ->
+          mkstr "  forall pp%d p%d, ParamMatch %s pp%d p%d ->"
+            i i (coq_of_param_typ t) i i)
+      |> String.concat "\n"
+  in
+  let pps =
+    m.payload
+      |> mapi (fun i _ -> mkstr " pp%d" i)
+      |> String.concat ""
+  in
+  let ps =
+    m.payload
+      |> mapi (fun i _ -> mkstr " p%d" i)
+      |> String.concat ""
+  in
+  mkstr "
+| MM_%s :
+%s
+  MsgMatch (MP_%s%s) (%s%s)"
+    m.tag hyps m.tag pps m.tag ps
+
+let cpp = function
+  | PP_Any t   -> mkstr "PP_Any %s" (coq_of_param_typ t)
+  | PP_Lit (t, v) -> mkstr "PP_Lit %s (%s)" (coq_of_param_typ t) v
+  | PP_Var (t, v) -> mkstr "PP_Var %s %s" (coq_of_param_typ t) v
+
+let ckmp (tag, params) =
+  match params with
   | [] ->
-      mkstr "
-| MM_%s :
-    MsgMatch MP_%s %s"
-      m.tag m.tag m.tag
+      mkstr "MP_%s" tag
   | _ ->
-      let args = coq_of_args m in
-      mkstr "
-| MM_%s :
-  forall %s,
-  MsgMatch MP_%s (%s %s)"
-        m.tag args m.tag m.tag args
+      params
+        |> List.map cpp
+        |> String.concat ") ("
+        |> mkstr "MP_%s (%s)" tag
 
 let ckap = function
   | KAP_Any     -> "KAP_Any"
-  | KAP_KSend s -> mkstr "KAP_KSend MP_%s" s
-  | KAP_KRecv s -> mkstr "KAP_KRecv MP_%s" s
+  | KAP_KSend p -> mkstr "KAP_KSend (%s)" (ckmp p)
+  | KAP_KRecv p -> mkstr "KAP_KRecv (%s)" (ckmp p)
 
 let rec cktp = function
   | KTP_Emp    -> "KTP_Emp"

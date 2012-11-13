@@ -1,6 +1,5 @@
 {
   open Common
-  open Kernel
   open Parse
 
   let chop_quotes s =
@@ -15,6 +14,7 @@ let space = [' ' '\t']
 let line = '\n'
 
 rule token = parse
+  | "HASCHANTYPE" { HASCHANTYPE }
   | "Constants" { CONSTANTS }
   | "State" { STATE }
   | "Components" { COMPONENTS }
@@ -37,32 +37,37 @@ rule token = parse
   | "=c" { EQC }
   | "=n" { EQN }
   | "=s" { EQS }
-  | "=" { EQ }
-  | "{" { LCURL }
-  | "}" { RCURL }
-  | "(" { LPAREN }
-  | ")" { RPAREN }
-  | "[" { LSQUARE }
-  | "]" { RSQUARE }
-  | "," { COMMA }
-  | ";" { SEMI }
-  | ":" { COLON }
-  | "+" { PLUS }
-  | "@" { AT }
-  | "!" { BANG }
-  | "^" { CARET }
-  | "." { DOT }
-  | "&" { AMP }
-  | "|" { PIPE }
-  | "?" { OPT }
-  | "*" { STAR }
-  | eof { EOF }
+  | "="  { EQ }
+  | "{"  { LCURL }
+  | "}"  { RCURL }
+  | "("  { LPAREN }
+  | ")"  { RPAREN }
+  | "["  { LSQUARE }
+  | "]"  { RSQUARE }
+  | "<<" { LCTX }
+  | ">>" { RCTX }
+  | ","  { COMMA }
+  | ";"  { SEMI }
+  | ":"  { COLON }
+  | "+"  { PLUS }
+  | "@"  { AT }
+  | "_"  { UNDER }
+  | "!"  { BANG }
+  | "^"  { CARET }
+  | "."  { DOT }
+  | "&"  { AMP }
+  | "|"  { PIPE }
+  | "?"  { OPT }
+  | "*"  { STAR }
+  | eof  { EOF }
   | num as x { NUMLIT (int_of_string x) }
   | str as x { STRLIT (chop_quotes x) }
   | id as x { ID x }
 (* ignore *)
   | comment { token lexbuf }
   | space { token lexbuf }
-  | line { incr line; token lexbuf }
+  | line { Lexing.new_line lexbuf; token lexbuf }
 (* error *)
-  | _ as c { failwith (mkstr "Lex: bogus char '%c' on line %d" c !line) }
+  | _ as c { failwith
+              (mkstr "Lex: bogus char '%c' on line %d"
+                c lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum) }

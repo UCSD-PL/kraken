@@ -37,12 +37,13 @@ Properties {
 
   NoAfterStartTillRecvStart =
     Match {
-      [^recv Start, send AfterStart]* |
-      .*[recv Start][^recv Start, send AfterStart]*
+      ([^recv(_, Start())]* & [^send(_, AfterStart())]*) |
+      .*[recv(_, Start())] ([^recv(_, Start())]* & [^send(_, AfterStart())]*)
     };
 
   NoAfterStartTillRecvStart2 =
     Match {
-      (.*[recv Start])?[^recv Start, send AfterStart]*
+      (.*[recv(_, Start())])?
+      ([^recv(_, Start())]* & [^send(_, AfterStart())]*)
     };
 }

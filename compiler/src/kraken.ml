@@ -154,10 +154,24 @@ let desugar_let k =
   }
 
 let parse_kernel f =
+  let lexbuf =
+    Lexing.from_channel (open_in f)
+  in
+  try
+    desugar_let (Parse.kernel Lex.token lexbuf)
+  with
+  | Failure f -> raise (Failure f)
+  | _ ->
+    failwith
+      (mkstr "Parse failure: line %d"
+        lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum)
+
+(*
   f |> readfile
     |> Lexing.from_string
     |> Parse.kernel Lex.token
     |> desugar_let
+*)
 
 (* for catg: read template, rewrite with subs, write instance *)
 let instantiate catg (subs : (Str.regexp * string) list) =

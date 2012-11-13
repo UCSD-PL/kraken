@@ -306,6 +306,13 @@ ktp_10 :
     { KTP_Star $1 }
   | ktp_10 PLUS
     { KTP_Cat ($1, KTP_Star $1) }
+  | ktp_10 LCURL NUMLIT RCURL
+    { range 0 $3
+        |> List.map (fun _ -> $1)
+        |> List.fold_left
+             (fun acc p -> KTP_Cat (acc, p))
+             KTP_Emp
+    }
 ;;
 
 ktp_20 :

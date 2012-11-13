@@ -72,4 +72,9 @@ Properties {
     Match {
       !.*[send(M(_))][send(M(_))].*
     };
+
+  Never2SendsAlt =
+    Match {
+      ! .*[send(M(_))]{2}.*
+    };
 }

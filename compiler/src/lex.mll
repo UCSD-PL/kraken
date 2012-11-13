@@ -1,6 +1,5 @@
 {
   open Common
-  open Kernel
   open Parse
 
   let chop_quotes s =

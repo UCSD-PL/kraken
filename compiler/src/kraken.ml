@@ -159,11 +159,13 @@ let parse_kernel f =
   in
   try
     desugar_let (Parse.kernel Lex.token lexbuf)
-  with Parse.Error ->
+  with
+  | Failure f -> raise (Failure f)
+  | _ ->
     failwith
       (mkstr "Parse failure: line %d"
         lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum)
-    
+
 (*
   f |> readfile
     |> Lexing.from_string

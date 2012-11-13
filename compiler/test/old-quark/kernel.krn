@@ -1,0 +1,63 @@
+State {
+  curtab : chan;
+  output : chan;
+}
+
+Components {
+  Output    "/home/ucsd/vcr/python-browser-8/output.py";
+  Tab       "/home/ucsd/vcr/python-browser-8/tab.py" {
+    domain : str;
+  }
+  UserInput "/home/ucsd/vcr/python-browser-8/input.py";
+}
+
+Messages {
+  Display  (str);
+  Navigate (str);
+  ReqHTML  (str);
+  ResHTML  (fdesc);
+# Input
+  KeyPress   (str);
+  MouseClick (str);
+# Specific to Kraken implementation
+  Go (str);
+}
+
+Init {
+  output = spawn(Output);
+  curtab = spawn(Tab("google.com"));
+  send(curtab, Go("http://www.google.com"));
+  spawn(UserInput);
+}
+
+Exchange(c) {
+  Tab {
+    Display(s) when (c =c curtab) {
+      send(output, K2GDisplayShm(s));
+    } {
+      # Drop display requests from non-current tabs
+    }
+
+    Navigate(url) when (dom(url) =s c@domain) {
+      # This should not happen, don't do anything
+    } {
+      curtab = spawn(Tab(dom(url)));
+      send(curtab, Go(url));
+    }
+
+    ReqHTML(url) {
+      html = call("wget.py", url);
+      send(c, ResHTML(html));
+    }
+  }
+
+  UserInput {
+    KeyPress(key) {
+      send(curtab, KeyPress(key));
+    }
+
+    MouseClick(pos) {
+      send(curtab, MouseClick(pos));
+    }
+  }
+}

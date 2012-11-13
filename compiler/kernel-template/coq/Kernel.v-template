@@ -82,11 +82,12 @@ Ltac bounds_packing :=
 end.
 
 Inductive KAction : Set :=
-| KExec   : str -> tchan -> KAction
-| KCall   : str -> str -> fdesc -> KAction
-| KSelect : list tchan -> tchan -> KAction
-| KSend   : tchan -> msg -> KAction
-| KRecv   : tchan -> msg -> KAction
+| KExec    : str -> tchan -> KAction
+| KCall    : str -> str -> fdesc -> KAction
+| KSelect  : list tchan -> tchan -> KAction
+| KConnect : str -> fdesc -> KAction
+| KSend    : tchan -> msg -> KAction
+| KRecv    : tchan -> msg -> KAction
 .
 
 Definition KTrace : Set :=
@@ -97,6 +98,7 @@ Definition expand_kaction (ka : KAction) : Trace :=
   | KExec cmd c => Exec cmd c :: nil
   | KCall cmd arg pipe => Call cmd arg pipe :: nil
   | KSelect cs c => Select cs c :: nil
+  | KConnect url soc => Connect url soc :: nil
   | KSend c m => SendMsg c m
   | KRecv c m => RecvMsg c m
   end.

@@ -31,6 +31,7 @@ rule token = parse
   | "send" { SEND }
   | "recv" { RECV }
   | "spawn" { SPAWN }
+  | "connect" { CONNECT }
   | "ImmAfter" { IMMAFTER }
   | "ImmBefore" { IMMBEFORE }
   | "Match" { MATCH }

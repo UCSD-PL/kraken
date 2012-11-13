@@ -129,6 +129,9 @@ let desugar_let k =
       | Spawn (res, comp) ->
         let (prog, bindings) = desugar_aux bindings p in
         (Seq (Spawn (res, comp), prog), bindings)
+      | Connect (soc, url) ->
+        let (prog, bindings) = desugar_aux bindings p in
+        (Seq (Connect (soc, url), prog), bindings)
     in desugar_aux [] (fst p)
   in
   let open Kernel in

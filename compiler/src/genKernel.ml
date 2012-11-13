@@ -162,6 +162,20 @@ send_msg %s %s
       ; fresh_vars =
           fresh :: pacc.fresh_vars
       }
+  | Connect (soc, url) ->
+      { pacc with code = pacc.code ^
+          mkstr "
+%s <- connect %s
+(tr ~~~ expand_ktrace (%s))
+<@> %s;"
+            soc (coq_of_expr url) pacc.trace_impl (coq_of_frame pacc.frame)
+      ; trace_impl =
+          mkstr "KConnect %s %s :: %s"
+            (coq_of_expr url) soc pacc.trace_impl
+      ; trace_spec =
+          mkstr "KConnect %s %s :: %s"
+            (coq_of_expr url) soc pacc.trace_spec
+      }
   | Assign (_, _) -> failwith "Assigns should have been desugared"
 
 let coq_of_prog s tr0 fr0 p sc ss =
@@ -206,6 +220,8 @@ let cmd_vars pacc = function
       [(coq_of_expr (lkup_var pacc.sstate res))]
   | Assign (_, _) ->
       [] (* will be bound by a let *)
+  | Connect (soc, _) ->
+      [soc]
 
 let rec prog_vars pacc = function
   | Nop -> []

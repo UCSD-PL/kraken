@@ -92,13 +92,14 @@ Qed.
 Axiom fdesc : Set.
 
 Inductive Action : Set :=
-| Exec   : str -> tchan -> Action
-| Call   : str -> str -> fdesc -> Action
-| Select : list tchan -> tchan -> Action
-| Recv   : tchan -> str -> Action
-| Send   : tchan -> str -> Action
-| RecvFD : tchan -> fdesc -> Action
-| SendFD : tchan -> fdesc -> Action
+| Exec    : str -> tchan -> Action
+| Call    : str -> str -> fdesc -> Action
+| Select  : list tchan -> tchan -> Action
+| Recv    : tchan -> str -> Action
+| Send    : tchan -> str -> Action
+| RecvFD  : tchan -> fdesc -> Action
+| SendFD  : tchan -> fdesc -> Action
+| Connect : str -> fdesc -> Action
 .
 
 Definition Trace : Set := list Action.
@@ -117,6 +118,12 @@ Axiom call :
   forall (prog arg : str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
         (fun (f : fdesc) => tr ~~ traced (Call prog arg f :: tr)).
+
+(* TODO: realize this function *)
+Axiom connect :
+  forall (url : str) (tr : [Trace]),
+    STsep (tr ~~ traced tr)
+    (fun (soc: fdesc) => tr ~~ traced (Connect url soc :: tr)).
 
 (* TODO add non-empty precondition *)
 Axiom select :

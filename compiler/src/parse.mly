@@ -12,7 +12,7 @@
 %}
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
-%token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
+%token NUM STR FDESC CHAN CALL SEND RECV SPAWN CONNECT WHEN
 %token EQ EQC EQN EQS COMMA SEMI COLON
 %token PLUS AT BANG CARET DOT AMP PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH
@@ -96,6 +96,8 @@ cmd :
     { Spawn ($1, $5) }
   | SPAWN LPAREN comp_constr RPAREN
     { Spawn (mkstr "c%d" (tock ()), $3) }
+  | ID EQ CONNECT LPAREN expr RPAREN
+    { Connect ($1, $5) }
   | ID EQ expr
     { Assign ($1, $3) }
 ;;

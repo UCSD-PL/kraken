@@ -41,10 +41,11 @@ type msg_decl = typ msg
 type msg_expr = expr msg
 
 type cmd =
-  | Send   of chan * msg_expr
-  | Call   of id * expr * expr
-  | Spawn  of id * (id * expr list)
-  | Assign of id * expr
+  | Send    of chan * msg_expr
+  | Call    of id * expr * expr
+  | Spawn   of id * (id * expr list)
+  | Connect of id * expr
+  | Assign  of id * expr
 
 type prog =
   | Nop

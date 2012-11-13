@@ -2,21 +2,45 @@
   open Common
   open Kernel
 
-  let parse_error _ =
-    failwith (mkstr "Parse: error on line %d" !line)
-
   (* NOTE to get commas correct, we special case empty arg lists *)
 
   (* global kernel ref, support omitted and arbitrarily ordered sections *)
   let _K = ref empty_kernel
+
+  let set_kmp_typ = function
+    | PP_Any _     , t -> PP_Any t
+    | PP_Lit (_, l), t -> PP_Lit (t, l)
+    | PP_Var (_, x), t -> PP_Var (t, x)
+
+  let set_kmp_typs tag params =
+    try
+      !_K.msg_decls
+        |> List.map (fun md -> (md.tag, md.payload))
+        |> List.assoc tag
+        |> List.combine params
+        |> List.map set_kmp_typ
+    with Not_found ->
+      failwith (mkstr "set_kmp_typs: no such tag '%s'" tag)
+    | Invalid_argument _ ->
+      failwith (mkstr "set_kmp_typs: bad msg params for '%s'" tag)
+
+  let var_bindings = ref []
+
+  let lkup_var v =
+    try
+      List.assoc v !var_bindings
+    with Not_found ->
+      let n = tock () in
+      var_bindings := (v, n) :: !var_bindings;
+      n
 %}
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
 %token EQ EQC EQN COMMA SEMI COLON
-%token PLUS BANG CARET DOT AMP PIPE OPT STAR
-%token IMMAFTER IMMBEFORE MATCH
-%token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
+%token PLUS UNDER BANG CARET DOT AMP PIPE OPT STAR
+%token IMMAFTER IMMBEFORE MATCH HASCHANTYPE
+%token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE LCTX RCTX EOF
 
 %right PLUS
 
@@ -220,9 +244,37 @@ prop :
     { KTracePat $3 }
 ;;
 
+/* all typs set to Num, fixed up in kmp */
+param_pat :
+  | UNDER
+    { PP_Any Num }
+  | STRLIT
+    { PP_Lit (Num, $1) }
+  | NUMLIT
+    { PP_Lit (Num, string_of_int $1) }
+  | ID
+    { PP_Var (Num, lkup_var $1) }
+;;
+
+param_pats :
+  | param_pat
+    { $1 :: [] }
+  | param_pat COMMA param_pats
+    { $1 :: $3 }
+;;
+
+kmp :
+  | ID LPAREN RPAREN
+    { ($1, []) }
+  | ID LPAREN param_pats RPAREN
+    { ($1, set_kmp_typs $1 $3) }
+;;
+
 kap :
-  | SEND ID { KAP_KSend $2 }
-  | RECV ID { KAP_KRecv $2 }
+  | SEND LPAREN param_pat COMMA kmp RPAREN
+    { KAP_KSend (set_kmp_typ ($3, Chan), $5) }
+  | RECV LPAREN param_pat COMMA kmp RPAREN
+    { KAP_KRecv (set_kmp_typ ($3, Chan), $5) }
 ;;
 
 pclass :
@@ -249,6 +301,8 @@ ktp_00 :
     { $2 }
   | LSQUARE CARET nclass RSQUARE
     { $3 }
+  | LCTX ID HASCHANTYPE ID RCTX
+    { KTP_Ctx_ChanT (lkup_var $2, $4) }
   | LPAREN ktrace_pat RPAREN
     { $2 }
 ;;
@@ -262,6 +316,13 @@ ktp_10 :
     { KTP_Star $1 }
   | ktp_10 PLUS
     { KTP_Cat ($1, KTP_Star $1) }
+  | ktp_10 LCURL NUMLIT RCURL
+    { range 0 $3
+        |> List.map (fun _ -> $1)
+        |> List.fold_left
+             (fun acc p -> KTP_Cat (acc, p))
+             KTP_Emp
+    }
 ;;
 
 ktp_20 :

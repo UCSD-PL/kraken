@@ -43,16 +43,16 @@ Properties {
 
   AnyDisguise =
     Match {
-      ([^send M]|[^recv M])*
+      ([^send(_, M(_, _))]|[^recv(_, M(_, _))])*
     };
 
   NoSendTillRecv =
     Match {
-      [^send M]*|.*[recv M][^send M]*
+      [^send(_, M(_, _))]*|.*[recv(_, M(_, _))][^send(_, M(_, _))]*
     };
 
   DonTest =
     Match {
-      (.*[recv M])?[^send M]*
+      (.*[recv(_, M(_, _))])?[^send(_, M(_, _))]*
     };
 }

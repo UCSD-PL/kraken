@@ -36,6 +36,7 @@ rule token = parse
   | "Match" { MATCH }
   | "=c" { EQC }
   | "=n" { EQN }
+  | "=s" { EQS }
   | "="  { EQ }
   | "{"  { LCURL }
   | "}"  { RCURL }

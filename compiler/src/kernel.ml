@@ -20,6 +20,7 @@ type when_cond =
   | Always
   | NumEq  of id * int
   | ChanEq of id * id
+  | StrEq  of expr * expr
 
 type 'a msg =
   { tag : string

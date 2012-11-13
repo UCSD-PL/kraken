@@ -38,7 +38,7 @@
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
 %token EQ EQC EQN COMMA SEMI COLON
-%token PLUS UNDER BANG CARET DOT AMP PIPE OPT STAR
+%token PLUS AT UNDER BANG CARET DOT AMP PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH HASCHANTYPE
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE LCTX RCTX EOF
 
@@ -116,12 +116,27 @@ cmd :
     { Call ($1, $5, $7) }
   | SEND LPAREN ID COMMA msg_expr RPAREN
     { Send ($3, $5) }
-  | ID EQ SPAWN LPAREN ID RPAREN
+  | ID EQ SPAWN LPAREN comp_constr RPAREN
     { Spawn ($1, $5) }
-  | SPAWN LPAREN ID RPAREN
+  | SPAWN LPAREN comp_constr RPAREN
     { Spawn (mkstr "c%d" (tock ()), $3) }
   | ID EQ expr
     { Assign ($1, $3) }
+;;
+
+comp_constr :
+  | ID
+    { ($1, []) }
+  | ID LPAREN comp_fields RPAREN
+    { ($1, $3) }
+
+comp_fields :
+  | /* empty */
+    { [] }
+  | expr
+    { [$1] }
+  | expr COMMA comp_fields
+    { $1 :: $3 }
 ;;
 
 msg_expr :
@@ -140,9 +155,10 @@ exprs :
 
 expr :
   | expr PLUS expr { Plus($1, $3) }
-  | NUMLIT { NumLit $1 }
-  | STRLIT { StrLit $1 }
-  | ID { Var $1 }
+  | NUMLIT         { NumLit $1 }
+  | STRLIT         { StrLit $1 }
+  | ID             { Var $1 }
+  | ID AT ID       { CompFld($1, $3) }
 ;;
 
 when_cond :
@@ -199,7 +215,9 @@ comp_decls :
 
 comp_decl :
   | ID STRLIT SEMI
-    { ($1, $2) }
+    { ($1, ($2, [])) }
+  | ID STRLIT LCURL var_decls RCURL
+    { ($1, ($2, $4)) }
 ;;
 
 typs :

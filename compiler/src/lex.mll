@@ -50,6 +50,7 @@ rule token = parse
   | ";"  { SEMI }
   | ":"  { COLON }
   | "+"  { PLUS }
+  | "@"  { AT }
   | "_"  { UNDER }
   | "!"  { BANG }
   | "^"  { CARET }

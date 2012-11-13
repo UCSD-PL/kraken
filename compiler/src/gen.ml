@@ -34,6 +34,9 @@ let rec coq_of_expr = function
   | Plus (a, b) ->
     mkstr "(num_of_nat ((nat_of_num (%s)) + (nat_of_num (%s))))"
       (coq_of_expr a) (coq_of_expr b)
+  | CompFld (c, fld) ->
+    (* This is very dirty, I know CT : projT1 c = SomeComp will be there *)
+    mkstr "(%s (snd (eq_rec _ _ (projT2 %s) _ CT)))" fld c
 
 let coq_of_args m =
   m.payload

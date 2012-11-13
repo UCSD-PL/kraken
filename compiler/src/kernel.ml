@@ -47,15 +47,28 @@ type prog =
   | Nop
   | Seq of cmd * prog
 
+(* symbolic state
+ *
+ * Track current value of state var during a handler's symbolic execution.
+ * For example, after [a := a + 1], [a] is mapped to [a + 1].
+ *)
+type sstate = (id * expr) list
+
+(*
+  I'm sorry, this is quite hacky :(
+  sstate holds the final mapping
+*)
+type uprog = prog * sstate
+
 type cond_prog =
   { condition : when_cond
-  ; program   : prog
+  ; program   : uprog
   }
 
 let mk_cond_prog c r =
   { condition = c
   ; program   = r
-  } 
+  }
 
 type handler =
   { trigger  : msg_pat
@@ -107,7 +120,7 @@ type kernel =
   ; var_decls  : (id * typ) list
   ; components : (id * string) list
   ; msg_decls  : msg_decl list
-  ; init       : prog
+  ; init       : uprog
   ; exchange   : chan * ((component * handler list) list)
   ; props      : (id * prop) list
   }
@@ -117,7 +130,7 @@ let empty_kernel =
   ; var_decls  = []
   ; components = []
   ; msg_decls  = []
-  ; init       = Nop
+  ; init       = (Nop, [])
   ; exchange   = ("__xch__", [])
   ; props      = []
   }

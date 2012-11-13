@@ -109,12 +109,56 @@ let parse_args () =
       ]
   end
 
+let desugar_let k =
+  let open Kernel in
+  let desugar p =
+    let rec desugar_aux bindings = function
+    | Nop -> (Nop, bindings)
+    | Seq (cmd, p) ->
+      match cmd with
+      | Assign (id, expr) ->
+        desugar_aux (GenKernel.set_var bindings id expr) p
+      | Send (c, msg) ->
+        let c = Gen.coq_of_expr (GenKernel.lkup_var bindings c) in
+        let msg = GenKernel.lkup_msg_expr bindings msg in
+        let (prog, bindings) = desugar_aux bindings p in
+        (Seq (Send(c, msg), prog), bindings)
+      | Call (res, f, arg) ->
+        let (prog, bindings) = desugar_aux bindings p in
+        (Seq (Call (res, f, arg), prog), bindings)
+      | Spawn (res, comp) ->
+        let (prog, bindings) = desugar_aux bindings p in
+        (Seq (Spawn (res, comp), prog), bindings)
+    in desugar_aux [] (fst p)
+  in
+  let open Kernel in
+  { k with
+    init = desugar k.init
+  ; exchange = (
+      let (c, chll) = k.exchange in
+      let chll =
+        List.map (fun (c, hl) ->
+          (c,
+            List.map (fun h ->
+              { h with responds =
+                List.map (fun cp ->
+                  { cp with program = desugar cp.program }
+                ) h.responds
+              }
+            ) hl
+          )
+        ) chll
+      in
+      (c, chll)
+    )
+  }
+
 let parse_kernel f =
   let lexbuf =
     Lexing.from_channel (open_in f)
   in
   try
-    Parse.kernel Lex.token lexbuf
+    desugar_let (Parse.kernel Lex.token lexbuf)
   with Parse.Error ->
     failwith
       (mkstr "Parse failure: line %d"
@@ -124,6 +168,7 @@ let parse_kernel f =
   f |> readfile
     |> Lexing.from_string
     |> Parse.kernel Lex.token
+    |> desugar_let
 *)
 
 (* for catg: read template, rewrite with subs, write instance *)

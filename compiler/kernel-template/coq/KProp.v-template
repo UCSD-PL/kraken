@@ -155,8 +155,8 @@ Inductive MsgMatch : MsgPat -> msg -> Prop :=
 
 Inductive KActionPat : Set :=
 | KAP_Any   : KActionPat
-| KAP_KSend : MsgPat -> KActionPat
-| KAP_KRecv : MsgPat -> KActionPat
+| KAP_KSend : ParamPat Chan -> MsgPat -> KActionPat
+| KAP_KRecv : ParamPat Chan -> MsgPat -> KActionPat
 .
 
 Inductive KActionMatch : KActionPat -> KAction -> Prop :=
@@ -164,13 +164,15 @@ Inductive KActionMatch : KActionPat -> KAction -> Prop :=
   forall a,
   KActionMatch KAP_Any a
 | KAM_KSend :
-  forall mp c m,
+  forall cp c mp m,
+  ParamMatch Chan ctx cp c ->
   MsgMatch mp m ->
-  KActionMatch (KAP_KSend mp) (KSend c m)
+  KActionMatch (KAP_KSend cp mp) (KSend c m)
 | KAM_KRecv :
-  forall mp c m,
+  forall cp c mp m,
+  ParamMatch Chan ctx cp c ->
   MsgMatch mp m ->
-  KActionMatch (KAP_KRecv mp) (KRecv c m)
+  KActionMatch (KAP_KRecv cp mp) (KRecv c m)
 .
 
 Inductive KTracePat : Set :=

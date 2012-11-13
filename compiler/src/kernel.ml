@@ -77,8 +77,8 @@ type kmsg_pat =
 
 type kaction_pat =
   | KAP_Any
-  | KAP_KSend of kmsg_pat
-  | KAP_KRecv of kmsg_pat
+  | KAP_KSend of param_pat * kmsg_pat
+  | KAP_KRecv of param_pat * kmsg_pat
 
 type ktrace_pat =
   | KTP_Emp

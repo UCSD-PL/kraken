@@ -1,0 +1,50 @@
+State {
+  user : str;
+  auth : num;
+  C : chan;
+  P : chan;
+  T : chan;
+}
+
+Components {
+  Connection "";
+  Password "";
+  Terminal "";
+}
+
+Messages {
+  ReqAuth(str, str);
+  Auth(str);
+  ReqTerm(str);
+  Term(str, fdesc);
+}
+
+Init {
+  user = "";
+  auth = 0;
+  C = spawn(Connection);
+  P = spawn(Password);
+  T = spawn(Terminal);
+}
+
+Exchange(c) {
+  Connection {
+    ReqAuth(u, p) {
+      send(P, ReqAuth(u, p));
+    }
+    ReqTerm(u) when (user =s u && auth =n 1) {
+      send(T, ReqTerm(u));
+    }
+  }
+  Password {
+    Auth(u) {
+      user = u;
+      auth = 1;
+    }
+  }
+  Terminal {
+    Term(u, t) when (user =s u && auth =n 1) {
+      send(C, Term(u, t));
+    }
+  }
+}

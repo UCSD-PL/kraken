@@ -55,26 +55,26 @@ Properties {
 
   AnyDisguise =
     Match {
-      ([^send(M(_))]|[^recv(M(_))])*
+      ([^send(_, M(_))]|[^recv(_, M(_))])*
     };
 
   NoSendTillRecv =
     Match {
-      [^send(M(_))]*|.*[recv(M(_))][^send(M(_))]*
+      [^send(_, M(_))]*|.*[recv(_, M(_))][^send(_, M(_))]*
     };
 
   DonTest =
     Match {
-      (.*[recv(M(_))])?[^send(M(_))]*
+      (.*[recv(_, M(_))])?[^send(_, M(_))]*
     };
 
   Never2Sends =
     Match {
-      !.*[send(M(_))][send(M(_))].*
+      !.*[send(_, M(_))][send(_, M(_))].*
     };
 
   Never2SendsAlt =
     Match {
-      ! .*[send(M(_))]{2}.*
+      ! .*[send(_, M(_))]{2}.*
     };
 }

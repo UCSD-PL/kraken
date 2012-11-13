@@ -10,12 +10,12 @@
   (* global kernel ref, support omitted and arbitrarily ordered sections *)
   let _K = ref empty_kernel
 
+  let set_kmp_typ = function
+    | PP_Any _     , t -> PP_Any t
+    | PP_Lit (_, l), t -> PP_Lit (t, l)
+    | PP_Var (_, x), t -> PP_Var (t, x)
+
   let set_kmp_typs tag params =
-    let set_kmp_typ = function
-      | PP_Any _     , t -> PP_Any t
-      | PP_Lit (_, l), t -> PP_Lit (t, l)
-      | PP_Var (_, x), t -> PP_Var (t, x)
-    in
     try
       !_K.msg_decls
         |> List.map (fun md -> (md.tag, md.payload))
@@ -263,10 +263,10 @@ kmp :
 ;;
 
 kap :
-  | SEND LPAREN kmp RPAREN
-    { KAP_KSend $3 }
-  | RECV LPAREN kmp RPAREN
-    { KAP_KRecv $3 }
+  | SEND LPAREN param_pat COMMA kmp RPAREN
+    { KAP_KSend (set_kmp_typ ($3, Chan), $5) }
+  | RECV LPAREN param_pat COMMA kmp RPAREN
+    { KAP_KRecv (set_kmp_typ ($3, Chan), $5) }
 ;;
 
 pclass :

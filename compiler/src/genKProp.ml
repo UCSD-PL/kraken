@@ -56,9 +56,9 @@ let ckmp (tag, params) =
         |> mkstr "MP_%s (%s)" tag
 
 let ckap = function
-  | KAP_Any     -> "KAP_Any"
-  | KAP_KSend p -> mkstr "KAP_KSend (%s)" (ckmp p)
-  | KAP_KRecv p -> mkstr "KAP_KRecv (%s)" (ckmp p)
+  | KAP_Any            -> "KAP_Any"
+  | KAP_KSend (cp, mp) -> mkstr "KAP_KSend (%s) (%s)" (cpp cp) (ckmp mp)
+  | KAP_KRecv (cp, mp) -> mkstr "KAP_KRecv (%s) (%s)" (cpp cp) (ckmp mp)
 
 let rec cktp = function
   | KTP_Emp    -> "KTP_Emp"
@@ -87,9 +87,9 @@ let pretty_mp (tag, params) =
     |> mkstr "%s(%s)" tag
 
 let pretty_kap = function
-  | KAP_Any     -> "_"
-  | KAP_KSend p -> mkstr "send(%s)" (pretty_mp p)
-  | KAP_KRecv p -> mkstr "recv(%s)" (pretty_mp p)
+  | KAP_Any            -> "_"
+  | KAP_KSend (cp, mp) -> mkstr "send(%s, %s)" (pretty_pp cp) (pretty_mp mp)
+  | KAP_KRecv (cp, mp) -> mkstr "recv(%s, %s)" (pretty_pp cp) (pretty_mp mp)
 
 let rec pretty_tp = function
   | KTP_Emp    -> "0"

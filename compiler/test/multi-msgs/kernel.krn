@@ -60,16 +60,16 @@ Properties {
 
   AnyDisguise =
     Match {
-      ([^send(M1(_)), send(M2(_))]|[^recv(M1(_)), recv(M2(_))])*
+      ([^send(_, M1(_)), send(_, M2(_))]|[^recv(_, M1(_)), recv(_, M2(_))])*
     };
 
   NoSendTillRecv =
     Match {
-      [^send(M1(_)), send(M2(_))]*|.*[recv(M1(_)), recv(M2(_))][^send(M1(_)), send(M2(_))]*
+      [^send(_, M1(_)), send(_, M2(_))]*|.*[recv(_, M1(_)), recv(_, M2(_))][^send(_, M1(_)), send(_, M2(_))]*
     };
 
   DonTest =
     Match {
-      (.*[recv(M1(_)), recv(M2(_))])?[^send(M1(_)), send(M2(_))]*
+      (.*[recv(_, M1(_)), recv(_, M2(_))])?[^send(_, M1(_)), send(_, M2(_))]*
     };
 }

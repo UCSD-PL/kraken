@@ -32,7 +32,9 @@ Exchange(c) {
     ReqAuth(u, p) {
       send(P, ReqAuth(u, p));
     }
-    ReqTerm(u) { # when (user =s u && auth =n 1) {
+    ReqTerm(u)
+    when (user !=s u) {}
+    when (auth =n 1) {
       send(T, ReqTerm(u));
     }
   }
@@ -43,7 +45,9 @@ Exchange(c) {
     }
   }
   Terminal {
-    Term(u, t) { # when (user =s u && auth =n 1) {
+    Term(u, t)
+    when (user !=s u) {}
+    when (auth =n 1) {
       send(C, Term(u, t));
     }
   }

@@ -223,9 +223,11 @@ let handler_vars_nonstate pacc xch_chan trig prog svars =
     (handler_vars pacc xch_chan trig prog)
 
 let coq_of_cond_prop = function
-  | Always            -> "True"
-  | NumEq (id, i)     -> mkstr "(nat_of_num %s = %d)" id i
-  | ChanEq (idl, idr) -> mkstr "(%s = %s)" idl idr
+  | Always             -> "True"
+  | NumEq   (id, i)    -> mkstr "(nat_of_num %s = %d)" id i
+  | ChanEq  (idl, idr) -> mkstr "(%s = %s)" idl idr
+  | NumNeq  (id, i)    -> mkstr "(nat_of_num %s <> %d)" id i
+  | ChanNeq (idl, idr) -> mkstr "(%s <> %s)" idl idr
 
 let coq_of_cond_spec prev_conds cond =
   let context =
@@ -278,12 +280,22 @@ let coq_of_cond index = function
   | NumEq (id, v) ->
       lcat
         [ if index > 0 then " else " else ""
-        ; mkstr "if (Peano_dec.eq_nat_dec (nat_of_num %s) %d) then " id v
+        ; mkstr "if (nat_eq (nat_of_num %s) %d) then " id v
         ]
   | ChanEq (idl, idr) ->
       lcat
         [ if index > 0 then " else " else ""
         ; mkstr "if (tchan_eq %s %s) then" idl idr
+        ]
+  | NumNeq (id, v) ->
+      lcat
+        [ if index > 0 then " else " else ""
+        ; mkstr "if (nat_neq (nat_of_num %s) %d) then " id v
+        ]
+  | ChanNeq (idl, idr) ->
+      lcat
+        [ if index > 0 then " else " else ""
+        ; mkstr "if (tchan_neq %s %s) then" idl idr
         ]
 
 let fields_in_comps k =

@@ -35,30 +35,32 @@ rule token = parse
   | "ImmAfter" { IMMAFTER }
   | "ImmBefore" { IMMBEFORE }
   | "Match" { MATCH }
-  | "=c" { EQC }
-  | "=n" { EQN }
-  | "="  { EQ }
-  | "{"  { LCURL }
-  | "}"  { RCURL }
-  | "("  { LPAREN }
-  | ")"  { RPAREN }
-  | "["  { LSQUARE }
-  | "]"  { RSQUARE }
-  | "<<" { LCTX }
-  | ">>" { RCTX }
-  | ","  { COMMA }
-  | ";"  { SEMI }
-  | ":"  { COLON }
-  | "+"  { PLUS }
-  | "_"  { UNDER }
-  | "!"  { BANG }
-  | "^"  { CARET }
-  | "."  { DOT }
-  | "&"  { AMP }
-  | "|"  { PIPE }
-  | "?"  { OPT }
-  | "*"  { STAR }
-  | eof  { EOF }
+  | "=c"  { EQC }
+  | "=n"  { EQN }
+  | "!=c" { NEQC }
+  | "!=n" { NEQN }
+  | "="   { EQ }
+  | "{"   { LCURL }
+  | "}"   { RCURL }
+  | "("   { LPAREN }
+  | ")"   { RPAREN }
+  | "["   { LSQUARE }
+  | "]"   { RSQUARE }
+  | "<<"  { LCTX }
+  | ">>"  { RCTX }
+  | ","   { COMMA }
+  | ";"   { SEMI }
+  | ":"   { COLON }
+  | "+"   { PLUS }
+  | "_"   { UNDER }
+  | "!"   { BANG }
+  | "^"   { CARET }
+  | "."   { DOT }
+  | "&"   { AMP }
+  | "|"   { PIPE }
+  | "?"   { OPT }
+  | "*"   { STAR }
+  | eof   { EOF }
   | num as x { NUMLIT (int_of_string x) }
   | str as x { STRLIT (chop_quotes x) }
   | id as x { ID x }

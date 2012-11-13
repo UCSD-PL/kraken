@@ -2,28 +2,63 @@ open Common
 open Kernel
 open Gen
 
+let coq_of_param_typ = function
+  | Num   -> "Num"
+  | Str   -> "Str"
+  | Chan  -> "Chan"
+  | Fdesc -> "Fdesc"
+
 let msgpat_case m =
-  mkstr "| MP_%s" m.tag
+  m.payload
+    |> List.map coq_of_param_typ
+    |> List.map (mkstr "ParamPat %s -> ")
+    |> String.concat ""
+    |> mkstr "| MP_%s : %sMsgPat" m.tag
 
 let msgmatch_case m =
-  match m.payload with
+  let hyps =
+    m.payload
+      |> mapi (fun i t ->
+          mkstr "  forall pp%d p%d, ParamMatch %s ctx pp%d p%d ->"
+            i i (coq_of_param_typ t) i i)
+      |> String.concat "\n"
+      |> function "" -> "" | s -> "\n" ^ s
+  in
+  let pps =
+    m.payload
+      |> mapi (fun i _ -> mkstr " pp%d" i)
+      |> String.concat ""
+  in
+  let ps =
+    m.payload
+      |> mapi (fun i _ -> mkstr " p%d" i)
+      |> String.concat ""
+  in
+  mkstr "\
+| MM_%s :
+  ctx = ctx ->%s
+  MsgMatch (MP_%s%s) (%s%s)"
+    m.tag hyps m.tag pps m.tag ps
+
+let cpp = function
+  | PP_Any t      -> mkstr "PP_Any %s" (coq_of_param_typ t)
+  | PP_Lit (t, v) -> mkstr "PP_Lit %s (%s)" (coq_of_param_typ t) v
+  | PP_Var (t, n) -> mkstr "PP_Var %s %d" (coq_of_param_typ t) n
+
+let ckmp (tag, params) =
+  match params with
   | [] ->
-      mkstr "
-| MM_%s :
-    MsgMatch MP_%s %s"
-      m.tag m.tag m.tag
+      mkstr "MP_%s" tag
   | _ ->
-      let args = coq_of_args m in
-      mkstr "
-| MM_%s :
-  forall %s,
-  MsgMatch MP_%s (%s %s)"
-        m.tag args m.tag m.tag args
+      params
+        |> List.map cpp
+        |> String.concat ") ("
+        |> mkstr "MP_%s (%s)" tag
 
 let ckap = function
-  | KAP_Any     -> "KAP_Any"
-  | KAP_KSend s -> mkstr "KAP_KSend MP_%s" s
-  | KAP_KRecv s -> mkstr "KAP_KRecv MP_%s" s
+  | KAP_Any            -> "KAP_Any"
+  | KAP_KSend (cp, mp) -> mkstr "KAP_KSend (%s) (%s)" (cpp cp) (ckmp mp)
+  | KAP_KRecv (cp, mp) -> mkstr "KAP_KRecv (%s) (%s)" (cpp cp) (ckmp mp)
 
 let rec cktp = function
   | KTP_Emp    -> "KTP_Emp"
@@ -33,10 +68,43 @@ let rec cktp = function
   | KTP_Alt (a, b) -> mkstr "KTP_Alt (%s) (%s)" (cktp a) (cktp b)
   | KTP_And (a, b) -> mkstr "KTP_And (%s) (%s)" (cktp a) (cktp b)
   | KTP_Cat (a, b) -> mkstr "KTP_Cat (%s) (%s)" (cktp a) (cktp b)
+  | KTP_Ctx_ChanT (var, chanT) -> mkstr "KTP_Ctx_ChanT %d %s" var chanT
 
 let coq_of_kt_spec = function
   | KTS_Pat  p -> mkstr "KTS_Pat  (%s)" (cktp p)
   | KTS_NPat p -> mkstr "KTS_NPat (%s)" (cktp p)
+
+(* pretty print regexps *)
+
+let pretty_pp = function
+  | PP_Any _      -> "_"
+  | PP_Lit (_, v) -> "\"" ^ v ^ "\""
+  | PP_Var (_, v) -> string_of_int v
+
+let pretty_mp (tag, params) =
+  params
+    |> List.map pretty_pp
+    |> String.concat ", "
+    |> mkstr "%s(%s)" tag
+
+let pretty_kap = function
+  | KAP_Any            -> "_"
+  | KAP_KSend (cp, mp) -> mkstr "send(%s, %s)" (pretty_pp cp) (pretty_mp mp)
+  | KAP_KRecv (cp, mp) -> mkstr "recv(%s, %s)" (pretty_pp cp) (pretty_mp mp)
+
+let rec pretty_tp = function
+  | KTP_Emp    -> "0"
+  | KTP_Act  x -> mkstr "[%s]"  (pretty_kap x)
+  | KTP_NAct x -> mkstr "[^%s]" (pretty_kap x)
+  | KTP_Star a -> mkstr "(%s)* " (pretty_tp a)
+  | KTP_Alt (a, b) -> mkstr "(%s | %s)" (pretty_tp a) (pretty_tp b)
+  | KTP_And (a, b) -> mkstr "(%s & %s)" (pretty_tp a) (pretty_tp b)
+  | KTP_Cat (a, b) -> mkstr "%s %s"      (pretty_tp a) (pretty_tp b)
+  | KTP_Ctx_ChanT (var, chanT) -> mkstr "<<%d HASCHANTYPE %s>>" var chanT
+
+let pretty_kt_spec = function
+  | KTS_Pat  p -> mkstr "ALWAYS_MATCH : %s"  (pretty_tp p)
+  | KTS_NPat p -> mkstr "NEVER_MATCH : %s" (pretty_tp p)
 
 let fold_kstate_field (id, _) =
   mkstr "  fold (Kernel.%s s) in *;" id
@@ -73,12 +141,13 @@ Theorem %s :
   forall kst, KInvariant kst ->
   forall tr, ktr kst = [tr]%%inhabited ->
   KTraceMatchSpec
+    (* %s *)
     (%s)
     tr.
 Proof.
-  ktmatch.
+  ktm.
 Qed.
-" name (coq_of_kt_spec p)
+" name (pretty_kt_spec p) (coq_of_kt_spec p)
 
 let subs k =
   List.map (fun (f, r) ->

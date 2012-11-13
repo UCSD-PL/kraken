@@ -33,7 +33,7 @@ Init {
 Exchange(c) {
   Tab {
     Display(s) when (c =c curtab) {
-      send(output, K2GDisplayShm(s));
+      send(output, Display(s));
     } {
       # Drop display requests from non-current tabs
     }

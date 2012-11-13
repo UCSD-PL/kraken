@@ -19,9 +19,10 @@ let msgmatch_case m =
   let hyps =
     m.payload
       |> mapi (fun i t ->
-          mkstr "  forall pp%d p%d, ParamMatch %s pp%d p%d ->"
+          mkstr "  forall pp%d p%d, ParamMatch %s ctx pp%d p%d ->"
             i i (coq_of_param_typ t) i i)
       |> String.concat "\n"
+      |> function "" -> "" | s -> "\n" ^ s
   in
   let pps =
     m.payload
@@ -33,14 +34,14 @@ let msgmatch_case m =
       |> mapi (fun i _ -> mkstr " p%d" i)
       |> String.concat ""
   in
-  mkstr "
+  mkstr "\
 | MM_%s :
-%s
+  ctx = ctx ->%s
   MsgMatch (MP_%s%s) (%s%s)"
     m.tag hyps m.tag pps m.tag ps
 
 let cpp = function
-  | PP_Any t   -> mkstr "PP_Any %s" (coq_of_param_typ t)
+  | PP_Any t      -> mkstr "PP_Any %s" (coq_of_param_typ t)
   | PP_Lit (t, v) -> mkstr "PP_Lit %s (%s)" (coq_of_param_typ t) v
   | PP_Var (t, v) -> mkstr "PP_Var %s %s" (coq_of_param_typ t) v
 
@@ -71,6 +72,37 @@ let rec cktp = function
 let coq_of_kt_spec = function
   | KTS_Pat  p -> mkstr "KTS_Pat  (%s)" (cktp p)
   | KTS_NPat p -> mkstr "KTS_NPat (%s)" (cktp p)
+
+(* pretty print regexps *)
+
+let pretty_pp = function
+  | PP_Any _      -> "_"
+  | PP_Lit (_, v) -> "\"" ^ v ^ "\""
+  | PP_Var (_, v) -> v
+
+let pretty_mp (tag, params) =
+  params
+    |> List.map pretty_pp
+    |> String.concat ", "
+    |> mkstr "%s(%s)" tag
+
+let pretty_kap = function
+  | KAP_Any     -> "_"
+  | KAP_KSend p -> mkstr "send(%s)" (pretty_mp p)
+  | KAP_KRecv p -> mkstr "recv(%s)" (pretty_mp p)
+
+let rec pretty_tp = function
+  | KTP_Emp    -> "0"
+  | KTP_Act  x -> mkstr "[%s]"  (pretty_kap x)
+  | KTP_NAct x -> mkstr "[^%s]" (pretty_kap x)
+  | KTP_Star a -> mkstr "(%s)* " (pretty_tp a)
+  | KTP_Alt (a, b) -> mkstr "(%s | %s)" (pretty_tp a) (pretty_tp b)
+  | KTP_And (a, b) -> mkstr "(%s & %s)" (pretty_tp a) (pretty_tp b)
+  | KTP_Cat (a, b) -> mkstr "%s %s"      (pretty_tp a) (pretty_tp b)
+
+let pretty_kt_spec = function
+  | KTS_Pat  p -> mkstr "%s"  (pretty_tp p)
+  | KTS_NPat p -> mkstr "!%s" (pretty_tp p)
 
 let fold_kstate_field (id, _) =
   mkstr "  fold (Kernel.%s s) in *;" id
@@ -107,12 +139,13 @@ Theorem %s :
   forall kst, KInvariant kst ->
   forall tr, ktr kst = [tr]%%inhabited ->
   KTraceMatchSpec
+    (* %s *)
     (%s)
     tr.
 Proof.
-  ktmatch.
+  ktm.
 Qed.
-" name (coq_of_kt_spec p)
+" name (pretty_kt_spec p) (coq_of_kt_spec p)
 
 let subs k =
   List.map (fun (f, r) ->

@@ -1,0 +1,32 @@
+State {
+  chosenOne : num;
+}
+
+Components {
+  Comp "comp.py" {
+    id : num;
+  }
+}
+
+Messages {
+  WhoAmI    ();
+  IAmChosen (num);
+  IAmNormal (num);
+}
+
+Init {
+  chosenOne = 1;
+  spawn(Comp(2));
+  spawn(Comp(1));
+  spawn(Comp(3));
+}
+
+Exchange(c) {
+  Comp {
+    WhoAmI() { #when (c@id =n 1) {
+      send(c, IAmChosen(c@id));
+    } #{
+      #send(c, IAmNormal(c@id));
+    #}
+  }
+}

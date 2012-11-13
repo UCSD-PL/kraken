@@ -63,7 +63,14 @@ Definition chan_path (t: chan_type): str :=
 
 Axiom chan : chan_type -> Set.
 
-Definition tchan := sigT (fun t : chan_type => chan t).
+(* __COMPS_STATES__ *)
+
+Definition comp_state (t: chan_type) : Set :=
+  match t with
+(* __COMPS_STATES_DISPATCH__ *)
+  end.
+
+Definition tchan := sigT (fun t : chan_type => (chan t * comp_state t)%type).
 
 Axiom tchan_eq : forall (c1 c2 : tchan), { c1 = c2 } + { c1 <> c2 }.
 
@@ -101,7 +108,7 @@ Axiom traced : Trace -> hprop.
 Axiom bound : tchan -> hprop.
 
 Axiom exec :
-  forall (t: chan_type) (prog : str) (tr : [Trace]),
+  forall (t: chan_type) (prog : str) (st: comp_state t) (tr : [Trace]),
     STsep (tr ~~ traced tr * [prog = chan_path t])
     (fun (c: tchan) =>
       tr ~~ bound c * traced (Exec prog c :: tr) * [projT1 c = t]).

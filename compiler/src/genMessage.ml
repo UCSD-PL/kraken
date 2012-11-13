@@ -140,8 +140,19 @@ let subs k =
   ; "COMP_DECLS",
       fmt k.components (fun (id, _) -> "| " ^ id)
   ; "CHAN_PATHS",
-      fmt k.components (fun (id, path) ->
+      fmt k.components (fun (id, (path, _)) ->
         mkstr "  | %s => str_of_string \"%s\"" id path)
+  ; "COMPS_STATES",
+      fmt k.components (fun (id, (_, fields)) ->
+        mkstr "Record st_%s := { %s }."
+        id
+        (String.concat "; "
+          (List.map (fun (id, typ) -> mkstr "%s : %s" id (coq_of_typ typ)) fields)
+        )
+      )
+  ; "COMPS_STATES_DISPATCH",
+      fmt k.components (fun (id, _) ->
+        mkstr "  | %s => st_%s" id id)
   ; "MSG_DECL",
       fmt k.msg_decls coq_of_msg_decl
   ; "RECV_T_CASES",

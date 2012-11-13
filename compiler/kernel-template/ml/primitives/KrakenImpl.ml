@@ -53,14 +53,14 @@ let log msg =
 
 type chan = Unix.file_descr
 
-let chan_of_tchan (Specif.Coq_existT(_, c)) = c
+let chan_of_tchan (Specif.Coq_existT(_, Datatypes.Coq_pair(c, _))) = c
 
 let tchan_eq tc1 tc2 =
   chan_of_tchan tc1 = chan_of_tchan tc2
 
 type fdesc = Unix.file_descr
 
-let exec t prog _ =
+let exec t prog st _ =
   let prog = MlCoq.string_of_str prog in
   let p, c = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   match Unix.fork () with
@@ -74,7 +74,7 @@ let exec t prog _ =
       Unix.close c;
       log (Printf.sprintf "exec : %s -> (p: %d, c: %d)"
             prog (int_of_fd p) (int_of_fd c));
-      Specif.Coq_existT(t, p)
+      Specif.Coq_existT(t, Datatypes.Coq_pair(p, st))
   end
 
 let call prog arg _ =
@@ -105,7 +105,7 @@ let select chans _ =
   log (Printf.sprintf "select : %s -> %d"
         (String.concat " " (List.map string_of_fd fds))
         (int_of_fd fd));
-  List.find (fun (Specif.Coq_existT(_, c)) -> c = fd) chans
+  List.find (fun (Specif.Coq_existT(_, Datatypes.Coq_pair(c, _))) -> c = fd) chans
 
 let recv c n _ =
   let fd = chan_of_tchan c in
@@ -140,14 +140,14 @@ let send c s _ =
   end
 
 external recv_fd_native : chan -> fdesc = "recv_fd_native"
-let recv_fd (Specif.Coq_existT(_, c)) _ =
+let recv_fd (Specif.Coq_existT(_, Datatypes.Coq_pair(c, _))) _ =
   let fd = recv_fd_native c in
   log (Printf.sprintf "recv_fd : %d -> %d"
         (int_of_fd c) (int_of_fd fd));
   fd
 
 external send_fd_native : chan -> fdesc -> unit = "send_fd_native"
-let send_fd (Specif.Coq_existT(_, c)) fd _ =
+let send_fd (Specif.Coq_existT(_, Datatypes.Coq_pair(c, _))) fd _ =
   send_fd_native c fd;
   log (Printf.sprintf "send_fd : %d %d -> ()"
         (int_of_fd c) (int_of_fd fd));

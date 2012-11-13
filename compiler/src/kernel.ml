@@ -70,7 +70,7 @@ let mk_handler t r =
 type param_pat =
   | PP_Any of typ
   | PP_Lit of typ * string
-  | PP_Var of typ * string
+  | PP_Var of typ * int
 
 type kmsg_pat =
   string * param_pat list
@@ -88,6 +88,7 @@ type ktrace_pat =
   | KTP_And  of ktrace_pat * ktrace_pat
   | KTP_Cat  of ktrace_pat * ktrace_pat
   | KTP_Star of ktrace_pat
+  | KTP_Ctx_ChanT of int * string
 
 type ktrace_spec =
   | KTS_Pat  of ktrace_pat
@@ -134,6 +135,3 @@ let ck_kernel _ =
 let gen_tag_map kernel =
   let tags = List.map tag kernel.msg_decls in
   List.combine tags (range 1 (List.length tags + 1))
-
-(* support lex/parse error reporting *)
-let line = ref 1

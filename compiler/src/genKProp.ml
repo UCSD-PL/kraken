@@ -43,7 +43,7 @@ let msgmatch_case m =
 let cpp = function
   | PP_Any t      -> mkstr "PP_Any %s" (coq_of_param_typ t)
   | PP_Lit (t, v) -> mkstr "PP_Lit %s (%s)" (coq_of_param_typ t) v
-  | PP_Var (t, v) -> mkstr "PP_Var %s %s" (coq_of_param_typ t) v
+  | PP_Var (t, n) -> mkstr "PP_Var %s %d" (coq_of_param_typ t) n
 
 let ckmp (tag, params) =
   match params with
@@ -68,6 +68,7 @@ let rec cktp = function
   | KTP_Alt (a, b) -> mkstr "KTP_Alt (%s) (%s)" (cktp a) (cktp b)
   | KTP_And (a, b) -> mkstr "KTP_And (%s) (%s)" (cktp a) (cktp b)
   | KTP_Cat (a, b) -> mkstr "KTP_Cat (%s) (%s)" (cktp a) (cktp b)
+  | KTP_Ctx_ChanT (var, chanT) -> mkstr "KTP_Ctx_ChanT %d %s" var chanT
 
 let coq_of_kt_spec = function
   | KTS_Pat  p -> mkstr "KTS_Pat  (%s)" (cktp p)
@@ -78,7 +79,7 @@ let coq_of_kt_spec = function
 let pretty_pp = function
   | PP_Any _      -> "_"
   | PP_Lit (_, v) -> "\"" ^ v ^ "\""
-  | PP_Var (_, v) -> v
+  | PP_Var (_, v) -> string_of_int v
 
 let pretty_mp (tag, params) =
   params
@@ -99,10 +100,11 @@ let rec pretty_tp = function
   | KTP_Alt (a, b) -> mkstr "(%s | %s)" (pretty_tp a) (pretty_tp b)
   | KTP_And (a, b) -> mkstr "(%s & %s)" (pretty_tp a) (pretty_tp b)
   | KTP_Cat (a, b) -> mkstr "%s %s"      (pretty_tp a) (pretty_tp b)
+  | KTP_Ctx_ChanT (var, chanT) -> mkstr "<<%d HASCHANTYPE %s>>" var chanT
 
 let pretty_kt_spec = function
-  | KTS_Pat  p -> mkstr "%s"  (pretty_tp p)
-  | KTS_NPat p -> mkstr "!%s" (pretty_tp p)
+  | KTS_Pat  p -> mkstr "ALWAYS_MATCH : %s"  (pretty_tp p)
+  | KTS_NPat p -> mkstr "NEVER_MATCH : %s" (pretty_tp p)
 
 let fold_kstate_field (id, _) =
   mkstr "  fold (Kernel.%s s) in *;" id

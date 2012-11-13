@@ -183,6 +183,7 @@ Inductive KTracePat : Set :=
 | KTP_And  : KTracePat -> KTracePat -> KTracePat
 | KTP_Cat  : KTracePat -> KTracePat -> KTracePat
 | KTP_Star : KTracePat -> KTracePat
+| KTP_Ctx_ChanT : nat -> chan_type -> KTracePat
 .
 
 Inductive KTraceMatch : KTracePat -> KTrace -> Prop :=
@@ -222,6 +223,11 @@ Inductive KTraceMatch : KTracePat -> KTrace -> Prop :=
   KTraceMatch p t1 ->
   KTraceMatch (KTP_Star p) t2 ->
   KTraceMatch (KTP_Star p) (t1 ++ t2)
+| KTM_Ctx_ChanT :
+  forall id ct c tr,
+  In (existT CtxKey (id, Chan) c) ctx ->
+  projT1 c = ct ->
+  KTraceMatch (KTP_Ctx_ChanT id ct) tr
 .
 
 Lemma KTM_Star_app :

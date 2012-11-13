@@ -2,9 +2,6 @@
   open Common
   open Kernel
 
-  let parse_error _ =
-    failwith (mkstr "Parse: error on line %d" !line)
-
   (* NOTE to get commas correct, we special case empty arg lists *)
 
   (* global kernel ref, support omitted and arbitrarily ordered sections *)
@@ -27,14 +24,23 @@
     | Invalid_argument _ ->
       failwith (mkstr "set_kmp_typs: bad msg params for '%s'" tag)
 
+  let var_bindings = ref []
+
+  let lkup_var v =
+    try
+      List.assoc v !var_bindings
+    with Not_found ->
+      let n = tock () in
+      var_bindings := (v, n) :: !var_bindings;
+      n
 %}
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
 %token EQ EQC EQN COMMA SEMI COLON
 %token PLUS UNDER BANG CARET DOT AMP PIPE OPT STAR
-%token IMMAFTER IMMBEFORE MATCH
-%token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE EOF
+%token IMMAFTER IMMBEFORE MATCH HASCHANTYPE
+%token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE LCTX RCTX EOF
 
 %right PLUS
 
@@ -246,6 +252,8 @@ param_pat :
     { PP_Lit (Num, $1) }
   | NUMLIT
     { PP_Lit (Num, string_of_int $1) }
+  | ID
+    { PP_Var (Num, lkup_var $1) }
 ;;
 
 param_pats :
@@ -293,6 +301,8 @@ ktp_00 :
     { $2 }
   | LSQUARE CARET nclass RSQUARE
     { $3 }
+  | LCTX ID HASCHANTYPE ID RCTX
+    { KTP_Ctx_ChanT (lkup_var $2, $4) }
   | LPAREN ktrace_pat RPAREN
     { $2 }
 ;;

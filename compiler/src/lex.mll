@@ -1,6 +1,5 @@
 {
   open Common
-  open Kernel
   open Parse
 
   let chop_quotes s =
@@ -37,8 +36,10 @@ rule token = parse
   | "Match" { MATCH }
   | "=c"  { EQC }
   | "=n"  { EQN }
+  | "=s"  { EQS }
   | "!=c" { NEQC }
   | "!=n" { NEQN }
+  | "!=s" { NEQS }
   | "="   { EQ }
   | "{"   { LCURL }
   | "}"   { RCURL }
@@ -48,6 +49,7 @@ rule token = parse
   | "]"   { RSQUARE }
   | "<<"  { LCTX }
   | ">>"  { RCTX }
+  | "@"   { AT }
   | ","   { COMMA }
   | ";"   { SEMI }
   | ":"   { COLON }

@@ -1,3 +1,4 @@
+Require Import Sumbool.
 Require Import Ascii.
 Require Import List.
 Require Import NPeano.
@@ -50,6 +51,27 @@ Fixpoint str_of_string (s: string): str :=
   | String c rest => c :: str_of_string rest
   end.
 
+Definition num_eq (a b : num) : {a = b} + {a <> b}.
+  case a; intro pA.
+  case b; intro pB.
+  case pA; intros a1 a2.
+  case pB; intros b1 b2.
+  case (ascii_dec a1 b1); intro e1.
+  case (ascii_dec a2 b2); intro e2.
+  left. rewrite e1. rewrite e2. apply refl_equal.
+  right. intro H. apply e2. inversion H. apply refl_equal.
+  right. intro H. apply e1. inversion H. apply refl_equal.
+Qed.
+
+Definition num_neq (a b : num) : {a <> b} + {a = b} :=
+  sumbool_not _ _ (num_eq a b).
+
+Definition str_eq (a b : str) : {a = b} + {a <> b} :=
+  list_eq_dec ascii_dec a b.
+
+Definition str_neq (a b : str) : {a <> b} + {a = b} :=
+  sumbool_not _ _ (str_eq a b).
+
 (* __CONST_DECLS__ *)
 
 Inductive chan_type : Set :=
@@ -63,9 +85,19 @@ Definition chan_path (t: chan_type): str :=
 
 Axiom chan : chan_type -> Set.
 
-Definition tchan := sigT (fun t : chan_type => chan t).
+(* __COMPS_STATES__ *)
+
+Definition comp_state (t: chan_type) : Set :=
+  match t with
+(* __COMPS_STATES_DISPATCH__ *)
+  end.
+
+Definition tchan := sigT (fun t : chan_type => (chan t * comp_state t)%type).
 
 Axiom tchan_eq : forall (c1 c2 : tchan), { c1 = c2 } + { c1 <> c2 }.
+
+Definition tchan_neq (a b : tchan) : {a <> b} + {a = b} :=
+  sumbool_not _ _ (tchan_eq a b).
 
 Lemma tchan_eq_true :
   forall (c : tchan) (A : Type) (vT vF : A),
@@ -101,7 +133,7 @@ Axiom traced : Trace -> hprop.
 Axiom bound : tchan -> hprop.
 
 Axiom exec :
-  forall (t: chan_type) (prog : str) (tr : [Trace]),
+  forall (t: chan_type) (prog : str) (st: comp_state t) (tr : [Trace]),
     STsep (tr ~~ traced tr * [prog = chan_path t])
     (fun (c: tchan) =>
       tr ~~ bound c * traced (Exec prog c :: tr) * [projT1 c = t]).

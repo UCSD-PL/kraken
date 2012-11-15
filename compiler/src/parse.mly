@@ -37,8 +37,8 @@
 
 %token CONSTANTS STATE COMPONENTS MESSAGES INIT EXCHANGE PROPERTIES
 %token NUM STR FDESC CHAN CALL SEND RECV SPAWN WHEN
-%token EQ EQC EQN NEQC NEQN COMMA SEMI COLON
-%token PLUS UNDER BANG CARET DOT AMP PIPE OPT STAR
+%token EQ EQC EQN EQS NEQC NEQN NEQS COMMA SEMI COLON
+%token PLUS AT UNDER BANG CARET DOT AMP PIPE OPT STAR
 %token IMMAFTER IMMBEFORE MATCH HASCHANTYPE
 %token LCURL RCURL LPAREN RPAREN LSQUARE RSQUARE LCTX RCTX EOF
 
@@ -116,40 +116,62 @@ cmd :
     { Call ($1, $5, $7) }
   | SEND LPAREN ID COMMA msg_expr RPAREN
     { Send ($3, $5) }
-  | ID EQ SPAWN LPAREN ID RPAREN
+  | ID EQ SPAWN LPAREN comp_constr RPAREN
     { Spawn ($1, $5) }
-  | SPAWN LPAREN ID RPAREN
+  | SPAWN LPAREN comp_constr RPAREN
     { Spawn (mkstr "c%d" (tock ()), $3) }
   | ID EQ expr
     { Assign ($1, $3) }
 ;;
 
+comp_constr :
+  | ID
+    { ($1, []) }
+  | ID LPAREN comp_fields RPAREN
+    { ($1, $3) }
+
+comp_fields :
+  | /* empty */
+    { [] }
+  | expr
+    { [$1] }
+  | expr COMMA comp_fields
+    { $1 :: $3 }
+;;
+
 msg_expr :
-  | ID LPAREN RPAREN
-    { mk_msg $1 [] }
-  | ID LPAREN exprs RPAREN
+  | ID LPAREN opt_commasep_exprs RPAREN
     { mk_msg $1 $3 }
 ;;
 
-exprs :
+opt_commasep_exprs :
+  | /* empty */
+    { [] }
+  | commasep_exprs
+    { $1 }
+
+commasep_exprs :
   | expr
     { $1 :: [] }
-  | expr COMMA exprs
+  | expr COMMA commasep_exprs
     { $1 :: $3 }
 ;;
 
 expr :
   | expr PLUS expr { Plus($1, $3) }
-  | NUMLIT { NumLit $1 }
-  | STRLIT { StrLit $1 }
-  | ID { Var $1 }
+  | NUMLIT         { NumLit $1 }
+  | STRLIT         { StrLit $1 }
+  | ID             { Var $1 }
+  | ID AT ID       { CompFld($1, $3) }
 ;;
 
 when_cond :
-  | ID EQN NUMLIT  { NumEq   ($1, $3) }
-  | ID EQC ID      { ChanEq  ($1, $3) }
-  | ID NEQN NUMLIT { NumNeq  ($1, $3) }
-  | ID NEQC ID     { ChanNeq ($1, $3) }
+  | expr EQN  expr { Eq  (Num,  $1, $3) }
+  | expr EQS  expr { Eq  (Str,  $1, $3) }
+  | expr EQC  expr { Eq  (Chan, $1, $3) }
+  | expr NEQN expr { Neq (Num,  $1, $3) }
+  | expr NEQS expr { Neq (Str,  $1, $3) }
+  | expr NEQC expr { Neq (Chan, $1, $3) }
 ;;
 
 msg_pat :
@@ -201,7 +223,9 @@ comp_decls :
 
 comp_decl :
   | ID STRLIT SEMI
-    { ($1, $2) }
+    { ($1, ($2, [])) }
+  | ID STRLIT LCURL var_decls RCURL
+    { ($1, ($2, $4)) }
 ;;
 
 typs :

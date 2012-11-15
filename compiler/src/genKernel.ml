@@ -9,10 +9,11 @@ let lkup_var st id =
     Var id
 
 let rec lkup_expr st = function
-  | Var id      -> lkup_var st id
-  | NumLit i    -> NumLit i
-  | StrLit s    -> StrLit s
-  | Plus (a, b) -> Plus (lkup_expr st a, lkup_expr st b)
+  | Var id         -> lkup_var st id
+  | NumLit i       -> NumLit i
+  | StrLit s       -> StrLit s
+  | Plus (a, b)    -> Plus (lkup_expr st a, lkup_expr st b)
+  | CompFld (c, f) -> CompFld (c, f)
 
 let lkup_msg_expr st m =
   { m with payload = List.map (lkup_expr st) m.payload }
@@ -119,8 +120,8 @@ send_msg %s %s
             (coq_of_expr arg)
             res pacc.trace_spec
       }
-  | Spawn (res, comp) ->
-      let path = List.assoc comp k.components in
+  | Spawn (res, (comp, fields)) ->
+      let (path, _) = List.assoc comp k.components in
       let is_shadowing = List.mem res pacc.scoped_chans in
       let fresh = mkstr "%s_%d" res (tock ()) in
       let bind_fresh = mkstr "let %s := %s in\n" fresh res in
@@ -132,12 +133,15 @@ send_msg %s %s
       in
       { code = pacc.code ^
           mkstr "
-%s%s <- exec %s (str_of_string \"%s\")
+%s%s <- exec %s (str_of_string \"%s\") (%s)
 (tr ~~~ expand_ktrace (%s))
 <@> %s;
 "
             (if is_shadowing then bind_fresh else "")
             fresh comp path
+            (mkstr "Build_st_%s %s" comp
+              (String.concat " " (List.map coq_of_expr fields))
+            )
             pacc.trace_impl
             (coq_of_frame patched_frame)
       ; trace_impl =
@@ -223,16 +227,23 @@ let handler_vars_nonstate pacc xch_chan trig prog svars =
     (handler_vars pacc xch_chan trig prog)
 
 let coq_of_cond_prop = function
-  | Always             -> "True"
-  | NumEq   (id, i)    -> mkstr "(nat_of_num %s = %d)" id i
-  | ChanEq  (idl, idr) -> mkstr "(%s = %s)" idl idr
-  | NumNeq  (id, i)    -> mkstr "(nat_of_num %s <> %d)" id i
-  | ChanNeq (idl, idr) -> mkstr "(%s <> %s)" idl idr
+  | Always -> "True"
+  | Never  -> "False"
+  | Eq  (_, l, r) -> mkstr "(%s = %s)"  (coq_of_expr l) (coq_of_expr r)
+  | Neq (_, l, r) -> mkstr "(%s <> %s)" (coq_of_expr l) (coq_of_expr r)
+
+let negate_cond = function
+  | Always -> Never
+  | Never  -> Always
+  | Eq  (t, l, r) -> Neq (t, l, r)
+  | Neq (t, l, r) -> Eq  (t, l, r)
 
 let coq_of_cond_spec prev_conds cond =
   let context =
     prev_conds
-      |> List.map (fun c -> mkstr "~ %s -> " (coq_of_cond_prop c))
+      |> List.map negate_cond
+      |> List.map coq_of_cond_prop
+      |> List.map (mkstr "%s ->")
       |> String.concat ""
   in
   mkstr "%s%s ->" context (coq_of_cond_prop cond)
@@ -260,8 +271,9 @@ let coq_spec_of_handler k comp xch_chan trig conds index cprog =
   lcat
     [ mkstr "| VE_%s_%s_%d :"
         comp trig.tag index
-    ; mkstr "forall %s,"
+    ; mkstr "forall %s (CT : projT1 %s = %s),"
         (String.concat " " (handler_vars_nonstate pacc xch_chan trig prog k.var_decls))
+        xch_chan comp
     ; coq_of_cond_spec conds cprog.condition
     ; "ValidExchange (mkst"
     ; mkstr "  (%scomps)"
@@ -274,29 +286,30 @@ let coq_spec_of_handler k comp xch_chan trig conds index cprog =
     ; ")"
     ]
 
-let coq_of_cond index = function
+let coq_of_cond cond = 
+  match cond with
   | Always ->
-      if index = 0 then "" else " else "
-  | NumEq (id, v) ->
-      lcat
-        [ if index > 0 then " else " else ""
-        ; mkstr "if (nat_eq (nat_of_num %s) %d) then " id v
-        ]
-  | ChanEq (idl, idr) ->
-      lcat
-        [ if index > 0 then " else " else ""
-        ; mkstr "if (tchan_eq %s %s) then" idl idr
-        ]
-  | NumNeq (id, v) ->
-      lcat
-        [ if index > 0 then " else " else ""
-        ; mkstr "if (nat_neq (nat_of_num %s) %d) then " id v
-        ]
-  | ChanNeq (idl, idr) ->
-      lcat
-        [ if index > 0 then " else " else ""
-        ; mkstr "if (tchan_neq %s %s) then" idl idr
-        ]
+      failwith "coq_of_cond: Always"
+  | Never ->
+      failwith "coq_of_cond: Never"
+  | Eq (t, e1, e2) ->
+      let ce1 = coq_of_expr e1 in
+      let ce2 = coq_of_expr e2 in
+      (match t with
+      | Num  -> mkstr "num_eq   (%s) (%s)" ce1 ce2
+      | Str  -> mkstr "str_eq   (%s) (%s)" ce1 ce2
+      | Chan -> mkstr "tchan_eq (%s) (%s)" ce1 ce2
+      | _ -> failwith "coq_of_cond Eq bad typ"
+      )
+  | Neq (t, e1, e2) ->
+      let ce1 = coq_of_expr e1 in
+      let ce2 = coq_of_expr e2 in
+      (match t with
+      | Num  -> mkstr "num_neq   (%s) (%s)" ce1 ce2
+      | Str  -> mkstr "str_neq   (%s) (%s)" ce1 ce2
+      | Chan -> mkstr "tchan_neq (%s) (%s)" ce1 ce2
+      | _ -> failwith "coq_of_cond Neq bad typ"
+      )
 
 let fields_in_comps k =
   k.var_decls
@@ -322,9 +335,15 @@ let coq_of_handler k xch_chan trig index tprog =
       ; "(tr ~~ [KInvariant kst])"
       ]
   in
-  let pacc = coq_of_prog k tr fr prog [] [] in
+  let pacc =
+    coq_of_prog k tr fr prog [] []
+  in
   lcat
-    [ coq_of_cond index tprog.condition ^ " ("
+    [ (if index = 0 then "" else "else ") ^
+      if tprog.condition = Always then
+        "("
+      else
+        ("if (" ^ coq_of_cond tprog.condition ^ ") then (")
     ; pacc.code
     ; mkstr "{{ Return (mkst (%scomps) (tr ~~~ %s) %s) }}"
         (String.concat "" (List.map (mkstr "%s :: ") pacc.comps))
@@ -370,11 +389,12 @@ let coq_of_exchange spec xch_chan comp =
   in
   lcat
     [ mkstr "Definition exchange_%s :" comp
-    ; mkstr "  forall (%s : tchan) (kst : kstate)," xch_chan
+    ; mkstr "  forall (%s : tchan) (CT : projT1 %s = %s) (kst : kstate),"
+        xch_chan xch_chan comp
     ; mkstr "  STsep (kstate_inv kst * [In %s (components kst)])" xch_chan
     ; mkstr "        (fun (kst' : kstate) => kstate_inv kst')."
     ; mkstr "Proof."
-    ; mkstr "  intros %s kst;" xch_chan
+    ; mkstr "  intros %s CT kst;" xch_chan
     ; mkstr "  pose (comps := components kst);"
     ; mkstr "  pose (tr := ktr kst);"
     ; mkstr "%s" var_ext
@@ -514,8 +534,9 @@ let subs k =
   ; "KBODY", (
       let comp_xch =
         k.components
-          |> List.map (fun (c, _) -> mkstr "\n| %s => exchange_%s" c c)
-          |> String.concat ""
+          |> List.map (fun (c, _) ->
+               mkstr "| %s => fun _ => exchange_%s comp _" c c)
+          |> String.concat "\n"
       in
       mkstr "
   intros kst.
@@ -527,11 +548,12 @@ let subs k =
     (tr ~~~ expand_ktrace tr)
     <@> (tr ~~ [KInvariant kst] * all_bound comps * %s);
     let handler := (
-      match type_of_comp comp comps with
+      let p := projT1 comp in
+      match p as p' return p = p' -> _ with
 %s
       end
     ) in
-    s' <- handler comp (mkst comps (tr ~~~ KSelect comps comp :: tr) %s);
+    s' <- handler _ (mkst comps (tr ~~~ KSelect comps comp :: tr) %s);
     {{ Return s' }}
   );
   sep unfoldr simplr.

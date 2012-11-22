@@ -279,12 +279,11 @@ Definition recv_type :
         (fun v : TypeD t => tr ~~ traced (RecvType f t v ++ tr) * open f ps).
 Proof.
   intros; refine (
-    match t with
+    match t as t' return STsep _ (fun v : TypeD t' => _) with
     | num_t =>
-        (* Num = TypeD t here but I can't get the match to go through ! *)
         n <- recv_num f ps tr;
         {{ Return n }}
-    | str_t =>
+    | str_t => 
         s <- recv_str f ps tr;
         {{ Return s }}
     | fd_t =>
@@ -292,7 +291,5 @@ Proof.
         {{ Return g }}
     end
   );
-  sep fail auto.
-  repeat rewrite app_ass; simpl;
   sep fail auto.
 Qed.

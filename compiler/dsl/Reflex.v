@@ -7,6 +7,9 @@ Open Scope char_scope.
 Open Scope hprop_scope.
 Open Scope stsepi_scope.
 
+Ltac sep'  := sep fail idtac.
+Ltac inv H := inversion H; subst; clear H.
+
 (* syntax *)
 
 Inductive type_t : Set :=
@@ -92,6 +95,16 @@ Record Msg (ms : msg_spec) : Set :=
   ; pay : PayloadD' (List.nth_error ms (nat_of_Num tag))
   }.
 
+Inductive MaybeMsg (ms : msg_spec) : Set :=
+| ValidTag :
+  Msg ms ->
+  MaybeMsg ms
+| BogusTag :
+  forall t : Num,
+  List.nth_error ms (nat_of_Num t) = None ->
+  MaybeMsg ms
+.
+
 Inductive Action : Set :=
 | Recv   : FD -> Str -> Action
 | Send   : FD -> Str -> Action
@@ -160,8 +173,7 @@ Proof.
       {{ Return (num "000" "000") }}
     end
   );
-  sep fail idtac;
-  discriminate.
+  sep'; discriminate.
 Qed.
 
 Definition send_num:
@@ -176,7 +188,7 @@ Proof.
       {{ Return tt }}
     end
   );
-  sep fail idtac.
+  sep'.
 Qed.
 
 Definition recv_str:
@@ -189,10 +201,10 @@ Proof.
     s <- recv f ps n (tr ~~~ RecvNum f n ++ tr);
     {{ Return s }}
   );
-  sep fail idtac.
+  sep'.
   rewrite <- H.
   rewrite Num_nat_embedding.
-  sep fail idtac.
+  sep'.
 Qed.
 
 Definition send_str:
@@ -206,7 +218,7 @@ Proof.
     send f ps s (tr ~~~ SendNum f n ++ tr);;
     {{ Return tt }}
   );
-  sep fail idtac.
+  sep'.
 Qed.
 
 (* prevent sep tactic from unfolding *)
@@ -228,23 +240,178 @@ Definition SendType (f : FD) (t : type_t) : TypeD t -> Trace :=
 
 Fixpoint RecvPay (f : FD) (pt : payload_t) : PayloadD pt -> Trace :=
   match pt with
-  | nil => fun _ : unit =>
-      nil
+  | nil => fun _ : unit => nil
   | t :: ts => fun pv : TypeD t * PayloadD ts =>
-      match pv with
-      | (v, vs) => RecvType f t v ++ RecvPay f ts vs
-      end
+    match pv with
+    | (v, vs) => RecvPay f ts vs ++ RecvType f t v
+    end
   end.
 
 Fixpoint SendPay (f : FD) (pt : payload_t) : PayloadD pt -> Trace :=
   match pt with
-  | nil => fun _ : unit =>
-      nil
+  | nil => fun _ : unit => nil
   | t :: ts => fun pv : TypeD t * PayloadD ts =>
-      match pv with
-      | (v, vs) => SendType f t v ++ SendPay f ts vs
-      end
+    match pv with
+    | (v, vs) => SendPay f ts vs ++ SendType f t v
+    end
   end.
+
+Definition RecvPay' (f : FD) (pt : option payload_t) : PayloadD' pt -> Trace :=
+  match pt with
+  | None => fun p : False =>
+    False_rec Trace p
+  | Some pt' => fun p : PayloadD pt' =>
+    RecvPay f pt' p
+  end.
+
+Definition SendPay' (f : FD) (pt : option payload_t) : PayloadD' pt -> Trace :=
+  match pt with
+  | None => fun p : False =>
+    False_rec Trace p
+  | Some pt' => fun p : PayloadD pt' =>
+    SendPay f pt' p
+  end.
+
+Definition RecvMsg (ms : msg_spec) (f : FD) (m : Msg ms) : Trace :=
+   let t := tag ms m in
+   let pt := List.nth_error ms (nat_of_Num t) in
+   RecvPay' f pt (pay ms m) ++ RecvNum f t.
+
+Definition SendMsg (ms : msg_spec) (f : FD) (m : Msg ms) : Trace :=
+   let t := tag ms m in
+   let pt := List.nth_error ms (nat_of_Num t) in
+   SendPay' f pt (pay ms m) ++ SendNum f t.
+
+Definition RecvMaybeMsg (ms : msg_spec) (f : FD) (mm : MaybeMsg ms) : Trace :=
+  match mm with
+  | ValidTag m => RecvMsg ms f m
+  | BogusTag t _ => RecvNum f t
+  end.
+
+Definition recv_type :
+  forall (f : FD) (ps : list Perm) (t : type_t) (tr : [Trace]),
+  STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
+        (fun v : TypeD t => tr ~~ traced (RecvType f t v ++ tr) * open f ps).
+Proof.
+  intros; refine (
+    match t as t' return STsep _ (fun v : TypeD t' => _) with
+    | num_t =>
+        n <- recv_num f ps tr;
+        {{ Return n }}
+    | str_t =>
+        s <- recv_str f ps tr;
+        {{ Return s }}
+    | fd_t =>
+        g <- recv_fd f ps tr;
+        {{ Return g }}
+    end
+  );
+  sep'.
+Qed.
+
+Definition send_type :
+  forall (f : FD) (ps : list Perm) (t : type_t) (v : TypeD t) (tr : [Trace]),
+  STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
+        (fun _ : unit => tr ~~ traced (SendType f t v ++ tr) * open f ps).
+Proof.
+  intros; refine (
+    match t as t' return
+      forall v: TypeD t', STsep _ (fun _ => tr ~~ traced (SendType f t' v ++ tr) * _)
+    with
+    | num_t => fun v =>
+      send_num f ps v tr;;
+      {{ Return tt }}
+    | str_t => fun v =>
+      send_str f ps v tr;;
+      {{ Return tt }}
+    | fd_t => fun v =>
+      send_fd f ps v tr;;
+      {{ Return tt }}
+    end v
+  );
+  sep'.
+Qed.
+
+Definition recv_pay :
+  forall (f : FD) (ps : list Perm) (pt : payload_t) (tr : [Trace]),
+  STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
+        (fun pv : PayloadD pt => tr ~~ traced (RecvPay f pt pv ++ tr) * open f ps).
+Proof.
+  intros; refine (
+    Fix2
+      (fun pt tr => tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
+      (fun pt tr (pv : PayloadD pt) => tr ~~ traced (RecvPay f pt pv ++ tr) * open f ps)
+      (fun self pt tr =>
+        match pt as pt' return STsep _ (fun x : PayloadD pt' => _) with
+        | nil =>
+          {{ Return tt }}
+        | t::ts =>
+          v  <- recv_type f ps t tr <@> [In RecvP ps] * [In RecvFDP ps];
+          vs <- self ts (tr ~~~ RecvType f t v ++ tr);
+          {{ Return (v, vs) }}
+        end)
+    pt tr
+  );
+  sep'.
+  inv H; rewrite app_assoc; sep'.
+Qed.
+
+Definition send_pay :
+  forall (f : FD) (ps : list Perm) (pt : payload_t) (pv : PayloadD pt) (tr : [Trace]),
+  STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
+        (fun _ : unit => tr ~~ traced (SendPay f pt pv ++ tr) * open f ps).
+Proof.
+  intros; refine (
+    Fix3
+      (fun pt pv tr => tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
+      (fun pt pv tr _ => tr ~~ traced (SendPay f pt pv ++ tr) * open f ps)
+      (fun self pt pv tr =>
+        match pt as pt' return
+          forall pv : PayloadD pt',  STsep _ (fun _ => tr ~~ traced (SendPay f pt' pv ++ tr) * _)
+        with
+        | nil => fun _ : unit =>
+          {{ Return tt }}
+        | t::ts => fun pv : TypeD t * PayloadD ts =>
+          match pv with
+          | (v, vs) =>
+            send_type f ps t v tr <@> [In SendP ps] * [In SendFDP ps];;
+            self ts vs (tr ~~~ SendType f t v ++ tr);;
+            {{ Return tt }}
+          end
+        end pv)
+    pt pv tr
+  );
+  sep'.
+  rewrite app_assoc; sep'.
+Qed.
+
+Print Msg.
+
+Check Build_Msg.
+
+Definition recv_msg :
+  forall (f : FD) (ps : list Perm) (ms : msg_spec) (tr : [Trace]),
+  STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
+        (fun mm : MaybeMsg ms => tr ~~ traced (RecvMaybeMsg ms f mm ++ tr) * open f ps).
+Proof.
+  intros; refine (
+    t <- recv_num f ps tr <@> [In RecvP ps] * [In RecvFDP ps];
+    let opt := List.nth_error ms (nat_of_Num t) in
+    match opt as opt' return
+      opt = opt' -> _
+    with
+    | None => fun pf : opt = None =>
+      {{ Return (BogusTag ms t pf) }}
+    | Some pt => fun pf : opt = Some pt =>
+      pv <- recv_pay f ps pt (tr ~~~ RecvNum f t ++ tr);
+      {{ Return (ValidTag ms (Build_Msg ms t pv)) }}
+    end (refl_equal _)
+  );
+  sep'.
+
+
+
+
 
 Definition RecvPay' (f : FD) (pt : option payload_t) : PayloadD' pt -> Trace :=
   match pt with
@@ -272,24 +439,3 @@ Definition SendMsg (ms : msg_spec) (f : FD) (m : Msg ms) : Trace :=
    let pt := List.nth_error ms (nat_of_Num t) in
    SendPay' f pt (pay ms m) ++ SendNum f t.
 
-
-Definition recv_type :
-  forall (f : FD) (ps : list Perm) (t : type_t) (tr : [Trace]),
-  STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
-        (fun v : TypeD t => tr ~~ traced (RecvType f t v ++ tr) * open f ps).
-Proof.
-  intros; refine (
-    match t as t' return STsep _ (fun v : TypeD t' => _) with
-    | num_t =>
-        n <- recv_num f ps tr;
-        {{ Return n }}
-    | str_t => 
-        s <- recv_str f ps tr;
-        {{ Return s }}
-    | fd_t =>
-        g <- recv_fd f ps tr;
-        {{ Return g }}
-    end
-  );
-  sep fail auto.
-Qed.

@@ -398,22 +398,19 @@ Proof.
     let opt := List.nth_error ms (nat_of_Num t) in
     match opt as opt' return
       opt = opt' -> _
-(* tried several variations of this
-      STsep _ (fun v :
-        match opt with
-        | Some pt => PayloadD pt
-        | None => False
-        end
-        => _)
-*)
     with
     | None => fun pf : opt = None =>
       {{ Return (BogusTag ms t pf) }}
-    | Some pt => fun _ : opt = Some pt =>
+    | Some pt => fun pf : opt = Some pt =>
       pv <- recv_pay f ps pt (tr ~~~ RecvNum f t ++ tr);
-      (* HERE : pv has the right type, but we've lost the info needed to show it *)
-      {{ Return (ValidTag ms (Build_Msg ms t pv)) }}
+      let pv' : match opt with Some pt => PayloadD pt | None => False end :=
+        eq_rec_r (x := Some pt) (fun e => match e with Some pt => PayloadD pt | None => False end) pv pf
+      in
+      {{ Return (ValidTag ms (Build_Msg ms t pv')) }}
     end (refl_equal _)
   );
   sep'.
+  unfold RecvMsg, pv', eq_rec_r; simpl.
+  rewrite pf; simpl.
+  rewrite app_assoc; sep'.
 Qed.

@@ -7,7 +7,7 @@ Open Scope char_scope.
 Open Scope hprop_scope.
 Open Scope stsepi_scope.
 
-Ltac sep'  := sep fail idtac.
+Ltac sep' := sep fail idtac.
 Ltac inv H := inversion H; subst; clear H.
 
 (* syntax *)
@@ -60,7 +60,7 @@ Qed.
 
 Definition Num_eq (n1 n2 : Num) : {n1 = n2} + {n1 <> n2}.
   decide equality; apply ascii_dec.
-Defined.
+Qed.
 
 (* prevent sep tactic from unfolding *)
 Global Opaque nat_of_Num Num_of_nat Num_eq.
@@ -203,12 +203,15 @@ Fixpoint PayloadD (p : payload_t) : Set :=
   | t :: ts => TypeD t * PayloadD ts
   end%type.
 
+Definition OptPayloadD (opt : option payload_t) : Set :=
+  match opt with
+  | Some pt => PayloadD pt
+  | None => False
+  end.
+
 Record Msg (ms : msg_spec) : Set :=
   { tag : Num
-  ; pay : match List.nth_error ms (nat_of_Num tag) with
-          | None => False
-          | Some pt => PayloadD pt
-          end
+  ; pay : OptPayloadD (List.nth_error ms (nat_of_Num tag))
   }.
 
 Inductive MaybeMsg (ms : msg_spec) : Set :=
@@ -253,35 +256,31 @@ Fixpoint SendPay (f : FD) (pt : payload_t) : PayloadD pt -> Trace :=
     end
   end.
 
+Definition RecvOptPay (f : FD) (opt : option payload_t) : OptPayloadD opt -> Trace :=
+  match opt with
+  | Some pt => fun pv : PayloadD pt =>
+    RecvPay f pt pv
+  | None => fun pf : False =>
+    False_rec Trace pf
+  end.
+
+Definition SendOptPay (f : FD) (opt : option payload_t) : OptPayloadD opt -> Trace :=
+  match opt with
+  | Some pt => fun pv : PayloadD pt =>
+    SendPay f pt pv
+  | None => fun pf : False =>
+    False_rec Trace pf
+  end.
+
 Definition RecvMsg (ms : msg_spec) (f : FD) (m : Msg ms) : Trace :=
    let t := tag ms m in
    let opt := List.nth_error ms (nat_of_Num t) in
-   match opt return
-     match opt with
-     | None => False
-     | Some pt => PayloadD pt
-     end -> _
-   with
-   | None => fun x : False =>
-     False_rec Trace x
-   | Some pt => fun x : PayloadD pt =>
-     RecvPay f pt x ++ RecvNum f t
-   end (pay ms m).
+   RecvOptPay f opt (pay ms m) ++ RecvNum f t.
 
 Definition SendMsg (ms : msg_spec) (f : FD) (m : Msg ms) : Trace :=
    let t := tag ms m in
    let opt := List.nth_error ms (nat_of_Num t) in
-   match opt return
-     match opt with
-     | None => False
-     | Some pt => PayloadD pt
-     end -> _
-   with
-   | None => fun x : False =>
-     False_rec Trace x
-   | Some pt => fun x : PayloadD pt =>
-     SendPay f pt x ++ SendNum f t
-   end (pay ms m).
+   SendOptPay f opt (pay ms m) ++ SendNum f t.
 
 Definition RecvMaybeMsg (ms : msg_spec) (f : FD) (mm : MaybeMsg ms) : Trace :=
   match mm with
@@ -396,21 +395,45 @@ Proof.
   intros; refine (
     t <- recv_num f ps tr <@> [In RecvP ps] * [In RecvFDP ps];
     let opt := List.nth_error ms (nat_of_Num t) in
-    match opt as opt' return
-      opt = opt' -> _
-    with
-    | None => fun pf : opt = None =>
-      {{ Return (BogusTag ms t pf) }}
+    match opt as opt' return opt = opt' -> _ with
     | Some pt => fun pf : opt = Some pt =>
       pv <- recv_pay f ps pt (tr ~~~ RecvNum f t ++ tr);
-      let pv' : match opt with Some pt => PayloadD pt | None => False end :=
-        eq_rec_r (x := Some pt) (fun e => match e with Some pt => PayloadD pt | None => False end) pv pf
+      let pv' : OptPayloadD opt :=
+        eq_rec_r (x := Some pt) OptPayloadD pv pf
       in
       {{ Return (ValidTag ms (Build_Msg ms t pv')) }}
+    | None => fun pf : opt = None =>
+      {{ Return (BogusTag ms t pf) }}
     end (refl_equal _)
   );
   sep'.
   unfold RecvMsg, pv', eq_rec_r; simpl.
   rewrite pf; simpl.
+  rewrite app_assoc; sep'.
+Qed.
+
+Definition send_msg :
+  forall (f : FD) (ps : list Perm) (ms : msg_spec) (m : Msg ms) (tr : [Trace]),
+  STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
+        (fun _ : unit => tr ~~ traced (SendMsg ms f m ++ tr) * open f ps).
+Proof.
+  intros; refine (
+    let t := tag ms m in
+    let opt := List.nth_error ms (nat_of_Num t) in
+    match opt as opt' return opt = opt' -> _ with
+    | Some pt => fun pf : opt = Some pt =>
+      let pv : PayloadD pt := eq_rec _ _ (pay ms m) _ pf in
+      send_num f ps t tr <@> [In SendP ps] * [In SendFDP ps];;
+      send_pay f ps pt pv (tr ~~~ SendNum f t ++ tr);;
+      {{ Return tt }}
+    | None => fun pf : opt = None =>
+      let x : False := eq_rec _ _ (pay ms m) _ pf in
+      False_rec _ x
+    end (refl_equal opt)
+  );
+  sep'.
+  unfold SendMsg, t, pv in *; clear t pv.
+  destruct m as [P T]; simpl in *.
+  revert T; rewrite pf; simpl; intro T.
   rewrite app_assoc; sep'.
 Qed.

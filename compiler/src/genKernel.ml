@@ -250,7 +250,7 @@ let rec chans_of_prog = function
   | Seq (c, p) -> chans_of_cmd c @ chans_of_prog p
 
 let coq_spec_of_handler k comp xch_chan trig conds index cprog =
-  let (prog, _) = cprog.program in
+  let (prog, bindings) = cprog.program in
   let fr0 =
     List.map
       (fun c -> mkstr "bound %s" c)
@@ -274,7 +274,7 @@ let coq_spec_of_handler k comp xch_chan trig conds index cprog =
         pacc.trace_spec xch_chan trig.tag
         (String.concat " " trig.payload)
     ; mkstr "  %s"
-        (lkup_st_fields pacc.sstate k)
+        (lkup_st_fields bindings (* ++ pacc.sstate? *) k)
     ; ")"
     ]
 
@@ -329,7 +329,7 @@ let coq_of_handler k xch_chan trig index tprog =
     ; mkstr "{{ Return (mkst (%scomps) (tr ~~~ %s) %s) }}"
         (String.concat "" (List.map (mkstr "%s :: ") pacc.comps))
         pacc.trace_impl
-        (lkup_st_fields pacc.sstate k)
+        (lkup_st_fields (snd tprog.program) k)
      ;" ) "
     ]
 

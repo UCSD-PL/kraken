@@ -1,5 +1,6 @@
 Require Import List.
 Require Import Ascii.
+Require Import String.
 Require Import NPeano.
 Require Import Ynot.
 
@@ -68,14 +69,41 @@ Global Opaque nat_of_Num Num_of_nat Num_eq.
 Definition Str : Set :=
   list ascii.
 
+Fixpoint str_of_string (s : string) : Str :=
+  match s with
+  | EmptyString => nil
+  | String c rest => c :: str_of_string rest
+  end.
+
 Definition FD : Set :=
   Num.
 
+Definition FD_eq (f1 f2 : FD) : {f1 = f2} + {f1 <> f2} :=
+  Num_eq f1 f2.
+
+Lemma FD_eq_true :
+  forall (f : FD) (A : Type) (vT vF : A),
+  (if FD_eq f f then vT else vF) = vT.
+Proof.
+  intros; case (FD_eq f f); auto. congruence.
+Qed.
+
+Lemma FD_eq_false :
+  forall (f1 f2 : FD) (A : Type) (vT vF : A),
+  f1 <> f2 ->
+  (if FD_eq f1 f2 then vT else vF) = vF.
+Proof.
+  intros; case (FD_eq f1 f2); auto. congruence.
+Qed.
+
 Inductive Action : Set :=
+| Exec   : Str -> FD -> Action
+| Call   : Str -> Str -> FD -> Action
+| Select : list FD -> FD -> Action
 | Recv   : FD -> Str -> Action
 | Send   : FD -> Str -> Action
-| RecvFD : FD -> FD  -> Action (* RecvFD f f' : use f to recv f' *)
-| SendFD : FD -> FD  -> Action (* SendFD f f' : use f to send f' *)
+| RecvFD : FD -> FD -> Action (* RecvFD f f' : use f to recv f' *)
+| SendFD : FD -> FD -> Action (* SendFD f f' : use f to send f' *)
 .
 
 Definition Trace : Set := list Action.
@@ -85,7 +113,30 @@ Axiom traced : Trace -> hprop.
 Inductive Perm : Set :=
   RecvP | SendP | RecvFDP | SendFDP.
 
+Definition CompPerms : list Perm :=
+  RecvP :: SendP :: RecvFDP :: SendFDP :: nil.
+
+Definition CallPerms : list Perm :=
+  RecvP :: RecvFDP :: nil.
+
 Axiom open : FD -> list Perm -> hprop.
+
+Axiom exec :
+  forall (prog : Str) (tr : [Trace]),
+    STsep (tr ~~ traced tr)
+          (fun f : FD => tr ~~ open f CompPerms * traced (Exec prog f :: tr)).
+
+Axiom call :
+  forall (prog arg : Str) (tr : [Trace]),
+  STsep (tr ~~ traced tr)
+        (fun f : FD => tr ~~ open f CallPerms * traced (Call prog arg f :: tr)).
+
+(* TODO add non-empty precondition *)
+(* TODO add open w/ recv perms precondition *)
+Axiom select :
+  forall (fs : list FD) (tr : [Trace]),
+  STsep (tr ~~ traced tr)
+        (fun f : FD => tr ~~ traced (Select fs f :: tr) * [In f fs]).
 
 Axiom recv :
   forall (f : FD) (ps : list Perm) (n : Num) (tr : [Trace]),
@@ -190,6 +241,13 @@ Qed.
 (* prevent sep tactic from unfolding *)
 Global Opaque RecvNum SendNum RecvStr SendStr.
 
+Section MESSAGE_SPEC.
+
+Variable MS : msg_spec.
+
+Definition lkup_tag (n : Num) :=
+  List.nth_error MS (nat_of_Num n).
+
 Definition TypeD (t : type_t) : Set :=
   match t with
   | num_t => Num
@@ -197,8 +255,8 @@ Definition TypeD (t : type_t) : Set :=
   | fd_t  => FD
   end.
 
-Fixpoint PayloadD (p : payload_t) : Set :=
-  match p with
+Fixpoint PayloadD (pt : payload_t) : Set :=
+  match pt with
   | nil => unit
   | t :: ts => TypeD t * PayloadD ts
   end%type.
@@ -209,19 +267,19 @@ Definition OptPayloadD (opt : option payload_t) : Set :=
   | None => False
   end.
 
-Record Msg (ms : msg_spec) : Set :=
+Record Msg : Set :=
   { tag : Num
-  ; pay : OptPayloadD (List.nth_error ms (nat_of_Num tag))
+  ; pay : OptPayloadD (lkup_tag tag)
   }.
 
-Inductive MaybeMsg (ms : msg_spec) : Set :=
-| ValidTag :
-  Msg ms ->
-  MaybeMsg ms
-| BogusTag :
-  forall t : Num,
-  List.nth_error ms (nat_of_Num t) = None ->
-  MaybeMsg ms
+Record BogusMsg : Set :=
+  { btag : Num
+  ; bpay : lkup_tag btag = None
+  }.
+
+Inductive MaybeMsg : Set :=
+| ValidTag : Msg -> MaybeMsg
+| BogusTag : BogusMsg -> MaybeMsg
 .
 
 Definition RecvType (f : FD) (t : type_t) : TypeD t -> Trace :=
@@ -272,20 +330,21 @@ Definition SendOptPay (f : FD) (opt : option payload_t) : OptPayloadD opt -> Tra
     False_rec Trace pf
   end.
 
-Definition RecvMsg (ms : msg_spec) (f : FD) (m : Msg ms) : Trace :=
-   let t := tag ms m in
-   let opt := List.nth_error ms (nat_of_Num t) in
-   RecvOptPay f opt (pay ms m) ++ RecvNum f t.
+Definition RecvMsg (f : FD) (m : Msg) : Trace :=
+  let t := tag m in
+  RecvOptPay f (lkup_tag t) (pay m) ++ RecvNum f t.
 
-Definition SendMsg (ms : msg_spec) (f : FD) (m : Msg ms) : Trace :=
-   let t := tag ms m in
-   let opt := List.nth_error ms (nat_of_Num t) in
-   SendOptPay f opt (pay ms m) ++ SendNum f t.
+Definition RecvBogusMsg (f : FD) (m : BogusMsg) : Trace :=
+  RecvNum f (btag m).
 
-Definition RecvMaybeMsg (ms : msg_spec) (f : FD) (mm : MaybeMsg ms) : Trace :=
+Definition SendMsg (f : FD) (m : Msg) : Trace :=
+  let t := tag m in
+  SendOptPay f (lkup_tag t) (pay m) ++ SendNum f t.
+
+Definition RecvMaybeMsg (f : FD) (mm : MaybeMsg) : Trace :=
   match mm with
-  | ValidTag m => RecvMsg ms f m
-  | BogusTag t _ => RecvNum f t
+  | ValidTag m => RecvMsg f m
+  | BogusTag bm => RecvBogusMsg f bm
   end.
 
 Definition recv_type :
@@ -388,22 +447,22 @@ Proof.
 Qed.
 
 Definition recv_msg :
-  forall (f : FD) (ps : list Perm) (ms : msg_spec) (tr : [Trace]),
+  forall (f : FD) (ps : list Perm) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
-        (fun mm : MaybeMsg ms => tr ~~ traced (RecvMaybeMsg ms f mm ++ tr) * open f ps).
+        (fun mm : MaybeMsg => tr ~~ traced (RecvMaybeMsg f mm ++ tr) * open f ps).
 Proof.
   intros; refine (
     t <- recv_num f ps tr <@> [In RecvP ps] * [In RecvFDP ps];
-    let opt := List.nth_error ms (nat_of_Num t) in
+    let opt := lkup_tag t in
     match opt as opt' return opt = opt' -> _ with
     | Some pt => fun pf : opt = Some pt =>
       pv <- recv_pay f ps pt (tr ~~~ RecvNum f t ++ tr);
       let pv' : OptPayloadD opt :=
         eq_rec_r (x := Some pt) OptPayloadD pv pf
       in
-      {{ Return (ValidTag ms (Build_Msg ms t pv')) }}
+      {{ Return (ValidTag (Build_Msg t pv')) }}
     | None => fun pf : opt = None =>
-      {{ Return (BogusTag ms t pf) }}
+      {{ Return (BogusTag (Build_BogusMsg t pf)) }}
     end (refl_equal _)
   );
   sep'.
@@ -413,21 +472,21 @@ Proof.
 Qed.
 
 Definition send_msg :
-  forall (f : FD) (ps : list Perm) (ms : msg_spec) (m : Msg ms) (tr : [Trace]),
+  forall (f : FD) (ps : list Perm) (m : Msg) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
-        (fun _ : unit => tr ~~ traced (SendMsg ms f m ++ tr) * open f ps).
+        (fun _ : unit => tr ~~ traced (SendMsg f m ++ tr) * open f ps).
 Proof.
   intros; refine (
-    let t := tag ms m in
-    let opt := List.nth_error ms (nat_of_Num t) in
+    let t := tag m in
+    let opt := lkup_tag t in
     match opt as opt' return opt = opt' -> _ with
     | Some pt => fun pf : opt = Some pt =>
-      let pv : PayloadD pt := eq_rec _ _ (pay ms m) _ pf in
+      let pv : PayloadD pt := eq_rec _ _ (pay m) _ pf in
       send_num f ps t tr <@> [In SendP ps] * [In SendFDP ps];;
       send_pay f ps pt pv (tr ~~~ SendNum f t ++ tr);;
       {{ Return tt }}
     | None => fun pf : opt = None =>
-      let x : False := eq_rec _ _ (pay ms m) _ pf in
+      let x : False := eq_rec _ _ (pay m) _ pf in
       False_rec _ x
     end (refl_equal opt)
   );
@@ -437,3 +496,254 @@ Proof.
   revert T; rewrite pf; simpl; intro T.
   rewrite app_assoc; sep'.
 Qed.
+
+Inductive KAction : Set :=
+| KExec   : Str -> FD -> KAction
+| KCall   : Str -> Str -> FD -> KAction
+| KSelect : list FD -> FD -> KAction
+| KSend   : FD -> Msg -> KAction
+| KRecv   : FD -> Msg -> KAction
+| KBogus  : FD -> BogusMsg -> KAction
+.
+
+Definition KTrace : Set :=
+  list KAction.
+
+Definition expand_kaction (ka : KAction) : Trace :=
+  match ka with
+  | KExec cmd f => Exec cmd f :: nil
+  | KCall cmd arg pipe => Call cmd arg pipe :: nil
+  | KSelect cs f => Select cs f :: nil
+  | KSend f m => SendMsg f m
+  | KRecv f m => RecvMsg f m
+  | KBogus f bm => RecvBogusMsg f bm
+  end.
+
+Fixpoint expand_ktrace (kt : KTrace) : Trace :=
+  match kt with
+  | nil => nil
+  | ka :: kas => expand_kaction ka ++ expand_ktrace kas
+  end.
+
+Record kstate : Set :=
+  mkst { components : list FD
+       ; ktr : [KTrace]
+       }.
+
+Inductive Reach : kstate -> Prop :=
+| Reach_init :
+  forall c,
+  Reach
+    {| components := c :: nil
+     ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) c :: nil]
+     |}
+| Reach_valid :
+  forall s c msg tr,
+  let cs := components s in
+  ktr s = [tr]%inhabited ->
+  Reach s ->
+  Reach
+    {| components := cs
+     ; ktr := [KSend c msg :: KRecv c msg :: KSelect cs c :: tr]
+     |}
+| Reach_bogus :
+  forall s c bmsg tr,
+  let cs := components s in
+  ktr s = [tr]%inhabited ->
+  Reach s ->
+  Reach
+    {| components := cs
+     ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
+     |}
+.
+
+Definition bound (f : FD) : hprop :=
+  open f CompPerms.
+
+Fixpoint all_bound (fds : list FD) : hprop :=
+  match fds with
+  | nil => emp
+  | f :: fs => bound f * all_bound fs
+  end.
+
+Fixpoint all_bound_drop (fds : list FD) (drop : FD) : hprop :=
+  match fds with
+  | nil => emp
+  | f :: fs =>
+    if FD_eq f drop
+      then all_bound fs
+      else open f CompPerms * all_bound_drop fs drop
+  end.
+
+Lemma unpack_all_bound :
+  forall fs f,
+  In f fs ->
+  all_bound fs ==> bound f * all_bound_drop fs f.
+Proof.
+  induction fs; simpl; intros. contradiction.
+  destruct H; subst. rewrite FD_eq_true. apply himp_refl.
+  case (FD_eq a f); intros; subst. apply himp_refl.
+  apply himp_comm_conc. apply himp_assoc_conc1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_conc; auto.
+Qed.
+
+Lemma repack_all_bound :
+  forall fs f,
+  In f fs ->
+  bound f * all_bound_drop fs f ==> all_bound fs.
+Proof.
+  induction fs; simpl; intros. contradiction.
+  destruct H; subst. rewrite FD_eq_true. apply himp_refl.
+  case (FD_eq a f); intros; subst. apply himp_refl.
+  apply himp_comm_prem. apply himp_assoc_prem1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_prem; auto.
+Qed.
+
+Definition kstate_inv s : hprop :=
+  tr :~~ ktr s in emp
+  * traced (expand_ktrace tr)
+  * [Reach s]
+  * all_bound (components s)
+  .
+
+Ltac isolate t :=
+  match t with ?lhs ==> ?rhs =>
+    refine (@himp_trans (lhs * _) _ _ _ _); [ sep' | ];
+    refine (@himp_trans (rhs * _) _ _ _ _); [ | sep' ];
+    apply himp_split
+  end.
+
+Ltac bounds_packing :=
+  match goal with
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (bound c * all_bound_drop cs c ==> all_bound cs);
+      [ apply repack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match rhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (all_bound cs ==> bound c * all_bound_drop cs c);
+      [ apply unpack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+    match rhs with context [ all_bound_drop ?cs ?d ] =>
+      isolate (bound c * all_bound_drop cs c ==> bound d * all_bound_drop cs d);
+      [ eapply himp_trans; [ apply repack_all_bound | apply unpack_all_bound ] | ]
+    end
+    end
+end.
+
+Ltac uninhabit :=
+  match goal with
+  | [ H1: ?tr = [_]%inhabited, H2: context[inhabit_unpack ?tr _] |- _ ] =>
+    rewrite H1 in H2; simpl in H2
+  | [ H: ?tr = [_]%inhabited |- context[inhabit_unpack ?tr _]] =>
+    rewrite H; simpl
+  end.
+
+Ltac reach :=
+  match goal with
+  | [ |- Reach _ ] =>
+      econstructor; eauto
+  end.
+
+Ltac unfoldr :=
+  unfold kstate_inv.
+
+Ltac simplr :=
+  sep';
+  try uninhabit;
+  try bounds_packing;
+  try reach.
+
+Ltac sep'' :=
+  sep unfoldr simplr.
+
+Definition kinit :
+  forall (_ : unit),
+  STsep (traced nil)
+        (fun s => kstate_inv s).
+Proof.
+  intros; refine (
+    let tr := [nil]%inhabited in
+    c <- exec (str_of_string "test.py") tr;
+    let tr := tr ~~~ KExec (str_of_string "test.py") c :: nil in
+    {{Return {|components := c :: nil; ktr := tr|}}}
+  );
+  sep''.
+Qed.
+
+Definition kbody:
+  forall s,
+  STsep (kstate_inv s)
+        (fun s' => kstate_inv s').
+Proof.
+  intro kst.
+  remember (components kst) as comps.
+  refine (
+    let tr := ktr kst in
+    c <- select comps
+    (tr ~~~ expand_ktrace tr)
+    <@> (tr ~~ [Reach kst] * all_bound comps);
+
+    let tr := tr ~~~ KSelect comps c :: tr in
+    mm <- recv_msg c CompPerms
+    (tr ~~~ expand_ktrace tr)
+    <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);
+
+    match mm with
+    | ValidTag m =>
+      let tr := tr ~~~ KRecv c m :: tr in
+      send_msg c CompPerms m
+      (tr ~~~ expand_ktrace tr)
+      <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);;
+
+      let tr := tr ~~~ KSend c m :: tr in
+      {{Return {|components := comps; ktr := tr|}}}
+
+    | BogusTag m =>
+      let tr := tr ~~~ KBogus c m :: tr in
+      {{Return {|components := comps; ktr := tr|}}}
+    end
+  );
+  sep''.
+Qed.
+
+Definition kloop:
+  forall s,
+  STsep (kstate_inv s)
+        (fun s' => kstate_inv s').
+Proof.
+  intros; refine (
+    Fix
+      (fun s => kstate_inv s)
+      (fun s s' => kstate_inv s')
+      (fun self s =>
+        s <- kbody s;
+        s <- self s;
+        {{ Return s }}
+      )
+    s
+  );
+  sep'.
+Qed.
+
+Definition main:
+  forall (_ : unit),
+  STsep (traced nil)
+        (fun s' => kstate_inv s').
+Proof.
+  intros; refine (
+    s0 <- kinit tt;
+    sN <- kloop s0;
+    {{ Return sN }}
+  );
+  sep'.
+Qed.
+
+End MESSAGE_SPEC.

@@ -1,0 +1,6 @@
+ml/*.ml
+ml/*.mli
+ml/_build
+ml/kernel
+c-stubs/*.o
+c-stubs/*.so

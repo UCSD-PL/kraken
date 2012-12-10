@@ -3,7 +3,9 @@ Require Import Ascii.
 Require Import String.
 Require Import NPeano.
 Require Import Ynot.
+
 Require Import ReflexBase.
+Require Import ReflexIO.
 
 Open Scope char_scope.
 Open Scope hprop_scope.
@@ -282,8 +284,8 @@ Proof.
 Qed.
 
 Inductive KAction : Set :=
-| KExec   : Str -> FD -> KAction
-| KCall   : Str -> Str -> FD -> KAction
+| KExec   : Str -> list Str -> FD -> KAction
+| KCall   : Str -> list Str -> FD -> KAction
 | KSelect : list FD -> FD -> KAction
 | KSend   : FD -> Msg -> KAction
 | KRecv   : FD -> Msg -> KAction
@@ -295,8 +297,8 @@ Definition KTrace : Set :=
 
 Definition expand_kaction (ka : KAction) : Trace :=
   match ka with
-  | KExec cmd f => Exec cmd f :: nil
-  | KCall cmd arg pipe => Call cmd arg pipe :: nil
+  | KExec cmd args f => Exec cmd args f :: nil
+  | KCall cmd args pipe => Call cmd args pipe :: nil
   | KSelect cs f => Select cs f :: nil
   | KSend f m => SendMsg f m
   | KRecv f m => RecvMsg f m
@@ -319,7 +321,7 @@ Inductive Reach : kstate -> Prop :=
   forall c,
   Reach
     {| components := c :: nil
-     ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) c :: nil]
+     ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) nil c :: nil]
      |}
 | Reach_valid :
   forall s c msg tr,
@@ -411,8 +413,8 @@ Definition kinit :
 Proof.
   intros; refine (
     let tr := [nil]%inhabited in
-    c <- exec (str_of_string "test.py") tr;
-    let tr := tr ~~~ KExec (str_of_string "test.py") c :: nil in
+    c <- exec (str_of_string "test.py") nil tr;
+    let tr := tr ~~~ KExec (str_of_string "test.py") nil c :: nil in
     {{Return {|components := c :: nil; ktr := tr|}}}
   );
   sep''.

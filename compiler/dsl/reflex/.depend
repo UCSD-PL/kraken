@@ -1,2 +1,0 @@
-Reflex.vo Reflex.glob: Reflex.v /Users/ztatlock/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo
-ReflexBase.vo ReflexBase.glob: ReflexBase.v /Users/ztatlock/kraken/compiler/ynot/src/coq/Ynot.vo

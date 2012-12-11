@@ -9,18 +9,18 @@ Open Scope hprop_scope.
 Open Scope stsepi_scope.
 
 (* follow ascii design, little endian *)
-Inductive Num : Set :=
-| num : ascii -> ascii -> Num.
+Inductive num : Set :=
+| Num : ascii -> ascii -> num.
 
-Definition nat_of_Num (n : Num) : nat :=
+Definition nat_of_num (n : num) : nat :=
   match n with
-  | num l h => nat_of_ascii l + nat_of_ascii h * 256
+  | Num l h => nat_of_ascii l + nat_of_ascii h * 256
   end.
 
-Definition Num_of_nat (n : nat) : Num :=
+Definition num_of_nat (n : nat) : num :=
   let l := n mod 256 in
   let h := n / 256 in
-  num (ascii_of_nat l) (ascii_of_nat h).
+  Num (ascii_of_nat l) (ascii_of_nat h).
 
 Lemma nat_of_ascii_bound :
   forall x, nat_of_ascii x < 256.
@@ -31,11 +31,11 @@ Proof.
   ); compute; omega.
 Qed.
 
-Lemma Num_nat_embedding :
-  forall (n : Num), Num_of_nat (nat_of_Num n) = n.
+Lemma num_nat_embedding :
+  forall (n : num), num_of_nat (nat_of_num n) = n.
 Proof with try discriminate.
   destruct n as [[l h]]; simpl.
-  unfold Num_of_nat, nat_of_Num.
+  unfold num_of_nat, nat_of_num.
   repeat f_equal.
   rewrite mod_add... rewrite mod_small. now rewrite ascii_nat_embedding.
   apply nat_of_ascii_bound.
@@ -43,39 +43,42 @@ Proof with try discriminate.
   apply nat_of_ascii_bound.
 Qed.
 
-Definition Num_eq (n1 n2 : Num) : {n1 = n2} + {n1 <> n2}.
+Definition num_eq (n1 n2 : num) : {n1 = n2} + {n1 <> n2}.
   decide equality; apply ascii_dec.
 Qed.
 
-Definition Str : Set :=
+Definition str : Set :=
   list ascii.
 
-Fixpoint str_of_string (s : string) : Str :=
+Fixpoint str_of_string (s : string) : str :=
   match s with
   | EmptyString => nil
   | String c rest => c :: str_of_string rest
   end.
 
-Definition FD : Set :=
-  Num.
+Definition str_eq (s1 s2 : str) : {s1 = s2} + {s1 <> s2} :=
+  list_eq_dec ascii_dec s1 s2.
 
-Definition FD_eq (f1 f2 : FD) : {f1 = f2} + {f1 <> f2} :=
-  Num_eq f1 f2.
+Definition fd : Set :=
+  num.
 
-Lemma FD_eq_true :
-  forall (f : FD) (A : Type) (vT vF : A),
-  (if FD_eq f f then vT else vF) = vT.
+Definition fd_eq (f1 f2 : fd) : {f1 = f2} + {f1 <> f2} :=
+  num_eq f1 f2.
+
+Lemma fd_eq_true :
+  forall (f : fd) (A : Type) (vT vF : A),
+  (if fd_eq f f then vT else vF) = vT.
 Proof.
-  intros; case (FD_eq f f); auto. congruence.
+  intros; case (fd_eq f f); auto. congruence.
 Qed.
 
-Lemma FD_eq_false :
-  forall (f1 f2 : FD) (A : Type) (vT vF : A),
+Lemma fd_eq_false :
+  forall (f1 f2 : fd) (A : Type) (vT vF : A),
   f1 <> f2 ->
-  (if FD_eq f1 f2 then vT else vF) = vF.
+  (if fd_eq f1 f2 then vT else vF) = vF.
 Proof.
-  intros; case (FD_eq f1 f2); auto. congruence.
+  intros; case (fd_eq f1 f2); auto. congruence.
 Qed.
 
 (* prevent sep tactic from unfolding *)
-Global Opaque nat_of_Num Num_of_nat.
+Global Opaque nat_of_num num_of_nat.

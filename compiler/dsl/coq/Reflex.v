@@ -14,38 +14,34 @@ Open Scope stsepi_scope.
 Ltac sep' := sep fail idtac.
 Ltac inv H := inversion H; subst; clear H.
 
-(* syntax *)
-
 Inductive type_t : Set :=
   num_t | str_t | fd_t.
 
-Definition payload_t : Set :=
-  list type_t.
-
-Definition msg_spec : Set :=
-  list payload_t.
-
-(* semantics *)
-
-Section MESSAGE_SPEC.
-
-Variable MS : msg_spec.
-
-Definition lkup_tag (n : Num) :=
-  List.nth_error MS (nat_of_Num n).
-
 Definition TypeD (t : type_t) : Set :=
   match t with
-  | num_t => Num
-  | str_t => Str
-  | fd_t  => FD
+  | num_t => num
+  | str_t => str
+  | fd_t  => fd
   end.
+
+Definition payload_t : Set :=
+  list type_t.
 
 Fixpoint PayloadD (pt : payload_t) : Set :=
   match pt with
   | nil => unit
   | t :: ts => TypeD t * PayloadD ts
   end%type.
+
+Definition msg_t : Set :=
+  list payload_t.
+
+Section WITH_MSG_T.
+
+Variable MT : msg_t.
+
+Definition lkup_tag (n : num) :=
+  List.nth_error MT (nat_of_num n).
 
 Definition OptPayloadD (opt : option payload_t) : Set :=
   match opt with
@@ -54,12 +50,14 @@ Definition OptPayloadD (opt : option payload_t) : Set :=
   end.
 
 Record Msg : Set :=
-  { tag : Num
+  { tag : num
   ; pay : OptPayloadD (lkup_tag tag)
   }.
 
+(* recv / send messages *)
+
 Record BogusMsg : Set :=
-  { btag : Num
+  { btag : num
   ; bpay : lkup_tag btag = None
   }.
 
@@ -68,21 +66,21 @@ Inductive MaybeMsg : Set :=
 | BogusTag : BogusMsg -> MaybeMsg
 .
 
-Definition RecvType (f : FD) (t : type_t) : TypeD t -> Trace :=
+Definition RecvType (f : fd) (t : type_t) : TypeD t -> Trace :=
   match t with
-  | num_t => fun n : Num => RecvNum f n
-  | str_t => fun s : Str => RecvStr f s
-  | fd_t  => fun g : FD  => RecvFD  f g :: nil
+  | num_t => fun n : num => RecvNum f n
+  | str_t => fun s : str => RecvStr f s
+  | fd_t  => fun g : fd  => RecvFD  f g :: nil
   end.
 
-Definition SendType (f : FD) (t : type_t) : TypeD t -> Trace :=
+Definition SendType (f : fd) (t : type_t) : TypeD t -> Trace :=
   match t with
-  | num_t => fun n : Num => SendNum f n
-  | str_t => fun s : Str => SendStr f s
-  | fd_t  => fun g : FD  => SendFD  f g :: nil
+  | num_t => fun n : num => SendNum f n
+  | str_t => fun s : str => SendStr f s
+  | fd_t  => fun g : fd  => SendFD  f g :: nil
   end.
 
-Fixpoint RecvPay (f : FD) (pt : payload_t) : PayloadD pt -> Trace :=
+Fixpoint RecvPay (f : fd) (pt : payload_t) : PayloadD pt -> Trace :=
   match pt with
   | nil => fun _ : unit => nil
   | t :: ts => fun pv : TypeD t * PayloadD ts =>
@@ -91,7 +89,7 @@ Fixpoint RecvPay (f : FD) (pt : payload_t) : PayloadD pt -> Trace :=
     end
   end.
 
-Fixpoint SendPay (f : FD) (pt : payload_t) : PayloadD pt -> Trace :=
+Fixpoint SendPay (f : fd) (pt : payload_t) : PayloadD pt -> Trace :=
   match pt with
   | nil => fun _ : unit => nil
   | t :: ts => fun pv : TypeD t * PayloadD ts =>
@@ -100,7 +98,7 @@ Fixpoint SendPay (f : FD) (pt : payload_t) : PayloadD pt -> Trace :=
     end
   end.
 
-Definition RecvOptPay (f : FD) (opt : option payload_t) : OptPayloadD opt -> Trace :=
+Definition RecvOptPay (f : fd) (opt : option payload_t) : OptPayloadD opt -> Trace :=
   match opt with
   | Some pt => fun pv : PayloadD pt =>
     RecvPay f pt pv
@@ -108,7 +106,7 @@ Definition RecvOptPay (f : FD) (opt : option payload_t) : OptPayloadD opt -> Tra
     False_rec Trace pf
   end.
 
-Definition SendOptPay (f : FD) (opt : option payload_t) : OptPayloadD opt -> Trace :=
+Definition SendOptPay (f : fd) (opt : option payload_t) : OptPayloadD opt -> Trace :=
   match opt with
   | Some pt => fun pv : PayloadD pt =>
     SendPay f pt pv
@@ -116,25 +114,25 @@ Definition SendOptPay (f : FD) (opt : option payload_t) : OptPayloadD opt -> Tra
     False_rec Trace pf
   end.
 
-Definition RecvMsg (f : FD) (m : Msg) : Trace :=
+Definition RecvMsg (f : fd) (m : Msg) : Trace :=
   let t := tag m in
   RecvOptPay f (lkup_tag t) (pay m) ++ RecvNum f t.
 
-Definition RecvBogusMsg (f : FD) (m : BogusMsg) : Trace :=
+Definition RecvBogusMsg (f : fd) (m : BogusMsg) : Trace :=
   RecvNum f (btag m).
 
-Definition SendMsg (f : FD) (m : Msg) : Trace :=
+Definition SendMsg (f : fd) (m : Msg) : Trace :=
   let t := tag m in
   SendOptPay f (lkup_tag t) (pay m) ++ SendNum f t.
 
-Definition RecvMaybeMsg (f : FD) (mm : MaybeMsg) : Trace :=
+Definition RecvMaybeMsg (f : fd) (mm : MaybeMsg) : Trace :=
   match mm with
   | ValidTag m => RecvMsg f m
   | BogusTag bm => RecvBogusMsg f bm
   end.
 
 Definition recv_type :
-  forall (f : FD) (ps : list Perm) (t : type_t) (tr : [Trace]),
+  forall (f : fd) (ps : list Perm) (t : type_t) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
         (fun v : TypeD t => tr ~~ traced (RecvType f t v ++ tr) * open f ps).
 Proof.
@@ -155,7 +153,7 @@ Proof.
 Qed.
 
 Definition send_type :
-  forall (f : FD) (ps : list Perm) (t : type_t) (v : TypeD t) (tr : [Trace]),
+  forall (f : fd) (ps : list Perm) (t : type_t) (v : TypeD t) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
         (fun _ : unit => tr ~~ traced (SendType f t v ++ tr) * open f ps).
 Proof.
@@ -179,7 +177,7 @@ Proof.
 Qed.
 
 Definition recv_pay :
-  forall (f : FD) (ps : list Perm) (pt : payload_t) (tr : [Trace]),
+  forall (f : fd) (ps : list Perm) (pt : payload_t) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
         (fun pv : PayloadD pt => tr ~~ traced (RecvPay f pt pv ++ tr) * open f ps).
 Proof.
@@ -203,7 +201,7 @@ Proof.
 Qed.
 
 Definition send_pay :
-  forall (f : FD) (ps : list Perm) (pt : payload_t) (pv : PayloadD pt) (tr : [Trace]),
+  forall (f : fd) (ps : list Perm) (pt : payload_t) (pv : PayloadD pt) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
         (fun _ : unit => tr ~~ traced (SendPay f pt pv ++ tr) * open f ps).
 Proof.
@@ -233,7 +231,7 @@ Proof.
 Qed.
 
 Definition recv_msg :
-  forall (f : FD) (ps : list Perm) (tr : [Trace]),
+  forall (f : fd) (ps : list Perm) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
         (fun mm : MaybeMsg => tr ~~ traced (RecvMaybeMsg f mm ++ tr) * open f ps).
 Proof.
@@ -258,7 +256,7 @@ Proof.
 Qed.
 
 Definition send_msg :
-  forall (f : FD) (ps : list Perm) (m : Msg) (tr : [Trace]),
+  forall (f : fd) (ps : list Perm) (m : Msg) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
         (fun _ : unit => tr ~~ traced (SendMsg f m ++ tr) * open f ps).
 Proof.
@@ -284,12 +282,12 @@ Proof.
 Qed.
 
 Inductive KAction : Set :=
-| KExec   : Str -> list Str -> FD -> KAction
-| KCall   : Str -> list Str -> FD -> KAction
-| KSelect : list FD -> FD -> KAction
-| KSend   : FD -> Msg -> KAction
-| KRecv   : FD -> Msg -> KAction
-| KBogus  : FD -> BogusMsg -> KAction
+| KExec   : str -> list str -> fd -> KAction
+| KCall   : str -> list str -> fd -> KAction
+| KSelect : list fd -> fd -> KAction
+| KSend   : fd -> Msg -> KAction
+| KRecv   : fd -> Msg -> KAction
+| KBogus  : fd -> BogusMsg -> KAction
 .
 
 Definition KTrace : Set :=
@@ -312,9 +310,260 @@ Fixpoint expand_ktrace (kt : KTrace) : Trace :=
   end.
 
 Record kstate : Set :=
-  mkst { components : list FD
+  mkst { components : list fd
        ; ktr : [KTrace]
        }.
+
+Section WITH_PAYLOAD_T.
+
+Variable PT : payload_t.
+
+Inductive unop : type_t -> type_t -> Set :=
+| Not : unop num_t num_t
+.
+
+Inductive binop : type_t -> type_t -> type_t -> Set :=
+| Eq  : forall t, binop t t num_t
+| Add : binop num_t num_t num_t
+| Sub : binop num_t num_t num_t
+| Mul : binop num_t num_t num_t
+| Cat : binop str_t str_t str_t
+.
+
+Inductive base_expr : type_t -> Set :=
+(* no fd lit, otherwise would make polymorphic lit ctor *)
+| SLit : str -> base_expr str_t
+| NLit : num -> base_expr num_t
+| CurChan : base_expr fd_t
+| Param :
+  forall i t,
+  Some t = List.nth_error PT i ->
+  base_expr t
+| UnOp :
+  forall t1 t2,
+  unop t1 t2 ->
+  base_expr t1 ->
+  base_expr t2
+| BinOp :
+  forall t1 t2 t3,
+  binop t1 t2 t3 ->
+  base_expr t1 ->
+  base_expr t2 ->
+  base_expr t3
+.
+
+Fixpoint payload_expr (pt : payload_t) : Set :=
+  match pt with
+  | t::ts => base_expr t * payload_expr ts
+  | nil => unit
+  end%type.
+
+Inductive expr_t : Set :=
+  base_t | msg_expr_t.
+
+Inductive expr : expr_t -> Set :=
+| Base :
+  forall t : type_t,
+  base_expr t -> expr base_t
+| MsgExpr :
+  forall (tag : num) (pt : payload_t),
+  Some pt = lkup_tag tag -> payload_expr pt -> expr msg_expr_t
+.
+
+Inductive cmd : Set :=
+| Send : base_expr fd_t -> expr msg_expr_t -> cmd
+.
+
+Definition prog : Set :=
+  list cmd.
+
+End WITH_PAYLOAD_T.
+
+Definition payload_t_of_msg (m : Msg) : payload_t :=
+  match lkup_tag (tag m) as opt return OptPayloadD opt -> payload_t with
+  | Some pt => fun _ : PayloadD pt => pt
+  | None => fun pf : False => False_rec _ pf
+  end (pay m).
+
+Definition handler : Set :=
+  forall m : Msg, prog (payload_t_of_msg m).
+
+Section WITH_ENV.
+
+Variable RC : fd.
+Variable RM : Msg.
+Let PT : payload_t := payload_t_of_msg RM.
+
+
+Let ZERO : num := Num "000" "000".
+Let ONE  : num := Num "001" "000".
+
+Fixpoint safe_nth
+  {A : Set} (l : list A) (i : nat) (pf : i < List.length l) : A.
+Proof.
+  refine (
+    match l as l' return i < List.length l' -> A with
+    | x :: xs => fun pf' : i < S (List.length xs) =>
+      match i as i' return i' < S (List.length xs) -> A with
+      | O => fun _ => x
+      | S j => fun pf'' : S j < S (List.length xs) =>
+        safe_nth A xs j (Lt.lt_S_n _ _ pf'')
+      end pf'
+    | nil => fun pf' : i < O =>
+      _ (* bogus, use tactics *)
+    end pf
+  ).
+  cut False; [contradiction|].
+  inversion pf'.
+Defined.
+
+Fixpoint param_idx
+  (pt : payload_t) (p : PayloadD pt) (i : nat) (pf : i < List.length pt) :
+  TypeD (safe_nth pt i pf).
+Proof.
+  refine (
+    match pt as pt' return
+      PayloadD pt' -> forall pf' : i < List.length pt', TypeD (safe_nth pt' i pf')
+    with
+    | t :: ts => fun (p : TypeD t * PayloadD ts) (pf : i < List.length (t :: ts)) =>
+      match p with
+      | (v, vs) =>
+        match i as i' return
+          forall pf' : i' < List.length (t :: ts), TypeD (safe_nth (t :: ts) i' pf')
+        with
+        | O => fun (pf : O < List.length (t :: ts)) => v
+        | S j => fun (pf : S j < List.length (t :: ts)) =>
+          param_idx ts vs j (Lt.lt_S_n _ _ pf)
+        end pf
+      end
+    | nil => fun (p : unit) (pf : i < List.length nil) =>
+      _ (* bogus, use tactics *)
+    end p pf
+  ).
+  cut False; [contradiction|].
+  inversion pf0.
+Qed.
+
+Lemma nth_lt_length :
+  forall A (l : list A) (i : nat) (a : A),
+  Some a = nth_error l i ->
+  i < List.length l.
+Proof.
+  induction l; simpl; intros.
+  destruct i; inv H.
+  destruct i; inv H. omega.
+  apply Lt.lt_n_S. eapply IHl; eauto.
+Qed.
+
+Lemma lkup_tag_msg :
+  forall m, exists pt, lkup_tag (tag m) = Some pt.
+Proof.
+  intros [tag pay]; simpl.
+  destruct (lkup_tag tag); simpl in *.
+  eauto. contradiction.
+Qed.
+
+Lemma payload_t_cast' :
+  OptPayloadD (lkup_tag (tag RM)) = PayloadD PT.
+Proof.
+  revert PT; unfold payload_t_of_msg; simpl. 
+  destruct (lkup_tag_msg RM).
+  destruct RM as [tag pay]; simpl in *.
+  revert pay; rewrite H; auto.
+Qed.
+
+(*
+Lemma payload_t_cast :
+  lkup_tag (tag RM) = PT.
+Proof.
+  revert PT; unfold payload_t_of_msg; simpl. 
+  destruct (lkup_tag_msg RM).
+  destruct RM as [tag pay]; simpl in *.
+  revert pay; rewrite H; auto.
+Qed.
+*)
+
+Variable silly : False.
+
+Print eq_rec.
+
+Fixpoint eval_base_expr (t : type_t) (e : base_expr PT t) : TypeD t :=
+  match e in base_expr _ t return TypeD t with
+  | SLit s => s
+  | NLit n => n
+  | CurChan => RC
+  | Param i t pf =>
+
+    match lkup_tag (tag RM) as opt return
+      OptPayloadD opt -> TypeD t
+    with
+    | Some pt => fun p : PayloadD pt =>
+      param_idx pt p i (nth_lt_length _ _ _ _ pf)
+    | None => fun bogus : False =>
+      False_rec _ bogus
+    end (pay RM)
+
+(*
+    param_idx PT (pay RM) i (nth_lt _ _ _ _ pf)
+*)
+
+(*
+      let pv : PayloadD pt := eq_rec _ _ (pay m) _ pf in
+    param_idx PT (pay RM) i (nth_lt _ _ _ _ pf)
+*)
+
+
+
+(*
+    match lkup_tag (tag RM) as opt return OptPayloadD opt -> TypeD t with
+    | Some pt => fun p : PayloadD pt =>
+      param_idx pt p i (nth_lt _ _ _ _ pf)
+    | None => fun bogus : False =>
+      False_rec _ bogus
+    end (pay RM)
+*)
+  | _ => False_rec _ silly
+  end.
+
+
+  | Eq t' e1 e2 =>
+    let v1 := eval_base_expr _ e1 in
+    let v2 := eval_base_expr _ e2 in
+    let cmp : forall x y : TypeD t', {x = y} + {x <> y} :=
+      match t' with
+      | num_t => num_eq
+      | str_t => str_eq
+      | fd_t  => fd_eq
+      end
+    in
+    if cmp v1 v2 then ONE else ZERO
+  | Not e =>
+    let v := eval_base_expr num_t e in
+    if num_eq v ZERO then ONE else ZERO
+  | Add e1 e2 =>
+    let v1 := eval_base_expr _ e1 in
+    let v2 := eval_base_expr _ e2 in
+    num_of_nat (plus (nat_of_num v1) (nat_of_num v2))
+  | Sub e1 e2 =>
+    let v1 := eval_base_expr _ e1 in
+    let v2 := eval_base_expr _ e2 in
+    num_of_nat (minus (nat_of_num v1) (nat_of_num v2))
+  | Mul e1 e2 =>
+    let v1 := eval_base_expr _ e1 in
+    let v2 := eval_base_expr _ e2 in
+    num_of_nat (mult (nat_of_num v1) (nat_of_num v2))
+  | _ => False_rec _ silly
+  end.
+
+XXX
+
+
+Definition CmdStep (s : kstate) (c : cmd) : kstate :=
+  s.
+
+Section WITH_HANDLER.
+
+Variable H : handler.
 
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
@@ -488,4 +737,4 @@ Proof.
   sep'.
 Qed.
 
-End MESSAGE_SPEC.
+End WITH_MSG_T.

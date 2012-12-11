@@ -4,6 +4,7 @@ Require Import Message.
 Require Import Ynot.
 Require Import Ascii.
 
+(*Cannot create PTY until authenticated for that user*)
 Inductive userauth : [KTrace] -> Prop :=
 | ua_empty       : userauth [nil]%inhabited
 | non_create_pty : forall tr act,
@@ -16,6 +17,17 @@ Inductive userauth : [KTrace] -> Prop :=
                      (exists sys, projT1 sys = System /\
                      In (KRecv sys (SysLoginRes autheduser (num_of_nat n))) tr) ->
                      userauth [KSend c (SysCreatePtyerReq autheduser) :: tr].
+
+(*Can attempt to authenticate at most n times*)
+Inductive auth_attempts : nat -> [KTrace] -> Prop :=
+| naa_empty   : forall (n:nat), auth_attempts n [nil]%inhabited
+| non_attempt : forall n tr act,
+                  auth_attempts n [tr] ->
+                  (forall c accstr, act <> KSend c (SysLoginReq accstr) )->
+                  auth_attempts n [act :: tr]
+| attempt     : forall c n tr accstr,
+                  auth_attempts n [tr] ->
+                  auth_attempts (S n) [KSend c (SysLoginReq accstr) :: tr].
 
 Ltac ve_steps_ua :=
   match goal with
@@ -137,16 +149,6 @@ Proof.
       try ve_pty_ua' H3 Heqktrs H0 IHHKI k0;
       try ve_pty_ua' H1 Heqktrs H0 IHHKI h0.
 Qed.
-
-Inductive auth_attempts : nat -> [KTrace] -> Prop :=
-| naa_empty   : forall (n:nat), auth_attempts n [nil]%inhabited
-| non_attempt : forall n tr act,
-                  auth_attempts n [tr] ->
-                  (forall c accstr, act <> KSend c (SysLoginReq accstr) )->
-                  auth_attempts n [act :: tr]
-| attempt     : forall c n tr accstr,
-                  auth_attempts n [tr] ->
-                  auth_attempts (S n) [KSend c (SysLoginReq accstr) :: tr].
 
 Ltac ve_steps_att :=
   match goal with

@@ -1,0 +1,1 @@
+NatOrderedType.mli: Compare_dec Datatypes EqNat Equalities MlCoq OrdersTac

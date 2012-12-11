@@ -1,0 +1,290 @@
+Require Import Ascii.
+Require Import List.
+Require Import String.
+Require Import Ynot.
+Require Import Message.
+
+Open Local Scope char_scope.
+Open Local Scope hprop_scope.
+Open Local Scope stsepi_scope.
+
+Fixpoint all_bound (cs : list tchan) : hprop :=
+  match cs with
+    | nil => emp
+    | c :: cs' => bound c * all_bound cs'
+  end.
+
+Fixpoint all_bound_drop (cs : list tchan) (drop : tchan) : hprop :=
+  match cs with
+  | nil => emp
+  | c :: cs' =>
+    if tchan_eq c drop
+      then all_bound cs'
+      else bound c * all_bound_drop cs' drop
+  end.
+
+Lemma unpack_all_bound :
+  forall cs c,
+  In c cs ->
+  all_bound cs ==> bound c * all_bound_drop cs c.
+Proof.
+  induction cs; simpl; intros. contradiction.
+  destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
+  case (tchan_eq a c); intros; subst. apply himp_refl.
+  apply himp_comm_conc. apply himp_assoc_conc1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_conc; auto.
+Qed.
+
+Lemma repack_all_bound :
+  forall cs c,
+  In c cs ->
+  bound c * all_bound_drop cs c ==> all_bound cs.
+Proof.
+  induction cs; simpl; intros. contradiction.
+  destruct H; subst. rewrite tchan_eq_true. apply himp_refl.
+  case (tchan_eq a c); intros; subst. apply himp_refl.
+  apply himp_comm_prem. apply himp_assoc_prem1.
+  apply himp_split. apply himp_refl.
+  apply himp_comm_prem; auto.
+Qed.
+
+Ltac sep' := sep fail idtac.
+
+Ltac isolate t :=
+  match t with ?lhs ==> ?rhs =>
+    refine (@himp_trans (lhs * _) _ _ _ _); [ sep' | ];
+    refine (@himp_trans (rhs * _) _ _ _ _); [ | sep' ];
+    apply himp_split
+  end.
+
+Ltac bounds_packing :=
+  match goal with
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (bound c * all_bound_drop cs c ==> all_bound cs);
+      [ apply repack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match rhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (all_bound cs ==> bound c * all_bound_drop cs c);
+      [ apply unpack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+    match rhs with context [ all_bound_drop ?cs ?d ] =>
+      isolate (bound c * all_bound_drop cs c ==> bound d * all_bound_drop cs d);
+      [ eapply himp_trans; [ apply repack_all_bound | apply unpack_all_bound ] | ]
+    end
+    end
+end.
+
+Inductive KAction : Set :=
+| KExec   : str -> tchan -> KAction
+| KCall   : str -> str -> fdesc -> KAction
+| KSelect : list tchan -> tchan -> KAction
+| KSend   : tchan -> msg -> KAction
+| KRecv   : tchan -> msg -> KAction
+.
+
+Definition KTrace : Set :=
+  list KAction.
+
+Definition expand_kaction (ka : KAction) : Trace :=
+  match ka with
+  | KExec cmd c => Exec cmd c :: nil
+  | KCall cmd arg pipe => Call cmd arg pipe :: nil
+  | KSelect cs c => Select cs c :: nil
+  | KSend c m => SendMsg c m
+  | KRecv c m => RecvMsg c m
+  end.
+
+Fixpoint expand_ktrace (kt : KTrace) : Trace :=
+  match kt with
+  | nil => nil
+  | ka :: kas => expand_kaction ka ++ expand_ktrace kas
+  end.
+
+Record kstate : Set :=
+  mkst { components : list tchan
+       ; ktr : [KTrace]
+(* __KSTATE_FIELDS__ *)
+       }.
+
+Section VEX.
+
+Variable s : kstate.
+
+Let comps := components s.
+Let tr := ktr s.
+(* __VE_STATE_VAR_DECLS__ *)
+
+Inductive ValidExchange : kstate -> Prop :=
+(* __VE_HANDLED_CASES__ *)
+(* __VE_UNHANDLED_CASES__ *)
+(* special case for errors *)
+| VE_BadTag :
+  forall c tag,
+  ValidExchange (mkst
+    comps
+    (tr ~~~ KRecv c (BadTag tag) :: tr)
+(* __VE_STATE_VAR_LISTS__ *)
+  ).
+End VEX.
+
+Hint Constructors ValidExchange.
+
+Ltac ve_solve_tac :=
+  solve
+    [ eapply VE_BadTag; eauto
+(* __VE_SOLVE_TAC__ *)
+    ].
+
+Inductive KInvariant : kstate -> Prop :=
+| KI_init :
+(* __KTRACE_INIT__ *)
+| KI_select :
+  forall s cs c,
+  let comps := components s in
+  let tr := ktr s in
+(* __KTRACE_VAR_DECLS__ *)
+  KInvariant s ->
+  KInvariant (mkst
+    comps
+    (tr ~~~ KSelect cs c :: tr)
+(* __KTRACE_VAR_LISTS__ *)
+  )
+| KI_exchange :
+  forall s s',
+  KInvariant s ->
+  ValidExchange s s' ->
+  KInvariant s'.
+
+Hint Constructors KInvariant.
+
+(* Support replacing a term deep in a list.
+ * If target is [FOO] and l is [A :: B :: C :: FOO], then
+ * [dangle_from target l] will yield [fun x => A :: B :: C :: x].
+ *)
+Ltac dangle_from target l :=
+  match l with
+  | target =>
+      constr:(fun (x: KTrace) => x)
+  | ?h :: ?t =>
+      let dt := dangle_from target t in
+      constr:(fun x => h :: dt x)
+  end.
+
+Ltac restore_kinv :=
+  unfold KTrace in *;
+  match goal with
+  | [H : ktr ?kst = [?x]%inhabited |- ValidExchange ?kst ?kst'] =>
+      let itr := eval simpl in (ktr kst') in
+      match itr with [?tr]%inhabited =>
+        let dtr := dangle_from x tr in
+        replace itr with (inhabit_unpack (ktr kst) dtr);
+          [ ve_solve_tac
+          | rewrite H; auto
+          ]
+      end
+
+  | [ H: ktr ?kst = [?x]%inhabited |- KInvariant ?kst' ] =>
+    match kst' with context [[?kact :: x]%inhabited] =>
+      replace ([kact :: x]%inhabited)
+      with (inhabit_unpack (ktr kst) (fun oldktr : KTrace => kact :: oldktr));
+        [ eapply KI_select; eauto
+        | rewrite H; auto
+        ]
+    end
+
+  | [_: KInvariant _ |- KInvariant _ ] =>
+      econstructor; [eauto|]
+
+  | [H: _ = [_]%inhabited |- _] =>
+      rewrite H in *; simpl in *
+
+  | [H:[_]%inhabited = [_]%inhabited |- _] =>
+      apply pack_injective in H;
+      rewrite -> H in * || rewrite <- H in *
+end.
+
+Definition kstate_inv s : hprop :=
+  tr :~~ ktr s in emp
+  * traced (expand_ktrace tr)
+  * [KInvariant s]
+  * all_bound (components s)
+  (* __KSTATE_INVS__ *).
+
+Ltac unfoldr :=
+  unfold kstate_inv, KTrace in *.
+
+Ltac simplr :=
+  sep';
+  try bounds_packing;
+  try restore_kinv.
+
+Definition kinit :
+  forall (_ : unit),
+  STsep (traced nil)
+        (fun s => kstate_inv s).
+Proof.
+  intros; refine (
+(* __INIT_CODE__ *)
+  );
+  sep unfoldr simplr.
+Qed.
+
+(* __EXCHANGES__ *)
+
+Fixpoint type_of_comp (c: tchan) (comps: list tchan): chan_type :=
+  match comps with
+(* __TYPE_OF_COMP_DEFAULT__ *)
+  | x :: rest =>
+    if tchan_eq x c then
+      projT1 x
+    else
+      type_of_comp c rest
+  end.
+
+Definition kbody:
+  forall s,
+  STsep (kstate_inv s)
+        (fun s' => kstate_inv s').
+Proof.
+(* __KBODY__ *)
+Qed.
+
+Definition kloop:
+  forall s,
+  STsep (kstate_inv s)
+        (fun s' => kstate_inv s').
+Proof.
+  intros; refine (
+    Fix
+      (fun s => kstate_inv s)
+      (fun s s' => kstate_inv s')
+      (fun self s =>
+        s <- kbody s;
+        s <- self s;
+        {{ Return s }}
+      )
+    s
+  );
+  sep fail auto.
+Qed.
+
+Definition main:
+  forall (_ : unit),
+  STsep (traced nil)
+        (fun s' => kstate_inv s').
+Proof.
+  intros; refine (
+    s0 <- kinit tt;
+    sN <- kloop s0;
+    {{ Return sN }}
+  );
+  unfold kstate_inv;
+  sep fail auto.
+Qed.

@@ -1,0 +1,3 @@
+Kernel.vo Kernel.glob: Kernel.v /home/daniel/UCSD/research/PL/kraken/compiler/ynot/src/coq/Ynot.vo Message.vo
+KProp.vo KProp.glob: KProp.v /home/daniel/UCSD/research/PL/kraken/compiler/ynot/src/coq/Ynot.vo Message.vo Kernel.vo
+Message.vo Message.glob: Message.v /home/daniel/UCSD/research/PL/kraken/compiler/ynot/src/coq/Ynot.vo

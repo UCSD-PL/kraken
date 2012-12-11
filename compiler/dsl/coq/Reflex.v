@@ -314,13 +314,17 @@ Record kstate : Set :=
        ; ktr : [KTrace]
        }.
 
-Section WITH_PAYLOAD_T.
-
-Variable PT : payload_t.
-
 Inductive unop : type_t -> type_t -> Set :=
 | Not : unop num_t num_t
 .
+
+Definition eval_unop
+  (t1 t2 : type_t) (op : unop t1 t2) (v : TypeD t1) : TypeD t2 :=
+  match op in unop t1 t2 return TypeD t1 -> TypeD t2 with
+  | Not => fun v => if num_eq v FALSE then TRUE else FALSE
+  end v.
+
+Implicit Arguments eval_unop.
 
 Inductive binop : type_t -> type_t -> type_t -> Set :=
 | Eq  : forall t, binop t t num_t
@@ -330,15 +334,116 @@ Inductive binop : type_t -> type_t -> type_t -> Set :=
 | Cat : binop str_t str_t str_t
 .
 
+Definition eval_binop
+  (t1 t2 t3: type_t) (op : binop t1 t2 t3)
+  (v1 : TypeD t1) (v2 : TypeD t2) : TypeD t3 :=
+  match op in binop t1 t2 t3 return TypeD t1 -> TypeD t2 -> TypeD t3 with
+  | Eq t => fun v1 v2 : TypeD t =>
+    let teq : forall (x y : TypeD t), {x = y} + {x <> y} :=
+      match t with
+      | num_t => num_eq
+      | str_t => str_eq
+      | fd_t  => fd_eq
+      end
+    in
+    if teq v1 v2 then TRUE else FALSE
+  | Add => fun v1 v2 : num =>
+    num_of_nat (plus (nat_of_num v1) (nat_of_num v2))
+  | Sub => fun v1 v2 : num =>
+    num_of_nat (minus (nat_of_num v1) (nat_of_num v2))
+  | Mul => fun v1 v2 : num =>
+    num_of_nat (mult (nat_of_num v1) (nat_of_num v2))
+  | Cat => fun v1 v2 : str =>
+    v1 ++ v2
+  end v1 v2.
+
+Implicit Arguments eval_binop.
+
+Definition payload_t_of_msg (m : Msg) : payload_t :=
+  match lkup_tag (tag m) as opt return OptPayloadD opt -> payload_t with
+  | Some pt => fun _ : PayloadD pt => pt
+  | None => fun pf : False => False_rec _ pf
+  end (pay m).
+
+Fixpoint safe_nth
+  {A : Set} (l : list A) (i : nat) (pf : i < List.length l) : A.
+Proof.
+  refine (
+    match l as l' return i < List.length l' -> A with
+    | x :: xs => fun pf' : i < S (List.length xs) =>
+      match i as i' return i' < S (List.length xs) -> A with
+      | O => fun _ => x
+      | S j => fun pf'' : S j < S (List.length xs) =>
+        safe_nth A xs j (Lt.lt_S_n _ _ pf'')
+      end pf'
+    | nil => fun pf' : i < O =>
+      _ (* bogus, use tactics *)
+    end pf
+  ).
+  cut False; [contradiction|].
+  inversion pf'.
+Defined.
+
+(* TODO clean up *)
+Fixpoint get_param_idx
+  (pt : payload_t) (p : PayloadD pt) (i : nat) (pf : i < List.length pt) :
+  TypeD (safe_nth pt i pf).
+Proof.
+  refine (
+    match pt as pt' return
+      PayloadD pt' -> forall pf' : i < List.length pt', TypeD (safe_nth pt' i pf')
+    with
+    | t :: ts => fun (p : TypeD t * PayloadD ts) (pf : i < List.length (t :: ts)) =>
+      match p with
+      | (v, vs) =>
+        match i as i' return
+          forall pf' : i' < List.length (t :: ts), TypeD (safe_nth (t :: ts) i' pf')
+        with
+        | O => fun (pf : O < List.length (t :: ts)) => v
+        | S j => fun (pf : S j < List.length (t :: ts)) =>
+          get_param_idx ts vs j (Lt.lt_S_n _ _ pf)
+        end pf
+      end
+    | nil => fun (p : unit) (pf : i < List.length nil) =>
+      _ (* bogus, use tactics *)
+    end p pf
+  ).
+  cut False; [contradiction|].
+  inversion pf0.
+Defined.
+
+Lemma nth_lt_length :
+  forall A (l : list A) (i : nat) (a : A),
+  Some a = nth_error l i ->
+  i < List.length l.
+Proof.
+  induction l; simpl; intros.
+  destruct i; inv H.
+  destruct i; inv H. omega.
+  apply Lt.lt_n_S. eapply IHl; eauto.
+Qed.
+
+Section WITH_ENV.
+
+Variable CC : fd.
+Variable MSG : Msg.
+
 Inductive base_expr : type_t -> Set :=
-(* no fd lit, otherwise would make polymorphic lit ctor *)
-| SLit : str -> base_expr str_t
+(* no fd lit, otherwise would make lit ctor polymorphic *)
 | NLit : num -> base_expr num_t
+| SLit : str -> base_expr str_t
 | CurChan : base_expr fd_t
 | Param :
-  forall i t,
-  Some t = List.nth_error PT i ->
-  base_expr t
+  forall i,
+  base_expr
+    match lkup_tag (tag MSG) with
+    | Some pt =>
+      match List.nth_error pt i with
+      | Some t => t
+      | None => str_t
+      end
+    | None => str_t (* bogus *)
+    end
 | UnOp :
   forall t1 t2,
   unop t1 t2 ->
@@ -351,6 +456,56 @@ Inductive base_expr : type_t -> Set :=
   base_expr t2 ->
   base_expr t3
 .
+
+Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
+  match e in base_expr t return TypeD t with
+  | NLit n => n
+  | SLit s => s
+  | CurChan => CC
+  | Param i =>
+    match lkup_tag (tag MSG) as opt return
+      TypeD match opt with
+      | Some pt =>
+        match List.nth_error pt i with
+        | Some t => t
+        | None => str_t
+        end
+      | None => str_t
+      end
+    with
+    | Some pt =>
+      match List.nth_error pt i as ot return
+        TypeD match ot with
+        | Some t => t
+        | None => str_t
+        end
+      with
+      | Some t => _
+      | None => _
+      end
+(*
+      let nth := List.nth_error pt i in
+      match nth as nth' return
+        nth = nth' -> TypeD t
+      with
+      | Some t => fun pf : nth = Some t => _
+      | None =>  fun pf : nth = None => _
+      end (refl_equal nth)
+*)
+    | None => _
+    end
+  | UnOp t1 t2 op e =>
+    let v := eval_base_expr t1 e in
+    eval_unop op v
+  | BinOp t1 t2 t3 op e1 e2 =>
+    let v1 := eval_base_expr t1 e1 in
+    let v2 := eval_base_expr t2 e2 in
+    eval_binop op v1 v2
+  end.
+
+
+
+
 
 Fixpoint payload_expr (pt : payload_t) : Set :=
   match pt with
@@ -379,11 +534,6 @@ Definition prog : Set :=
 
 End WITH_PAYLOAD_T.
 
-Definition payload_t_of_msg (m : Msg) : payload_t :=
-  match lkup_tag (tag m) as opt return OptPayloadD opt -> payload_t with
-  | Some pt => fun _ : PayloadD pt => pt
-  | None => fun pf : False => False_rec _ pf
-  end (pay m).
 
 Definition handler : Set :=
   forall m : Msg, prog (payload_t_of_msg m).
@@ -393,10 +543,6 @@ Section WITH_ENV.
 Variable RC : fd.
 Variable RM : Msg.
 Let PT : payload_t := payload_t_of_msg RM.
-
-
-Let ZERO : num := Num "000" "000".
-Let ONE  : num := Num "001" "000".
 
 Fixpoint safe_nth
   {A : Set} (l : list A) (i : nat) (pf : i < List.length l) : A.

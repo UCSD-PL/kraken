@@ -359,69 +359,52 @@ Definition eval_binop
 
 Implicit Arguments eval_binop.
 
-Definition payload_t_of_msg (m : Msg) : payload_t :=
-  match lkup_tag (tag m) as opt return OptPayloadD opt -> payload_t with
-  | Some pt => fun _ : PayloadD pt => pt
-  | None => fun pf : False => False_rec _ pf
-  end (pay m).
-
-Fixpoint safe_nth
-  {A : Set} (l : list A) (i : nat) (pf : i < List.length l) : A.
+Lemma some_eq_inv :
+  forall A (x y : A),
+  Some x = Some y ->
+  x = y.
 Proof.
-  refine (
-    match l as l' return i < List.length l' -> A with
-    | x :: xs => fun pf' : i < S (List.length xs) =>
-      match i as i' return i' < S (List.length xs) -> A with
-      | O => fun _ => x
-      | S j => fun pf'' : S j < S (List.length xs) =>
-        safe_nth A xs j (Lt.lt_S_n _ _ pf'')
-      end pf'
-    | nil => fun pf' : i < O =>
-      _ (* bogus, use tactics *)
-    end pf
-  ).
-  cut False; [contradiction|].
-  inversion pf'.
-Defined.
-
-(* TODO clean up *)
-Fixpoint get_param_idx
-  (pt : payload_t) (p : PayloadD pt) (i : nat) (pf : i < List.length pt) :
-  TypeD (safe_nth pt i pf).
-Proof.
-  refine (
-    match pt as pt' return
-      PayloadD pt' -> forall pf' : i < List.length pt', TypeD (safe_nth pt' i pf')
-    with
-    | t :: ts => fun (p : TypeD t * PayloadD ts) (pf : i < List.length (t :: ts)) =>
-      match p with
-      | (v, vs) =>
-        match i as i' return
-          forall pf' : i' < List.length (t :: ts), TypeD (safe_nth (t :: ts) i' pf')
-        with
-        | O => fun (pf : O < List.length (t :: ts)) => v
-        | S j => fun (pf : S j < List.length (t :: ts)) =>
-          get_param_idx ts vs j (Lt.lt_S_n _ _ pf)
-        end pf
-      end
-    | nil => fun (p : unit) (pf : i < List.length nil) =>
-      _ (* bogus, use tactics *)
-    end p pf
-  ).
-  cut False; [contradiction|].
-  inversion pf0.
-Defined.
-
-Lemma nth_lt_length :
-  forall A (l : list A) (i : nat) (a : A),
-  Some a = nth_error l i ->
-  i < List.length l.
-Proof.
-  induction l; simpl; intros.
-  destruct i; inv H.
-  destruct i; inv H. omega.
-  apply Lt.lt_n_S. eapply IHl; eauto.
+  intros. inv H; auto.
 Qed.
+
+Implicit Arguments some_eq_inv.
+
+Lemma opt_eq_contra :
+  forall A (a : A),
+  None = Some a ->
+  False.
+Proof.
+  intros; inv H.
+Qed.
+
+Implicit Arguments opt_eq_contra.
+
+Fixpoint get_param_idx
+  (pt : payload_t) (p : PayloadD pt) (i : nat) (t : type_t)
+  (pf : List.nth_error pt i = Some t) : TypeD t :=
+  match pt as pt' return
+    PayloadD pt' -> forall pf : List.nth_error pt' i = Some t, TypeD t
+  with
+  | x :: xs =>
+    fun (p : TypeD x * PayloadD xs) (pf : List.nth_error (x :: xs) i = Some t) =>
+    match p with
+    | (v, vs) =>
+      match i as i' return
+        forall pf : List.nth_error (x :: xs) i' = Some t, TypeD t
+      with
+      | O => fun pf : Some x = Some t =>
+        eq_rec _ _ v _ (some_eq_inv pf)
+      | S j => fun pf : List.nth_error xs j = Some t =>
+        get_param_idx xs vs j t pf
+      end pf
+    end
+  | nil =>
+    fun (p : unit) (pf : List.nth_error nil i = Some t) =>
+    match i as i' return List.nth_error nil i' = Some t -> _ with
+    | O => fun pf : None = Some t => False_rec _ (opt_eq_contra pf)
+    | S _ => fun pf : None = Some t => False_rec _ (opt_eq_contra pf)
+    end pf
+end p pf.
 
 Section WITH_ENV.
 
@@ -464,7 +447,7 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
   | CurChan => CC
   | Param i =>
     match lkup_tag (tag MSG) as opt return
-      TypeD match opt with
+      OptPayloadD opt -> TypeD match opt with
       | Some pt =>
         match List.nth_error pt i with
         | Some t => t
@@ -473,27 +456,20 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
       | None => str_t
       end
     with
-    | Some pt =>
-      match List.nth_error pt i as ot return
-        TypeD match ot with
+    | Some pt => fun p : PayloadD pt =>
+      let ot := List.nth_error pt i in
+      match ot as ot' return
+        ot = ot' -> TypeD match ot' with
         | Some t => t
         | None => str_t
         end
       with
-      | Some t => _
-      | None => _
-      end
-(*
-      let nth := List.nth_error pt i in
-      match nth as nth' return
-        nth = nth' -> TypeD t
-      with
-      | Some t => fun pf : nth = Some t => _
-      | None =>  fun pf : nth = None => _
-      end (refl_equal nth)
-*)
-    | None => _
-    end
+      | Some t => fun pf : List.nth_error pt i = Some t =>
+        get_param_idx pt p i t pf
+      | None => fun _ => (@nil ascii)
+      end (refl_equal ot)
+    | None => fun pf : False => False_rec _ pf
+    end (pay MSG)
   | UnOp t1 t2 op e =>
     let v := eval_base_expr t1 e in
     eval_unop op v
@@ -503,27 +479,59 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
     eval_binop op v1 v2
   end.
 
-
-
-
-
 Fixpoint payload_expr (pt : payload_t) : Set :=
   match pt with
   | t::ts => base_expr t * payload_expr ts
   | nil => unit
   end%type.
 
+Fixpoint eval_payload_expr (pt : payload_t) (e : payload_expr pt) : PayloadD pt :=
+ match pt as pt' return payload_expr pt' -> PayloadD pt' with
+ | t :: ts => fun e : base_expr t * payload_expr ts =>
+   match e with
+   | (e1, es) =>
+     let v1 := eval_base_expr t e1 in
+     let vs := eval_payload_expr ts es in
+     (v1, vs)
+   end
+ | nil => fun _ => tt
+ end e.
+
 Inductive expr_t : Set :=
-  base_t | msg_expr_t.
+| base_t : type_t -> expr_t
+| msg_expr_t : expr_t
+.
+
+Definition ExprTD (t : expr_t) : Set :=
+  match t with
+  | base_t t => TypeD t
+  | msg_expr_t => Msg
+  end.
 
 Inductive expr : expr_t -> Set :=
 | Base :
   forall t : type_t,
-  base_expr t -> expr base_t
+  base_expr t ->
+  expr (base_t t)
 | MsgExpr :
   forall (tag : num) (pt : payload_t),
-  Some pt = lkup_tag tag -> payload_expr pt -> expr msg_expr_t
+  Some pt = lkup_tag tag ->
+  payload_expr pt ->
+  expr msg_expr_t
 .
+
+Definition eval_expr (t : expr_t) (e : expr t) : ExprTD t :=
+  match e in expr t return ExprTD t with
+  | Base t e => eval_base_expr t e
+  | MsgExpr tag pt pf pe =>
+    let p : PayloadD pt := eval_payload_expr pt pe in
+    let p : OptPayloadD (lkup_tag tag) :=
+      eq_rec (Some pt) (fun e : option payload_t => OptPayloadD e) p (lkup_tag tag) pf
+    in
+    {| tag := tag; pay := p |}
+  end.
+
+XXX HERE XXX
 
 Inductive cmd : Set :=
 | Send : base_expr fd_t -> expr msg_expr_t -> cmd

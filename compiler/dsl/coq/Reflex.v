@@ -404,11 +404,11 @@ Fixpoint get_param_idx
     | O => fun pf : None = Some t => False_rec _ (opt_eq_contra pf)
     | S _ => fun pf : None = Some t => False_rec _ (opt_eq_contra pf)
     end pf
-end p pf.
+  end p pf.
 
 Section WITH_ENV.
 
-Variable CC : fd.
+Variable CFD : fd.
 Variable MSG : Msg.
 
 Inductive base_expr : type_t -> Set :=
@@ -444,7 +444,7 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
   match e in base_expr t return TypeD t with
   | NLit n => n
   | SLit s => s
-  | CurChan => CC
+  | CurChan => CFD
   | Param i =>
     match lkup_tag (tag MSG) as opt return
       OptPayloadD opt -> TypeD match opt with
@@ -478,6 +478,16 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
     let v2 := eval_base_expr t2 e2 in
     eval_binop op v1 v2
   end.
+
+Lemma base_expr_fd_in :
+  forall e f s,
+  In CFD (components s) ->
+  eval_base_expr fd_t e = f ->
+  In f (components s).
+Proof.
+  
+
+XXX  
 
 Fixpoint payload_expr (pt : payload_t) : Set :=
   match pt with
@@ -538,14 +548,14 @@ Inductive cmd : Set :=
 Definition RunCmd (s : kstate) (c : cmd) : kstate :=
   match c with
   | Send fe me =>
-    let f := eval_base_expr fd_t fe in
-    let m := eval_expr msg_expr_t me in
+    let f := eval_base_expr _ fe in
+    let m := eval_expr _ me in
     let tr := ktr s in
     {| components := components s
      ; ktr := tr ~~~ KSend f m :: tr
      |}
   end.
-
+  
 Definition prog : Set :=
   list cmd.
 
@@ -560,12 +570,249 @@ End WITH_ENV.
 Definition handler : Set :=
   forall m : Msg, prog m.
 
+Section WITH_HANDLER.
+
+Variable H : handler.
+
+Inductive Reach : kstate -> Prop :=
+| Reach_init :
+  forall f,
+  Reach
+    {| components := f :: nil
+     ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) nil f :: nil]
+     |}
+| Reach_valid :
+  forall s f m tr,
+  let cs := components s in
+  ktr s = [tr]%inhabited ->
+  Reach s ->
+  let s' :=
+    {| components := cs
+     ; ktr := [KRecv f m :: KSelect cs f :: tr]
+     |}
+  in
+  Reach (RunProg f m s' (H m))
+| Reach_bogus :
+  forall s c bmsg tr,
+  let cs := components s in
+  ktr s = [tr]%inhabited ->
+  Reach s ->
+  Reach
+    {| components := cs
+     ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
+     |}
+.
+
+Definition kstate_inv s : hprop :=
+  tr :~~ ktr s in emp
+  * traced (expand_ktrace tr)
+  * [Reach s]
+  * all_bound (components s)
+  .
+
+Ltac isolate t :=
+  match t with ?lhs ==> ?rhs =>
+    refine (@himp_trans (lhs * _) _ _ _ _); [ sep' | ];
+    refine (@himp_trans (rhs * _) _ _ _ _); [ | sep' ];
+    apply himp_split
+  end.
+
+Ltac bounds_packing :=
+  match goal with
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (bound c * all_bound_drop cs c ==> all_bound cs);
+      [ apply repack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match rhs with context [ all_bound_drop ?cs ?c ] =>
+      isolate (all_bound cs ==> bound c * all_bound_drop cs c);
+      [ apply unpack_all_bound | ]
+    end
+
+  | [ |- ?lhs ==> ?rhs ] =>
+    match lhs with context [ all_bound_drop ?cs ?c ] =>
+    match rhs with context [ all_bound_drop ?cs ?d ] =>
+      isolate (bound c * all_bound_drop cs c ==> bound d * all_bound_drop cs d);
+      [ eapply himp_trans; [ apply repack_all_bound | apply unpack_all_bound ] | ]
+    end
+    end
+end.
+
+Ltac uninhabit :=
+  match goal with
+  | [ H1: ?tr = [_]%inhabited, H2: context[inhabit_unpack ?tr _] |- _ ] =>
+    rewrite H1 in H2; simpl in H2
+  | [ H: ?tr = [_]%inhabited |- context[inhabit_unpack ?tr _]] =>
+    rewrite H; simpl
+  end.
+
+Ltac reach :=
+  match goal with
+  | [ |- Reach _ ] =>
+      econstructor; eauto
+  end.
+
+Ltac unfoldr :=
+  unfold kstate_inv.
+
+Ltac simplr :=
+  sep';
+  try uninhabit;
+  try bounds_packing;
+  try reach.
+
+Ltac sep'' :=
+  sep unfoldr simplr.
+
+Definition kinit :
+  forall (_ : unit),
+  STsep (traced nil)
+        (fun s => kstate_inv s).
+Proof.
+  intros; refine (
+    let tr := [nil]%inhabited in
+    c <- exec (str_of_string "test.py") nil tr;
+    let tr := tr ~~~ KExec (str_of_string "test.py") nil c :: nil in
+    {{Return {|components := c :: nil; ktr := tr|}}}
+  );
+  sep''.
+Qed.
+
+Definition ValidEnv (cfd : fd) (m : Msg) (s : kstate) : Prop :=
+  forall e f,
+  In cfd (components s) ->
+  eval_base_expr cfd m fd_t e = f ->
+  In f (components s).
+
+Definition run_cmd :
+  forall (cfd : fd) (cm : Msg) (s : kstate) (c : cmd cm),
+  STsep (tr :~~ ktr s in
+          traced (expand_ktrace tr) * all_bound (components s) *
+          [In cfd (components s)] * [ValidEnv cfd cm s])
+        (fun s' : kstate => tr :~~ ktr s' in
+          traced (expand_ktrace tr) * all_bound (components s') *
+          [In cfd (components s')] * [ValidEnv cfd cm s'] * [RunCmd cfd cm s c = s']).
+Proof.
+  intros; refine (
+    let comps := components s in
+    let tr := ktr s in
+    match c with
+    | Send fe me =>
+      let f := eval_base_expr cfd cm _ fe in
+      let m := eval_expr cfd cm _ me in
+      send_msg f ExecPerms m
+      (tr ~~~ expand_ktrace tr)
+      <@> all_bound_drop comps f * [In cfd comps] * [ValidEnv cfd cm s];;
+
+      let tr := tr ~~~ KSend f m :: tr in
+      {{Return {|components := comps; ktr := tr|}}}
+    end
+  );
+  sep''.
+  unfold ValidEnv in H3.
+  eapply H3; eauto.
+  unfold ValidEnv in H5.
+  eapply H5; eauto.
+Qed.
+
+
+XXX
+
+Definition kbody:
+  forall s,
+  STsep (kstate_inv s)
+        (fun s' => kstate_inv s').
+Proof.
+  intro kst.
+  remember (components kst) as comps.
+  refine (
+    let tr := ktr kst in
+    c <- select comps
+    (tr ~~~ expand_ktrace tr)
+    <@> (tr ~~ [Reach kst] * all_bound comps);
+
+    let tr := tr ~~~ KSelect comps c :: tr in
+    mm <- recv_msg c ExecPerms
+    (tr ~~~ expand_ktrace tr)
+    <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);
+
+    match mm with
+    | ValidTag m =>
+      let tr := tr ~~~ KRecv c m :: tr in
+      send_msg c ExecPerms m
+      (tr ~~~ expand_ktrace tr)
+      <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);;
+
+      let tr := tr ~~~ KSend c m :: tr in
+      {{Return {|components := comps; ktr := tr|}}}
+
+    | BogusTag m =>
+      let tr := tr ~~~ KBogus c m :: tr in
+      {{Return {|components := comps; ktr := tr|}}}
+    end
+  );
+  sep''.
+Qed.
+
+Definition kloop:
+  forall s,
+  STsep (kstate_inv s)
+        (fun s' => kstate_inv s').
+Proof.
+  intros; refine (
+    Fix
+      (fun s => kstate_inv s)
+      (fun s s' => kstate_inv s')
+      (fun self s =>
+        s <- kbody s;
+        s <- self s;
+        {{ Return s }}
+      )
+    s
+  );
+  sep'.
+Qed.
+
+Definition main:
+  forall (_ : unit),
+  STsep (traced nil)
+        (fun s' => kstate_inv s').
+Proof.
+  intros; refine (
+    s0 <- kinit tt;
+    sN <- kloop s0;
+    {{ Return sN }}
+  );
+  sep'.
+Qed.
+
+End WITH_MSG_T.
 
 
 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+(*
 Section WITH_ENV.
 
 Variable RC : fd.
@@ -735,180 +982,5 @@ XXX
 Definition CmdStep (s : kstate) (c : cmd) : kstate :=
   s.
 
-Section WITH_HANDLER.
+*)
 
-Variable H : handler.
-
-Inductive Reach : kstate -> Prop :=
-| Reach_init :
-  forall c,
-  Reach
-    {| components := c :: nil
-     ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) nil c :: nil]
-     |}
-| Reach_valid :
-  forall s c msg tr,
-  let cs := components s in
-  ktr s = [tr]%inhabited ->
-  Reach s ->
-  Reach
-    {| components := cs
-     ; ktr := [KSend c msg :: KRecv c msg :: KSelect cs c :: tr]
-     |}
-| Reach_bogus :
-  forall s c bmsg tr,
-  let cs := components s in
-  ktr s = [tr]%inhabited ->
-  Reach s ->
-  Reach
-    {| components := cs
-     ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
-     |}
-.
-
-Definition kstate_inv s : hprop :=
-  tr :~~ ktr s in emp
-  * traced (expand_ktrace tr)
-  * [Reach s]
-  * all_bound (components s)
-  .
-
-Ltac isolate t :=
-  match t with ?lhs ==> ?rhs =>
-    refine (@himp_trans (lhs * _) _ _ _ _); [ sep' | ];
-    refine (@himp_trans (rhs * _) _ _ _ _); [ | sep' ];
-    apply himp_split
-  end.
-
-Ltac bounds_packing :=
-  match goal with
-  | [ |- ?lhs ==> ?rhs ] =>
-    match lhs with context [ all_bound_drop ?cs ?c ] =>
-      isolate (bound c * all_bound_drop cs c ==> all_bound cs);
-      [ apply repack_all_bound | ]
-    end
-
-  | [ |- ?lhs ==> ?rhs ] =>
-    match rhs with context [ all_bound_drop ?cs ?c ] =>
-      isolate (all_bound cs ==> bound c * all_bound_drop cs c);
-      [ apply unpack_all_bound | ]
-    end
-
-  | [ |- ?lhs ==> ?rhs ] =>
-    match lhs with context [ all_bound_drop ?cs ?c ] =>
-    match rhs with context [ all_bound_drop ?cs ?d ] =>
-      isolate (bound c * all_bound_drop cs c ==> bound d * all_bound_drop cs d);
-      [ eapply himp_trans; [ apply repack_all_bound | apply unpack_all_bound ] | ]
-    end
-    end
-end.
-
-Ltac uninhabit :=
-  match goal with
-  | [ H1: ?tr = [_]%inhabited, H2: context[inhabit_unpack ?tr _] |- _ ] =>
-    rewrite H1 in H2; simpl in H2
-  | [ H: ?tr = [_]%inhabited |- context[inhabit_unpack ?tr _]] =>
-    rewrite H; simpl
-  end.
-
-Ltac reach :=
-  match goal with
-  | [ |- Reach _ ] =>
-      econstructor; eauto
-  end.
-
-Ltac unfoldr :=
-  unfold kstate_inv.
-
-Ltac simplr :=
-  sep';
-  try uninhabit;
-  try bounds_packing;
-  try reach.
-
-Ltac sep'' :=
-  sep unfoldr simplr.
-
-Definition kinit :
-  forall (_ : unit),
-  STsep (traced nil)
-        (fun s => kstate_inv s).
-Proof.
-  intros; refine (
-    let tr := [nil]%inhabited in
-    c <- exec (str_of_string "test.py") nil tr;
-    let tr := tr ~~~ KExec (str_of_string "test.py") nil c :: nil in
-    {{Return {|components := c :: nil; ktr := tr|}}}
-  );
-  sep''.
-Qed.
-
-Definition kbody:
-  forall s,
-  STsep (kstate_inv s)
-        (fun s' => kstate_inv s').
-Proof.
-  intro kst.
-  remember (components kst) as comps.
-  refine (
-    let tr := ktr kst in
-    c <- select comps
-    (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [Reach kst] * all_bound comps);
-
-    let tr := tr ~~~ KSelect comps c :: tr in
-    mm <- recv_msg c ExecPerms
-    (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);
-
-    match mm with
-    | ValidTag m =>
-      let tr := tr ~~~ KRecv c m :: tr in
-      send_msg c ExecPerms m
-      (tr ~~~ expand_ktrace tr)
-      <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);;
-
-      let tr := tr ~~~ KSend c m :: tr in
-      {{Return {|components := comps; ktr := tr|}}}
-
-    | BogusTag m =>
-      let tr := tr ~~~ KBogus c m :: tr in
-      {{Return {|components := comps; ktr := tr|}}}
-    end
-  );
-  sep''.
-Qed.
-
-Definition kloop:
-  forall s,
-  STsep (kstate_inv s)
-        (fun s' => kstate_inv s').
-Proof.
-  intros; refine (
-    Fix
-      (fun s => kstate_inv s)
-      (fun s s' => kstate_inv s')
-      (fun self s =>
-        s <- kbody s;
-        s <- self s;
-        {{ Return s }}
-      )
-    s
-  );
-  sep'.
-Qed.
-
-Definition main:
-  forall (_ : unit),
-  STsep (traced nil)
-        (fun s' => kstate_inv s').
-Proof.
-  intros; refine (
-    s0 <- kinit tt;
-    sN <- kloop s0;
-    {{ Return sN }}
-  );
-  sep'.
-Qed.
-
-End WITH_MSG_T.

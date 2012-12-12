@@ -531,20 +531,40 @@ Definition eval_expr (t : expr_t) (e : expr t) : ExprTD t :=
     {| tag := tag; pay := p |}
   end.
 
-XXX HERE XXX
-
 Inductive cmd : Set :=
 | Send : base_expr fd_t -> expr msg_expr_t -> cmd
 .
 
+Definition RunCmd (s : kstate) (c : cmd) : kstate :=
+  match c with
+  | Send fe me =>
+    let f := eval_base_expr fd_t fe in
+    let m := eval_expr msg_expr_t me in
+    let tr := ktr s in
+    {| components := components s
+     ; ktr := tr ~~~ KSend f m :: tr
+     |}
+  end.
+
 Definition prog : Set :=
   list cmd.
 
-End WITH_PAYLOAD_T.
+Fixpoint RunProg (s : kstate) (p : prog) : kstate :=
+  match p with
+  | c :: cs => RunProg (RunCmd s c) cs
+  | nil => s
+  end.
 
+End WITH_ENV.
 
 Definition handler : Set :=
-  forall m : Msg, prog (payload_t_of_msg m).
+  forall m : Msg, prog m.
+
+
+
+
+
+
 
 Section WITH_ENV.
 

@@ -479,15 +479,57 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
     eval_binop op v1 v2
   end.
 
-Lemma base_expr_fd_in :
+Lemma base_expr_fd_in_aux :
   forall e f s,
   In CFD (components s) ->
   eval_base_expr fd_t e = f ->
   In f (components s).
 Proof.
+Check base_expr_ind.
+
+Lemma fd_expr_ind :
+  forall P : base_expr fd_t -> Prop,
+  P CurChan ->
+  (forall i, P (Param i)) ->
+  forall e : base_expr fd_t, P e.
+
+
+  induction e.
+
+
+Lemma base_expr_fd_in_aux :
+  forall t e f s (pf: t = fd_t),
+  In CFD (components s) ->
+  eval_base_expr t e = f ->
+  let f : fd := eq_rec _ _ f _ pf in
+  In f (components s).
+Proof.
+  induction e; simpl; intros.
+  inv pf.
+  inv pf.
+
+  subst.
+  unfold eq_rec, eq_rect; simpl.
+  intros. subst. simpl in *.
+  destruct pf.
+
+  revert H. destruct pf. simpl.
+
+
+  simpl.
+  unfold eq_rec, eq_rect; simpl.
+  Set Printing All. auto.
+  intros. subst. simpl in *.
+  revert H. destruct pf. simpl.
+
+
+  induction e; simpl; intros; try inv pf; simpl. subst.
+  unfold eq_rec, eq_rect; simpl.
+  pattern fd_t.
+  intros. remember fd_t.
   
 
-XXX  
+XXX
 
 Fixpoint payload_expr (pt : payload_t) : Set :=
   match pt with

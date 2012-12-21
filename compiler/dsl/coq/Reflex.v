@@ -359,6 +359,8 @@ Definition eval_binop
 
 Implicit Arguments eval_binop.
 
+(*
+
 Lemma some_eq_inv :
   forall A (x y : A),
   Some x = Some y ->
@@ -406,10 +408,52 @@ Fixpoint get_param_idx
     end pf
   end p pf.
 
+*)
+
+Definition optpayload_get_t (opt : option payload_t) (i : nat) : type_t :=
+  match opt with
+  | Some pt => List.nth i pt str_t
+  | None => str_t
+  end.
+
+Fixpoint payload_get_v
+  (i : nat) (pt : payload_t) (p : PayloadD pt) : TypeD (List.nth i pt str_t) :=
+  match i as i' return TypeD (List.nth i' pt str_t) with
+  | S j =>
+    match pt as pt' return
+      PayloadD pt' -> TypeD (List.nth (S j) pt' str_t)
+    with
+    | t :: ts => fun p =>
+      match p with (v, vs) => payload_get_v j ts vs end
+    | nil => fun _ =>
+      str_of_string "BOGUS"
+    end p
+  | O =>
+    match pt as pt' return
+      PayloadD pt' -> TypeD (List.nth O pt' str_t)
+    with
+    | t :: ts => fun p =>
+      match p with (v, vs) => v end
+    | nil => fun _ =>
+      str_of_string "BOGUS"
+    end p
+  end.
+
 Section WITH_ENV.
 
+Variable CST : kstate.
 Variable CFD : fd.
-Variable MSG : Msg.
+Variable CMSG : Msg.
+
+Let CPAY := lkup_tag (tag CMSG).
+
+Definition mparam_i (i : nat) : TypeD (optpayload_get_t CPAY i) :=
+  match CPAY as opt return
+    OptPayloadD opt -> TypeD (optpayload_get_t opt i)
+  with
+  | Some pt => fun p : PayloadD pt => payload_get_v i pt p
+  | None => fun pf : False => False_rec _ pf
+  end (pay CMSG).
 
 Inductive base_expr : type_t -> Set :=
 (* no fd lit, otherwise would make lit ctor polymorphic *)
@@ -418,15 +462,7 @@ Inductive base_expr : type_t -> Set :=
 | CurChan : base_expr fd_t
 | Param :
   forall i,
-  base_expr
-    match lkup_tag (tag MSG) with
-    | Some pt =>
-      match List.nth_error pt i with
-      | Some t => t
-      | None => str_t
-      end
-    | None => str_t (* bogus *)
-    end
+  base_expr (optpayload_get_t CPAY i)
 | UnOp :
   forall t1 t2,
   unop t1 t2 ->
@@ -445,31 +481,7 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
   | NLit n => n
   | SLit s => s
   | CurChan => CFD
-  | Param i =>
-    match lkup_tag (tag MSG) as opt return
-      OptPayloadD opt -> TypeD match opt with
-      | Some pt =>
-        match List.nth_error pt i with
-        | Some t => t
-        | None => str_t
-        end
-      | None => str_t
-      end
-    with
-    | Some pt => fun p : PayloadD pt =>
-      let ot := List.nth_error pt i in
-      match ot as ot' return
-        ot = ot' -> TypeD match ot' with
-        | Some t => t
-        | None => str_t
-        end
-      with
-      | Some t => fun pf : List.nth_error pt i = Some t =>
-        get_param_idx pt p i t pf
-      | None => fun _ => (@nil ascii)
-      end (refl_equal ot)
-    | None => fun pf : False => False_rec _ pf
-    end (pay MSG)
+  | Param i => mparam_i i
   | UnOp t1 t2 op e =>
     let v := eval_base_expr t1 e in
     eval_unop op v
@@ -479,57 +491,29 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
     eval_binop op v1 v2
   end.
 
-Lemma base_expr_fd_in_aux :
-  forall e f s,
-  In CFD (components s) ->
-  eval_base_expr fd_t e = f ->
-  In f (components s).
+Definition msg_fds_ok : Prop :=
+  forall i,
+  let t := optpayload_get_t CPAY i in
+  match t as t' return TypeD t' -> Prop with
+  | fd_t => fun f => In f (components CST)
+  | _ => fun _ => True
+  end (mparam_i i).
+
+Lemma base_expr_fd_in :
+  forall t e v,
+  msg_fds_ok ->
+  In CFD (components CST)->
+  eval_base_expr t e = v ->
+  match t as t' return (TypeD t' -> Prop) with
+  | fd_t => fun f => In f (components CST)
+  | _ => fun _ => True
+  end v.
 Proof.
-Check base_expr_ind.
-
-Lemma fd_expr_ind :
-  forall P : base_expr fd_t -> Prop,
-  P CurChan ->
-  (forall i, P (Param i)) ->
-  forall e : base_expr fd_t, P e.
-
-
-  induction e.
-
-
-Lemma base_expr_fd_in_aux :
-  forall t e f s (pf: t = fd_t),
-  In CFD (components s) ->
-  eval_base_expr t e = f ->
-  let f : fd := eq_rec _ _ f _ pf in
-  In f (components s).
-Proof.
-  induction e; simpl; intros.
-  inv pf.
-  inv pf.
-
-  subst.
-  unfold eq_rec, eq_rect; simpl.
-  intros. subst. simpl in *.
-  destruct pf.
-
-  revert H. destruct pf. simpl.
-
-
-  simpl.
-  unfold eq_rec, eq_rect; simpl.
-  Set Printing All. auto.
-  intros. subst. simpl in *.
-  revert H. destruct pf. simpl.
-
-
-  induction e; simpl; intros; try inv pf; simpl. subst.
-  unfold eq_rec, eq_rect; simpl.
-  pattern fd_t.
-  intros. remember fd_t.
-  
-
-XXX
+  destruct e; simpl; intros; subst; auto.
+  specialize (H i); auto.
+  destruct t2; auto. inv u.
+  destruct t3; auto. inv b.
+Qed.
 
 Fixpoint payload_expr (pt : payload_t) : Set :=
   match pt with
@@ -614,7 +598,7 @@ Definition handler : Set :=
 
 Section WITH_HANDLER.
 
-Variable H : handler.
+Variable HANDLER : handler.
 
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
@@ -624,16 +608,14 @@ Inductive Reach : kstate -> Prop :=
      ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) nil f :: nil]
      |}
 | Reach_valid :
-  forall s f m tr,
+  forall s f m tr s',
   let cs := components s in
   ktr s = [tr]%inhabited ->
   Reach s ->
-  let s' :=
-    {| components := cs
-     ; ktr := [KRecv f m :: KSelect cs f :: tr]
-     |}
-  in
-  Reach (RunProg f m s' (H m))
+  s' = {| components := cs
+        ; ktr := [KRecv f m :: KSelect cs f :: tr]
+        |} ->
+  Reach (RunProg f m s' (HANDLER m))
 | Reach_bogus :
   forall s c bmsg tr,
   let cs := components s in
@@ -686,8 +668,10 @@ Ltac uninhabit :=
   match goal with
   | [ H1: ?tr = [_]%inhabited, H2: context[inhabit_unpack ?tr _] |- _ ] =>
     rewrite H1 in H2; simpl in H2
-  | [ H: ?tr = [_]%inhabited |- context[inhabit_unpack ?tr _]] =>
+  | [ H: ?tr = [_]%inhabited |- context[inhabit_unpack ?tr _] ] =>
     rewrite H; simpl
+  | [ H: ktr ?s = [_]%inhabited |- _ ] =>
+    unfold s in *; simpl in *
   end.
 
 Ltac reach :=
@@ -722,20 +706,14 @@ Proof.
   sep''.
 Qed.
 
-Definition ValidEnv (cfd : fd) (m : Msg) (s : kstate) : Prop :=
-  forall e f,
-  In cfd (components s) ->
-  eval_base_expr cfd m fd_t e = f ->
-  In f (components s).
-
 Definition run_cmd :
   forall (cfd : fd) (cm : Msg) (s : kstate) (c : cmd cm),
   STsep (tr :~~ ktr s in
           traced (expand_ktrace tr) * all_bound (components s) *
-          [In cfd (components s)] * [ValidEnv cfd cm s])
+          [In cfd (components s)] * [msg_fds_ok s cm])
         (fun s' : kstate => tr :~~ ktr s' in
           traced (expand_ktrace tr) * all_bound (components s') *
-          [In cfd (components s')] * [ValidEnv cfd cm s'] * [RunCmd cfd cm s c = s']).
+          [In cfd (components s')] * [msg_fds_ok s' cm] * [RunCmd cfd cm s c = s']).
 Proof.
   intros; refine (
     let comps := components s in
@@ -746,21 +724,49 @@ Proof.
       let m := eval_expr cfd cm _ me in
       send_msg f ExecPerms m
       (tr ~~~ expand_ktrace tr)
-      <@> all_bound_drop comps f * [In cfd comps] * [ValidEnv cfd cm s];;
+      <@> all_bound_drop comps f * [In cfd comps] * [msg_fds_ok s cm];;
 
       let tr := tr ~~~ KSend f m :: tr in
       {{Return {|components := comps; ktr := tr|}}}
     end
   );
   sep''.
-  unfold ValidEnv in H3.
-  eapply H3; eauto.
-  unfold ValidEnv in H5.
-  eapply H5; eauto.
+  eapply (base_expr_fd_in s cfd cm fd_t); eauto.
+  eapply (base_expr_fd_in s cfd cm fd_t); eauto.
 Qed.
 
-
-XXX
+Definition run_prog :
+  forall (cfd : fd) (cm : Msg) (s : kstate) (p : prog cm),
+  STsep (tr :~~ ktr s in
+          traced (expand_ktrace tr) * all_bound (components s) *
+          [In cfd (components s)] * [msg_fds_ok s cm])
+        (fun s' : kstate => tr :~~ ktr s' in
+          traced (expand_ktrace tr) * all_bound (components s') *
+          [In cfd (components s')] * [msg_fds_ok s' cm] * [RunProg cfd cm s p = s']).
+Proof.
+  intros; refine (
+    Fix2
+      (fun p s =>
+        tr :~~ ktr s in
+          traced (expand_ktrace tr) * all_bound (components s) *
+          [In cfd (components s)] * [msg_fds_ok s cm])
+      (fun p s (s' : kstate) =>
+        tr :~~ ktr s' in
+          traced (expand_ktrace tr) * all_bound (components s') *
+          [In cfd (components s')] * [msg_fds_ok s' cm] * [RunProg cfd cm s p = s'])
+      (fun self p s =>
+        match p with
+        | nil =>
+          {{ Return s }}
+        | c::cs =>
+          s' <- run_cmd cfd cm s c;
+          s'' <- self cs s' <@> [RunCmd cfd cm s c = s'];
+          {{ Return s'' }}
+        end)
+    p s
+  );
+  sep''.
+Qed.
 
 Definition kbody:
   forall s,
@@ -783,12 +789,18 @@ Proof.
     match mm with
     | ValidTag m =>
       let tr := tr ~~~ KRecv c m :: tr in
+      let s' := {|components := comps; ktr := tr|} in
+      s'' <- run_prog c m s' (HANDLER m) <@> [Reach kst];
+      {{Return s''}}
+
+(*
       send_msg c ExecPerms m
       (tr ~~~ expand_ktrace tr)
       <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);;
 
       let tr := tr ~~~ KSend c m :: tr in
       {{Return {|components := comps; ktr := tr|}}}
+*)
 
     | BogusTag m =>
       let tr := tr ~~~ KBogus c m :: tr in
@@ -796,6 +808,28 @@ Proof.
     end
   );
   sep''.
+
+  admit.
+
+  subst v.
+  sep''.
+  rewrite H2 in H3.
+  apply pack_injective in H3.
+  subst x2.
+  sep''.
+
+  econstructor. inversion H3; auto.
+  rewrite <- H6.
+  eapply (Reach_valid kst); eauto.
+  unfold s'. rewrite Heqcomps.
+  f_equal.
+  unfold tr in *. clear tr.
+  unfold tr0 in *. clear tr0.
+  unfold tr1 in *. clear tr1.
+  destruct (ktr kst). simpl in *.
+  rewrite Heqcomps.
+  apply pack_injective in H1.
+  subst x1. sep''.
 Qed.
 
 Definition kloop:
@@ -830,199 +864,6 @@ Proof.
   sep'.
 Qed.
 
+End WITH_HANDLER.
+
 End WITH_MSG_T.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-(*
-Section WITH_ENV.
-
-Variable RC : fd.
-Variable RM : Msg.
-Let PT : payload_t := payload_t_of_msg RM.
-
-Fixpoint safe_nth
-  {A : Set} (l : list A) (i : nat) (pf : i < List.length l) : A.
-Proof.
-  refine (
-    match l as l' return i < List.length l' -> A with
-    | x :: xs => fun pf' : i < S (List.length xs) =>
-      match i as i' return i' < S (List.length xs) -> A with
-      | O => fun _ => x
-      | S j => fun pf'' : S j < S (List.length xs) =>
-        safe_nth A xs j (Lt.lt_S_n _ _ pf'')
-      end pf'
-    | nil => fun pf' : i < O =>
-      _ (* bogus, use tactics *)
-    end pf
-  ).
-  cut False; [contradiction|].
-  inversion pf'.
-Defined.
-
-Fixpoint param_idx
-  (pt : payload_t) (p : PayloadD pt) (i : nat) (pf : i < List.length pt) :
-  TypeD (safe_nth pt i pf).
-Proof.
-  refine (
-    match pt as pt' return
-      PayloadD pt' -> forall pf' : i < List.length pt', TypeD (safe_nth pt' i pf')
-    with
-    | t :: ts => fun (p : TypeD t * PayloadD ts) (pf : i < List.length (t :: ts)) =>
-      match p with
-      | (v, vs) =>
-        match i as i' return
-          forall pf' : i' < List.length (t :: ts), TypeD (safe_nth (t :: ts) i' pf')
-        with
-        | O => fun (pf : O < List.length (t :: ts)) => v
-        | S j => fun (pf : S j < List.length (t :: ts)) =>
-          param_idx ts vs j (Lt.lt_S_n _ _ pf)
-        end pf
-      end
-    | nil => fun (p : unit) (pf : i < List.length nil) =>
-      _ (* bogus, use tactics *)
-    end p pf
-  ).
-  cut False; [contradiction|].
-  inversion pf0.
-Qed.
-
-Lemma nth_lt_length :
-  forall A (l : list A) (i : nat) (a : A),
-  Some a = nth_error l i ->
-  i < List.length l.
-Proof.
-  induction l; simpl; intros.
-  destruct i; inv H.
-  destruct i; inv H. omega.
-  apply Lt.lt_n_S. eapply IHl; eauto.
-Qed.
-
-Lemma lkup_tag_msg :
-  forall m, exists pt, lkup_tag (tag m) = Some pt.
-Proof.
-  intros [tag pay]; simpl.
-  destruct (lkup_tag tag); simpl in *.
-  eauto. contradiction.
-Qed.
-
-Lemma payload_t_cast' :
-  OptPayloadD (lkup_tag (tag RM)) = PayloadD PT.
-Proof.
-  revert PT; unfold payload_t_of_msg; simpl. 
-  destruct (lkup_tag_msg RM).
-  destruct RM as [tag pay]; simpl in *.
-  revert pay; rewrite H; auto.
-Qed.
-
-(*
-Lemma payload_t_cast :
-  lkup_tag (tag RM) = PT.
-Proof.
-  revert PT; unfold payload_t_of_msg; simpl. 
-  destruct (lkup_tag_msg RM).
-  destruct RM as [tag pay]; simpl in *.
-  revert pay; rewrite H; auto.
-Qed.
-*)
-
-Variable silly : False.
-
-Print eq_rec.
-
-Fixpoint eval_base_expr (t : type_t) (e : base_expr PT t) : TypeD t :=
-  match e in base_expr _ t return TypeD t with
-  | SLit s => s
-  | NLit n => n
-  | CurChan => RC
-  | Param i t pf =>
-
-    match lkup_tag (tag RM) as opt return
-      OptPayloadD opt -> TypeD t
-    with
-    | Some pt => fun p : PayloadD pt =>
-      param_idx pt p i (nth_lt_length _ _ _ _ pf)
-    | None => fun bogus : False =>
-      False_rec _ bogus
-    end (pay RM)
-
-(*
-    param_idx PT (pay RM) i (nth_lt _ _ _ _ pf)
-*)
-
-(*
-      let pv : PayloadD pt := eq_rec _ _ (pay m) _ pf in
-    param_idx PT (pay RM) i (nth_lt _ _ _ _ pf)
-*)
-
-
-
-(*
-    match lkup_tag (tag RM) as opt return OptPayloadD opt -> TypeD t with
-    | Some pt => fun p : PayloadD pt =>
-      param_idx pt p i (nth_lt _ _ _ _ pf)
-    | None => fun bogus : False =>
-      False_rec _ bogus
-    end (pay RM)
-*)
-  | _ => False_rec _ silly
-  end.
-
-
-  | Eq t' e1 e2 =>
-    let v1 := eval_base_expr _ e1 in
-    let v2 := eval_base_expr _ e2 in
-    let cmp : forall x y : TypeD t', {x = y} + {x <> y} :=
-      match t' with
-      | num_t => num_eq
-      | str_t => str_eq
-      | fd_t  => fd_eq
-      end
-    in
-    if cmp v1 v2 then ONE else ZERO
-  | Not e =>
-    let v := eval_base_expr num_t e in
-    if num_eq v ZERO then ONE else ZERO
-  | Add e1 e2 =>
-    let v1 := eval_base_expr _ e1 in
-    let v2 := eval_base_expr _ e2 in
-    num_of_nat (plus (nat_of_num v1) (nat_of_num v2))
-  | Sub e1 e2 =>
-    let v1 := eval_base_expr _ e1 in
-    let v2 := eval_base_expr _ e2 in
-    num_of_nat (minus (nat_of_num v1) (nat_of_num v2))
-  | Mul e1 e2 =>
-    let v1 := eval_base_expr _ e1 in
-    let v2 := eval_base_expr _ e2 in
-    num_of_nat (mult (nat_of_num v1) (nat_of_num v2))
-  | _ => False_rec _ silly
-  end.
-
-XXX
-
-
-Definition CmdStep (s : kstate) (c : cmd) : kstate :=
-  s.
-
-*)
-

@@ -499,6 +499,95 @@ Definition msg_fds_ok : Prop :=
   | _ => fun _ => True
   end (mparam_i i).
 
+(* this extracts to not-the-worst code, not tail recursive *)
+Definition mem
+  {A : Type} (deq : forall x y : A, {x = y} + {x <> y}) (xs : list A) (x : A) :
+  {In x xs} + {~ In x xs}.
+Proof.
+  induction xs; simpl; auto.
+  destruct IHxs; auto.
+  destruct (deq a x); subst; auto.
+  right; intro. destruct H; auto.
+Qed.
+
+(* really need to generalize all this payload business *)
+(* this should be some sort of a forallb type function *)
+Fixpoint pay_fds_ck
+  (fs : list fd) (pt : payload_t) (p : PayloadD pt) : bool :=
+  match pt as pt' return
+    PayloadD pt' -> bool
+  with
+  | nil => fun _ : unit => true
+  | t::ts => fun p : (TypeD t * PayloadD ts) =>
+    match p with (v, vs) =>
+      andb
+        (match t as t' return TypeD t' -> bool with
+        | fd_t => fun f => if mem fd_eq fs f then true else false
+        | _ => fun _ => true
+        end v)
+        (pay_fds_ck fs ts vs)
+    end
+  end p.
+
+Definition msg_fds_ck : bool :=
+  match lkup_tag (tag CMSG) as opt return OptPayloadD opt -> bool with
+  | Some pt => fun p : PayloadD pt =>
+    pay_fds_ck (components CST) pt p
+  | None => fun pf : False =>
+    False_rec _ pf
+  end (pay CMSG).
+
+(* TODO fix this, it is ugly and stupid *)
+Lemma msg_fds_ck_correct :
+  msg_fds_ck = true <-> msg_fds_ok.
+Proof.
+  destruct CST as [fs tr].
+  unfold msg_fds_ck, msg_fds_ok.
+  unfold mparam_i, optpayload_get_t.
+  unfold CPAY in *; clear CPAY.
+  destruct CMSG as [mtag mpay]; simpl.
+  split.
+
+  (* -> *)
+
+  revert mpay.
+  destruct (lkup_tag mtag); simpl; intros; auto.
+  clear tr mtag.
+  revert p mpay H.
+  induction i; simpl; intros.
+
+  destruct p; simpl in *; auto.
+  destruct mpay; simpl in *; auto.
+  destruct t; simpl in *; auto.
+  destruct (mem fd_eq (components CST) t0); auto.
+  discriminate.
+
+  destruct p; simpl in *; auto.
+  destruct mpay; simpl in *; auto.
+  apply IHi.
+  destruct t; simpl in H; auto.
+  destruct (mem fd_eq (components CST) t0); auto.
+  discriminate.
+
+  (* <- *)  
+
+  revert mpay.
+  destruct (lkup_tag mtag); simpl; intros; auto.
+  clear tr mtag.
+  revert p mpay H.
+  induction p; simpl; intros.
+
+  auto.
+
+  destruct mpay; simpl in *.
+  destruct a; simpl in *; auto.
+  apply IHp; intros. specialize (H (S i)); auto.
+  apply IHp; intros. specialize (H (S i)); auto.
+  destruct (mem fd_eq (components CST) t) as [X|X]; simpl.
+  apply IHp; intros. specialize (H (S i)); auto.
+  destruct X. apply (H O).
+Qed.
+
 Lemma base_expr_fd_in :
   forall t e v,
   msg_fds_ok ->
@@ -609,6 +698,7 @@ Inductive Reach : kstate -> Prop :=
      |}
 | Reach_valid :
   forall s f m tr s',
+  msg_fds_ok s m ->
   let cs := components s in
   ktr s = [tr]%inhabited ->
   Reach s ->
@@ -616,14 +706,24 @@ Inductive Reach : kstate -> Prop :=
         ; ktr := [KRecv f m :: KSelect cs f :: tr]
         |} ->
   Reach (RunProg f m s' (HANDLER m))
-| Reach_bogus :
-  forall s c bmsg tr,
+| Reach_bad_fds :
+  forall s f m tr,
+  ~ msg_fds_ok s m ->
   let cs := components s in
   ktr s = [tr]%inhabited ->
   Reach s ->
   Reach
     {| components := cs
-     ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
+     ; ktr := [KRecv f m :: KSelect cs f :: tr]
+     |}
+| Reach_bogus :
+  forall s f bmsg tr,
+  let cs := components s in
+  ktr s = [tr]%inhabited ->
+  Reach s ->
+  Reach
+    {| components := cs
+     ; ktr := [KBogus f bmsg :: KSelect cs f :: tr]
      |}
 .
 
@@ -672,12 +772,19 @@ Ltac uninhabit :=
     rewrite H; simpl
   | [ H: ktr ?s = [_]%inhabited |- _ ] =>
     unfold s in *; simpl in *
+  | [ H1 : ktr ?s = [_]%inhabited, H2 : ktr ?s = [_]%inhabited |- _ ] =>
+    rewrite H1 in H2; apply pack_injective in H2;
+    rewrite -> H2 in * || rewrite <- H2 in * (* subst may be blocked *)
   end.
 
-Ltac reach :=
+Ltac misc :=
   match goal with
   | [ |- Reach _ ] =>
       econstructor; eauto
+  | [ H : msg_fds_ck _ ?m = true |- msg_fds_ok _ ?m ] =>
+    apply msg_fds_ck_correct; auto
+  | [ H1 : msg_fds_ck _ ?m = false, H2 : msg_fds_ok _ ?m |- False ] =>
+    apply msg_fds_ck_correct in H2; congruence
   end.
 
 Ltac unfoldr :=
@@ -687,7 +794,7 @@ Ltac simplr :=
   sep';
   try uninhabit;
   try bounds_packing;
-  try reach.
+  try misc.
 
 Ltac sep'' :=
   sep unfoldr simplr.
@@ -789,18 +896,15 @@ Proof.
     match mm with
     | ValidTag m =>
       let tr := tr ~~~ KRecv c m :: tr in
-      let s' := {|components := comps; ktr := tr|} in
-      s'' <- run_prog c m s' (HANDLER m) <@> [Reach kst];
-      {{Return s''}}
-
-(*
-      send_msg c ExecPerms m
-      (tr ~~~ expand_ktrace tr)
-      <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);;
-
-      let tr := tr ~~~ KSend c m :: tr in
-      {{Return {|components := comps; ktr := tr|}}}
-*)
+      let ck := msg_fds_ck kst m in
+      match ck as ck' return ck = ck' -> _ with
+      | true => fun _ =>
+        let s' := {|components := comps; ktr := tr|} in
+        s'' <- run_prog c m s' (HANDLER m) <@> [Reach kst];
+        {{Return s''}}
+      | false => fun _ =>
+        {{Return {|components := comps; ktr := tr|}}}
+      end (refl_equal ck)
 
     | BogusTag m =>
       let tr := tr ~~~ KBogus c m :: tr in
@@ -808,28 +912,13 @@ Proof.
     end
   );
   sep''.
+  subst v; sep''.
 
-  admit.
-
-  subst v.
-  sep''.
-  rewrite H2 in H3.
-  apply pack_injective in H3.
-  subst x2.
-  sep''.
-
-  econstructor. inversion H3; auto.
-  rewrite <- H6.
+  econstructor; eauto.
+  unfold s' in *; rewrite <- H6.
   eapply (Reach_valid kst); eauto.
-  unfold s'. rewrite Heqcomps.
-  f_equal.
-  unfold tr in *. clear tr.
-  unfold tr0 in *. clear tr0.
-  unfold tr1 in *. clear tr1.
-  destruct (ktr kst). simpl in *.
-  rewrite Heqcomps.
-  apply pack_injective in H1.
-  subst x1. sep''.
+  apply msg_fds_ck_correct; auto.
+  f_equal; auto. sep''.
 Qed.
 
 Definition kloop:

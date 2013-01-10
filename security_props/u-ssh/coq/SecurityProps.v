@@ -3,6 +3,10 @@ Require Import List.
 Require Import Message.
 Require Import Ynot.
 Require Import Ascii.
+Require Import NPeano.
+Require Import Arith.
+
+Local Transparent nat_of_num num_of_nat.
 
 (*Cannot create PTY until authenticated for that user*)
 Inductive userauth : [KTrace] -> Prop :=
@@ -14,9 +18,28 @@ Inductive userauth : [KTrace] -> Prop :=
 | create_pty     : forall c tr autheduser n,
                      userauth [tr] ->
                      n <> 0 ->
-                     (exists sys, projT1 sys = System /\
-                     In (KRecv sys (SysLoginRes autheduser (num_of_nat n))) tr) ->
+                     (exists sys,
+                        In (KRecv sys (SysLoginRes autheduser (num_of_nat n))) tr
+                        /\ projT1 sys = System) ->
                      userauth [KSend c (SysCreatePtyerReq autheduser) :: tr].
+
+Ltac rewrite_trace :=
+  match goal with
+  | [ H : [_]%inhabited = [_]%inhabited |- _ ]
+    => apply pack_injective in H; rewrite H; simpl in *
+  | [ tr := ktr ?s, H : [?k]%inhabited = (_ ~~~ _ :: _) |- _ ]
+    => destruct (ktr s); simpl in *;
+       rewrite_trace
+  | [ H : {| components:= _ ;
+             ktr := inhabit_unpack (ktr ?s) _ ;
+             system := _ ;
+             slave := _ ;
+             logincnt := _ ;
+             loginsucceded := _ ;
+             username := _ |} = ?s' |- _ ]
+    => destruct (ktr s); destruct H; simpl in *;
+       rewrite_trace
+  end.
 
 Theorem KI_userauth : forall st,
   KInvariant st -> userauth (ktr st).
@@ -24,42 +47,39 @@ Proof.
   intros st HKI.
   induction HKI; simpl in *.
     (*KI_init*)
-    repeat econstructor; discriminate.
+    repeat constructor; discriminate.
 
     (*KI_select*)
-    destruct (ktr s); simpl; constructor; [auto | discriminate].
+    destruct (ktr s); simpl; constructor; easy.
 
     (*KI_exchange*)
     inversion H; remember (ktr s) as ktrs; destruct ktrs; simpl in *;
-    try (repeat constructor; [auto | discriminate]);
-    try (repeat constructor; [auto | discriminate | discriminate]).
-    apply create_pty with (n:=nat_of_num (loginsucceded s)).
+    try (repeat constructor; auto || discriminate).
+    eapply create_pty with (n:=nat_of_num (loginsucceded s)).
     constructor; [assumption | discriminate].
     assumption.
     clear H IHHKI H2 H1 s' CT.
     generalize dependent k.
     induction HKI; simpl in *; intros.
       (*KI_init*)
-      firstorder. (*H0 is false. Magically, this tactic infers that.*)
+      intuition. (*H0 is false. Magically, this tactic infers that.*)
 
       (*KI_select*)
-      destruct (ktr s); apply IHHKI with (k:=k0) in H0;
-      [ simpl in *; apply pack_injective in Heqktrs; rewrite Heqktrs;
-        simpl in *; destruct H0; exists x; tauto
+      rewrite_trace;
+      apply IHHKI with (k:=k0) in H0;
+      [ destruct H0 as [sys]; exists sys; tauto
       | reflexivity ].
 
       (*KI_exchange*)
-      inversion H; simpl in *;
+      inversion H; rewrite_trace;
       match goal with
-      | [s' : kstate, Hs : _ = ?s', H0 : _ <> 0 |- _]
-          => destruct (ktr s); destruct Hs; simpl in *;
-             apply IHHKI with (k:=k0) in H0;
-             [ simpl in *; apply pack_injective in Heqktrs; rewrite Heqktrs;
-               simpl in *; destruct H0; exists x; tauto
+      | [ H : nat_of_num (loginsucceded s) <> 0 |- _ ]
+          => apply IHHKI with (k:=k0) in H;
+             [ destruct H as [sys]; exists sys; tauto
              | reflexivity ]
-      | [ |- _ ] => destruct (ktr s); destruct H2; simpl in *;
-                    apply pack_injective in Heqktrs; rewrite Heqktrs;
-                    exists c0; rewrite num_nat_embedding; simpl; tauto
+      | [ CT : projT1 ?c = System |- _ ]
+          => exists c; rewrite num_nat_embedding;
+             tauto
       end.
 Qed.
 
@@ -74,33 +94,39 @@ Inductive auth_attempts : nat -> [KTrace] -> Prop :=
                   auth_attempts n [tr] ->
                   auth_attempts (S n) [KSend c (SysLoginReq accstr) :: tr].
 
+Ltac nat_num :=
+  match goal with
+  | [ |- context[ nat_of_ascii ( ascii_of_nat (_) )] ]
+      => simpl; rewrite nat_ascii_embedding; nat_num
+  | [ |- context[ _ mod _ ] ]
+      => simpl; rewrite mod_small; nat_num
+  | [ |- context[ _ / _ ] ]
+      => simpl; rewrite div_small; nat_num
+  | [ |- _ ]
+      => simpl; try omega
+  end.
+
 Theorem auth_att_3 : forall st,
   KInvariant st -> (exists n, n <=3 /\ auth_attempts n (ktr st)).
 Proof.
   intros st HKI.
   exists (nat_of_num (logincnt st)).
-  split.
-    (*nat_of_num (logincnt st) <= 3*)
-    induction HKI; simpl in *.
-      auto.
+  induction HKI; simpl in *.
+    split; [ omega | repeat constructor; discriminate].
 
-      assumption.
+    split; [ tauto
+           | destruct (ktr s); simpl; constructor;
+             [ tauto | discriminate ] ].
 
-      destruct H; simpl; try assumption.
-        destruct IHHKI.
-          destruct H.
-          reflexivity.
+    inversion H; destruct (ktr s); simpl in *; split;
+    try tauto; try (repeat constructor; tauto || discriminate);
 
-          admit. (*Again not sure how to handle nat_of_num, num_of_nat*)
+      nat_num.
 
-    (*nat_of_num (logincnt st) auth attempts*)
-    induction HKI; simpl in *.
-      repeat constructor; discriminate.
-
-      destruct (ktr s); simpl; constructor; [auto | discriminate].
-
-      inversion H; destruct (ktr s); simpl in *;
-      try (repeat constructor; [auto | discriminate]);
-      try (repeat constructor; [auto | discriminate | discriminate]).
-      admit. (*Not sure how to handle nat_of_num, num_of_nat*)
+      rewrite plus_0_r.
+      rewrite plus_comm.
+      apply attempt.
+      constructor.
+      tauto.
+      discriminate.
 Qed.

@@ -14,6 +14,54 @@ Open Scope stsepi_scope.
 Ltac sep' := sep fail idtac.
 Ltac inv H := inversion H; subst; clear H.
 
+Section DepList.
+
+Variable T : Type.
+Variable denote : T -> Type.
+
+Inductive dlist : list T -> Type :=
+| dnil :
+  dlist nil
+| dcons :
+  forall (t : T) (ts : list T), denote t -> dlist ts -> dlist (t :: ts)
+.
+
+Fixpoint tgeti (ts : list T) (i : nat) : option T :=
+  match ts with
+  | nil => None
+  | t :: ts' =>
+    match i with
+    | O => Some t
+    | S i' => tgeti ts' i'
+    end
+  end.
+
+Fixpoint geti {ts : list T} (vs : dlist ts) (i : nat)
+  : match tgeti ts i with Some t => denote t | None => unit end :=
+  match vs as vs' in dlist ts' return
+    match tgeti ts' i with
+    | Some t => denote t
+    | None => unit
+    end
+  with
+  | dnil => tt
+  | dcons t ts' v vs' =>
+    match i as i' return 
+      match tgeti (t :: ts') i' with
+      | Some t => denote t
+      | None => unit
+      end
+    with
+    | O => v
+    | S i' => geti vs' i'
+    end
+  end.
+
+End DepList.
+
+Implicit Arguments dlist [T].
+Implicit Arguments dcons [t ts].
+
 Inductive type_t : Set :=
   num_t | str_t | fd_t.
 
@@ -27,11 +75,8 @@ Definition TypeD (t : type_t) : Set :=
 Definition payload_t : Set :=
   list type_t.
 
-Fixpoint PayloadD (pt : payload_t) : Set :=
-  match pt with
-  | nil => unit
-  | t :: ts => TypeD t * PayloadD ts
-  end%type.
+Definition PayloadD (pt : payload_t) : Set :=
+  dlist TypeD pt.
 
 Definition msg_t : Set :=
   list payload_t.
@@ -80,36 +125,30 @@ Definition SendType (f : fd) (t : type_t) : TypeD t -> Trace :=
   | fd_t  => fun g : fd  => SendFD  f g :: nil
   end.
 
-Fixpoint RecvPay (f : fd) (pt : payload_t) : PayloadD pt -> Trace :=
-  match pt with
-  | nil => fun _ : unit => nil
-  | t :: ts => fun pv : TypeD t * PayloadD ts =>
-    match pv with
-    | (v, vs) => RecvPay f ts vs ++ RecvType f t v
-    end
+Fixpoint RecvPay {pt} (f : fd) (p : PayloadD pt) : Trace :=
+  match p with
+  | dnil => nil
+  | dcons t ts' v vs' => RecvPay f vs' ++ RecvType f t v
   end.
 
-Fixpoint SendPay (f : fd) (pt : payload_t) : PayloadD pt -> Trace :=
-  match pt with
-  | nil => fun _ : unit => nil
-  | t :: ts => fun pv : TypeD t * PayloadD ts =>
-    match pv with
-    | (v, vs) => SendPay f ts vs ++ SendType f t v
-    end
+Fixpoint SendPay {pt} (f : fd) (p : PayloadD pt) : Trace :=
+  match p with
+  | dnil => nil
+  | dcons t ts' v vs' => SendPay f vs' ++ SendType f t v
   end.
 
 Definition RecvOptPay (f : fd) (opt : option payload_t) : OptPayloadD opt -> Trace :=
-  match opt with
+  match opt as opt' return OptPayloadD opt' -> Trace with
   | Some pt => fun pv : PayloadD pt =>
-    RecvPay f pt pv
+    RecvPay f pv
   | None => fun pf : False =>
     False_rec Trace pf
   end.
 
 Definition SendOptPay (f : fd) (opt : option payload_t) : OptPayloadD opt -> Trace :=
-  match opt with
+  match opt as opt' return OptPayloadD opt' -> Trace with
   | Some pt => fun pv : PayloadD pt =>
-    SendPay f pt pv
+    SendPay f pv
   | None => fun pf : False =>
     False_rec Trace pf
   end.
@@ -179,20 +218,20 @@ Qed.
 Definition recv_pay :
   forall (f : fd) (ps : list Perm) (pt : payload_t) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
-        (fun pv : PayloadD pt => tr ~~ traced (RecvPay f pt pv ++ tr) * open f ps).
+        (fun pv : PayloadD pt => tr ~~ traced (RecvPay f pv ++ tr) * open f ps).
 Proof.
   intros; refine (
     Fix2
       (fun pt tr => tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
-      (fun pt tr (pv : PayloadD pt) => tr ~~ traced (RecvPay f pt pv ++ tr) * open f ps)
+      (fun pt tr (pv : PayloadD pt) => tr ~~ traced (RecvPay f pv ++ tr) * open f ps)
       (fun self pt tr =>
         match pt as pt' return STsep _ (fun x : PayloadD pt' => _) with
         | nil =>
-          {{ Return tt }}
+          {{ Return dnil }}
         | t::ts =>
           v  <- recv_type f ps t tr <@> [In RecvP ps] * [In RecvFDP ps];
           vs <- self ts (tr ~~~ RecvType f t v ++ tr);
-          {{ Return (v, vs) }}
+          {{ Return (dcons v vs) }}
         end)
     pt tr
   );

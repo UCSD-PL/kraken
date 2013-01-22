@@ -1,3 +1,9 @@
-ReflexBase.vo ReflexBase.glob: ReflexBase.v /home/ztatlock/kraken/compiler/ynot/src/coq/Ynot.vo
-ReflexIO.vo ReflexIO.glob: ReflexIO.v /home/ztatlock/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo
-Reflex.vo Reflex.glob: Reflex.v /home/ztatlock/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo ReflexIO.vo
+ReflexFin.vo ReflexFin.glob: ReflexFin.v
+Reflex.vo Reflex.glob: Reflex.v /home/vrobert/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo ReflexDenoted.vo ReflexFin.vo ReflexIO.vo ReflexVec.vo ReflexHVec.vo
+ReflexHList.vo ReflexHList.glob: ReflexHList.v
+ReflexIO.vo ReflexIO.glob: ReflexIO.v /home/vrobert/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo
+ReflexHVec.vo ReflexHVec.glob: ReflexHVec.v ReflexDenoted.vo ReflexFin.vo ReflexVec.vo
+DepList.vo DepList.glob: DepList.v
+ReflexBase.vo ReflexBase.glob: ReflexBase.v /home/vrobert/kraken/compiler/ynot/src/coq/Ynot.vo
+ReflexVec.vo ReflexVec.glob: ReflexVec.v ReflexFin.vo
+ReflexDenoted.vo ReflexDenoted.glob: ReflexDenoted.v

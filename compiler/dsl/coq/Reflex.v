@@ -510,30 +510,16 @@ Variable CMSG : msg.
 
 Print msg.
 
-Let CPAY : option payload_desc := lkup_tag (tag CMSG).
+Let CPAY : payload_desc := lkup_tag (tag CMSG).
 
-(*
-Definition mparam_i (i : nat) : TypeD (optpayload_get_t CPAY i) :=
-  match CPAY as opt return
-    OptPayloadD opt -> TypeD (optpayload_get_t opt i)
-  with
-  | Some pt => fun p : PayloadD pt => payload_get_v i pt p
-  | None => fun pf : False => False_rec _ pf
-  end (pay CMSG).
-*)
-
-Inductive base_expr : desc -> Set :=
+Inductive base_expr : desc -> Type :=
 (* no fd lit, otherwise would make lit ctor polymorphic *)
 | NLit : num -> base_expr num_d
 | SLit : str -> base_expr str_d
 | CurChan : base_expr fd_d
-| Param : forall i,
-  base_expr (
-    match CPAY with
-    | None => 
-    | Some pd => 
-    end
-  )
+| Param :
+  forall (i : fin (projT1 CPAY)),
+  base_expr (v_get (projT2 CPAY) i)
 | UnOp :
   forall d1 d2,
   unop d1 d2 ->
@@ -547,12 +533,18 @@ Inductive base_expr : desc -> Set :=
   base_expr d3
 .
 
-Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
-  match e in base_expr t return TypeD t with
+Fixpoint eval_base_expr (d : desc) (e : base_expr d) : [[ d ]] :=
+  match e in base_expr _d return [[ _d ]] with
   | NLit n => n
   | SLit s => s
   | CurChan => CFD
-  | Param i => mparam_i i
+  | Param i =>
+    match CPAY as _CPAY return
+      forall (p : [[ _CPAY ]]) (i : fin (projT1 _CPAY)), [[ v_get (projT2 _CPAY) i ]]
+    with
+    | existT n pd => fun (p : [[ existT _ n pd ]]) (i : fin n) =>
+      hv_nth pd p i
+    end (pay CMSG) i
   | UnOp t1 t2 op e =>
     let v := eval_base_expr t1 e in
     eval_unop op v
@@ -562,176 +554,78 @@ Fixpoint eval_base_expr (t : type_t) (e : base_expr t) : TypeD t :=
     eval_binop op v1 v2
   end.
 
-Definition msg_fds_ok : Prop :=
-  forall i,
-  let t := optpayload_get_t CPAY i in
-  match t as t' return TypeD t' -> Prop with
-  | fd_t => fun f => In f (components CST)
-  | _ => fun _ => True
-  end (mparam_i i).
-
-(* this extracts to not-the-worst code, not tail recursive *)
-Definition mem
-  {A : Type} (deq : forall x y : A, {x = y} + {x <> y}) (xs : list A) (x : A) :
-  {In x xs} + {~ In x xs}.
-Proof.
-  induction xs; simpl; auto.
-  destruct IHxs; auto.
-  destruct (deq a x); subst; auto.
-  right; intro. destruct H; auto.
-Qed.
-
-(* really need to generalize all this payload business *)
-(* this should be some sort of a forallb type function *)
-Fixpoint pay_fds_ck
-  (fs : list fd) (pt : payload_t) (p : PayloadD pt) : bool :=
-  match pt as pt' return
-    PayloadD pt' -> bool
-  with
-  | nil => fun _ : unit => true
-  | t::ts => fun p : (TypeD t * PayloadD ts) =>
-    match p with (v, vs) =>
-      andb
-        (match t as t' return TypeD t' -> bool with
-        | fd_t => fun f => if mem fd_eq fs f then true else false
-        | _ => fun _ => true
-        end v)
-        (pay_fds_ck fs ts vs)
+Fixpoint payload_expr' (n : nat) (pd : payload_desc' n) : Type :=
+  match n as _n return payload_desc' _n -> Type with
+  | O => fun p => unit
+  | S n' => fun (pd : payload_desc' (S n')) =>
+    match pd with
+    | (d, pd') => base_expr d * payload_expr' n' pd'
     end
-  end p.
+  end%type pd.
 
-Definition msg_fds_ck : bool :=
-  match lkup_tag (tag CMSG) as opt return OptPayloadD opt -> bool with
-  | Some pt => fun p : PayloadD pt =>
-    pay_fds_ck (components CST) pt p
-  | None => fun pf : False =>
-    False_rec _ pf
-  end (pay CMSG).
+Definition payload_expr (pd : payload_desc) : Type :=
+  payload_expr' (projT1 pd) (projT2 pd).
 
-(* TODO fix this, it is ugly and stupid *)
-Lemma msg_fds_ck_correct :
-  msg_fds_ck = true <-> msg_fds_ok.
-Proof.
-  destruct CST as [fs tr].
-  unfold msg_fds_ck, msg_fds_ok.
-  unfold mparam_i, optpayload_get_t.
-  unfold CPAY in *; clear CPAY.
-  destruct CMSG as [mtag mpay]; simpl.
-  split.
+Fixpoint eval_payload_expr' (n : nat) (pd : payload_desc' n) (e : payload_expr' n pd)
+  : [[ pd ]] :=
+  match n as _n return
+    forall (pd : payload_desc' _n) (e : payload_expr' _n pd), [[ pd ]]
+  with
+  | O => fun pd e => tt
+  | S n' => fun (pd : payload_desc' (S n')) (e : payload_expr' (S n') pd) =>
+    match pd as _pd return payload_expr' (S n') _pd -> [[ _pd ]] with
+    | (d, pd') => fun e =>
+      match e return
+        @denote (payload_desc' (S n')) (@Denoted_payload_desc' (S n')) (d, pd')
+      with
+      | (v, e') =>
+        (eval_base_expr d v, eval_payload_expr' n' pd' e')
+      end
+    end e
+  end pd e.
 
-  (* -> *)
+Definition eval_payload_expr (pd : payload_desc) (e : payload_expr pd) : [[ pd ]] :=
+  eval_payload_expr' (projT1 pd) (projT2 pd) e.
 
-  revert mpay.
-  destruct (lkup_tag mtag); simpl; intros; auto.
-  clear tr mtag.
-  revert p mpay H.
-  induction i; simpl; intros.
-
-  destruct p; simpl in *; auto.
-  destruct mpay; simpl in *; auto.
-  destruct t; simpl in *; auto.
-  destruct (mem fd_eq (components CST) t0); auto.
-  discriminate.
-
-  destruct p; simpl in *; auto.
-  destruct mpay; simpl in *; auto.
-  apply IHi.
-  destruct t; simpl in H; auto.
-  destruct (mem fd_eq (components CST) t0); auto.
-  discriminate.
-
-  (* <- *)  
-
-  revert mpay.
-  destruct (lkup_tag mtag); simpl; intros; auto.
-  clear tr mtag.
-  revert p mpay H.
-  induction p; simpl; intros.
-
-  auto.
-
-  destruct mpay; simpl in *.
-  destruct a; simpl in *; auto.
-  apply IHp; intros. specialize (H (S i)); auto.
-  apply IHp; intros. specialize (H (S i)); auto.
-  destruct (mem fd_eq (components CST) t) as [X|X]; simpl.
-  apply IHp; intros. specialize (H (S i)); auto.
-  destruct X. apply (H O).
-Qed.
-
-Lemma base_expr_fd_in :
-  forall t e v,
-  msg_fds_ok ->
-  In CFD (components CST)->
-  eval_base_expr t e = v ->
-  match t as t' return (TypeD t' -> Prop) with
-  | fd_t => fun f => In f (components CST)
-  | _ => fun _ => True
-  end v.
-Proof.
-  destruct e; simpl; intros; subst; auto.
-  specialize (H i); auto.
-  destruct t2; auto. inv u.
-  destruct t3; auto. inv b.
-Qed.
-
-Fixpoint payload_expr (pt : payload_t) : Set :=
-  match pt with
-  | t::ts => base_expr t * payload_expr ts
-  | nil => unit
-  end%type.
-
-Fixpoint eval_payload_expr (pt : payload_t) (e : payload_expr pt) : PayloadD pt :=
- match pt as pt' return payload_expr pt' -> PayloadD pt' with
- | t :: ts => fun e : base_expr t * payload_expr ts =>
-   match e with
-   | (e1, es) =>
-     let v1 := eval_base_expr t e1 in
-     let vs := eval_payload_expr ts es in
-     (v1, vs)
-   end
- | nil => fun _ => tt
- end e.
-
-Inductive expr_t : Set :=
-| base_t : type_t -> expr_t
-| msg_expr_t : expr_t
+Inductive expr_desc : Set :=
+| base_expr_d : desc -> expr_desc
+| msg_expr_d : expr_desc
 .
 
-Definition ExprTD (t : expr_t) : Set :=
+Definition denote_expr_desc t :=
   match t with
-  | base_t t => TypeD t
-  | msg_expr_t => Msg
+  | base_expr_d d => [[ d ]]
+  | msg_expr_d => msg
   end.
 
-Inductive expr : expr_t -> Set :=
+Instance Denoted_expr_t : Denoted expr_desc :=
+{ denote := denote_expr_desc
+}.
+
+Inductive expr : expr_desc -> Type :=
 | Base :
-  forall t : type_t,
-  base_expr t ->
-  expr (base_t t)
+  forall d : desc,
+  base_expr d ->
+  expr (base_expr_d d)
 | MsgExpr :
-  forall (tag : num) (pt : payload_t),
-  Some pt = lkup_tag tag ->
-  payload_expr pt ->
-  expr msg_expr_t
+  forall tag,
+  payload_expr (lkup_tag tag) ->
+  expr msg_expr_d
 .
 
-Definition eval_expr (t : expr_t) (e : expr t) : ExprTD t :=
-  match e in expr t return ExprTD t with
+Definition eval_expr (d : expr_desc) (e : expr d) : [[ d ]] :=
+  match e in expr _d return [[ _d ]] with
   | Base t e => eval_base_expr t e
-  | MsgExpr tag pt pf pe =>
-    let p : PayloadD pt := eval_payload_expr pt pe in
-    let p : OptPayloadD (lkup_tag tag) :=
-      eq_rec (Some pt) (fun e : option payload_t => OptPayloadD e) p (lkup_tag tag) pf
-    in
-    {| tag := tag; pay := p |}
+  | MsgExpr t pe =>
+    let p := eval_payload_expr (lkup_tag t) pe in
+    {| tag := t; pay := p |}
   end.
 
-Inductive cmd : Set :=
-| Send : base_expr fd_t -> expr msg_expr_t -> cmd
+Inductive cmd : Type :=
+| Send : base_expr fd_d -> expr msg_expr_d -> cmd
 .
 
-Definition RunCmd (s : kstate) (c : cmd) : kstate :=
+Definition run_cmd (s : kstate) (c : cmd) : kstate :=
   match c with
   | Send fe me =>
     let f := eval_base_expr _ fe in
@@ -742,19 +636,21 @@ Definition RunCmd (s : kstate) (c : cmd) : kstate :=
      |}
   end.
   
-Definition prog : Set :=
+Definition prog : Type :=
   list cmd.
 
-Fixpoint RunProg (s : kstate) (p : prog) : kstate :=
+Fixpoint run_prog (s : kstate) (p : prog) : kstate :=
   match p with
-  | c :: cs => RunProg (RunCmd s c) cs
+  | c :: cs => run_prog (run_cmd s c) cs
   | nil => s
   end.
 
 End WITH_ENV.
 
+TODO.
+
 Definition handler : Set :=
-  forall m : Msg, prog m.
+  forall m : msg, prog m.
 
 Section WITH_HANDLER.
 

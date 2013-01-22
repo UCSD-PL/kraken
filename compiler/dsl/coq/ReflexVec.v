@@ -21,3 +21,5 @@ Fixpoint v_get (n : nat) : vec n -> fin n -> T :=
   end.
 
 End Vector.
+
+Implicit Arguments v_get [T n].

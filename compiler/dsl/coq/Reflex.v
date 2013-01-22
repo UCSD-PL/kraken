@@ -36,7 +36,7 @@ Instance Denoted_desc : Denoted desc :=
 Definition payload_desc' n : Type := vec desc n.
 
 Definition denote_payload_desc' n (pt : payload_desc' n) : Type :=
-  hvec desc Denoted_desc n pt.
+  hvec pt.
 
 Instance Denoted_payload_desc' { n } : Denoted (payload_desc' n) :=
 { denote := denote_payload_desc' n
@@ -46,21 +46,22 @@ Instance Denoted_payload_desc' { n } : Denoted (payload_desc' n) :=
 Definition payload_desc := (sigT (fun (n : nat) => payload_desc' n)).
 
 Instance Denoted_payload_desc : Denoted payload_desc :=
-{ denote := fun spt => @denote _ (@Denoted_payload_desc' (projT1 spt)) (projT2 spt)
+{ denote := fun pd => @denote _ (@Denoted_payload_desc' (projT1 pd)) (projT2 pd)
 }.
 
-Definition payload_desc_list := list payload_desc.
+Definition payload_desc_vec n := vec payload_desc n.
 
-Section WITH_PAYLOAD_DESC_LIST.
+Section WITH_PAYLOAD_DESC_VEC.
 
-Variable PDL : payload_desc_list.
+Variable NB_MSG : nat.
+Variable PDV : payload_desc_vec NB_MSG.
 
-Definition lkup_tag (n : num) : option payload_desc :=
-  nth_error PDL (nat_of_num n).
+Definition lkup_tag (tag : fin NB_MSG) : payload_desc :=
+  v_get PDV tag.
 
 Record msg : Type :=
-  { tag : num
-  ; pay : [! lkup_tag tag !]
+  { tag : fin NB_MSG
+  ; pay : [[ lkup_tag tag ]]
   }.
 
 Definition trace_recv (f : fd) (d : desc) : [[ d ]] -> Trace :=
@@ -79,7 +80,7 @@ Definition trace_send (f : fd) (d : desc) : [[ d ]] -> Trace :=
 
 Record bogus_msg : Set :=
   { btag : num
-  ; bpay : lkup_tag btag = None
+  ; bbad : nat_of_num btag >= NB_MSG
   }.
 
 Definition maybe_msg := (msg + bogus_msg)%type.
@@ -123,20 +124,24 @@ Definition trace_opt_payload_recv := trace_opt_payload_desc trace_recv.
 
 Definition trace_opt_payload_send := trace_opt_payload_desc trace_send.
 
-Definition RecvMsg (f : fd) (m : msg) : Trace :=
+Definition num_of_fin (bound : nat) (n : fin bound) := num_of_nat (nat_of_fin n).
+
+Implicit Arguments num_of_fin [bound].
+
+Definition recv_msg (f : fd) (m : msg) : Trace :=
   let t := tag m in
-  trace_opt_payload_recv (lkup_tag t) f (pay m) ++ RecvNum f t.
+  trace_payload_recv (lkup_tag t) f (pay m) ++ RecvNum f (num_of_fin t).
 
 Definition recv_bogus_msg (f : fd) (m : bogus_msg) : Trace :=
   RecvNum f (btag m).
 
 Definition SendMsg (f : fd) (m : msg) : Trace :=
   let t := tag m in
-  trace_opt_payload_send (lkup_tag t) f (pay m) ++ SendNum f t.
+  trace_payload_send (lkup_tag t) f (pay m) ++ SendNum f (num_of_fin t).
 
 Definition recv_maybe_msg (f : fd) (m : maybe_msg) : Trace :=
   match m with
-  | inl m => RecvMsg f m
+  | inl m => recv_msg f m
   | inr bm => recv_bogus_msg f bm
   end.
 
@@ -487,6 +492,8 @@ Variable CST : kstate.
 Variable CFD : fd.
 Variable CMSG : msg.
 
+Print msg.
+
 Let CPAY : option payload_desc := lkup_tag (tag CMSG).
 
 (*
@@ -499,16 +506,18 @@ Definition mparam_i (i : nat) : TypeD (optpayload_get_t CPAY i) :=
   end (pay CMSG).
 *)
 
-TODO.
-
 Inductive base_expr : desc -> Set :=
 (* no fd lit, otherwise would make lit ctor polymorphic *)
 | NLit : num -> base_expr num_d
 | SLit : str -> base_expr str_d
 | CurChan : base_expr fd_d
-| Param :
-  forall i,
-  base_expr (optpayload_get_t CPAY i)
+| Param : forall i,
+  base_expr (
+    match CPAY with
+    | None => 
+    | Some pd => 
+    end
+  )
 | UnOp :
   forall d1 d2,
   unop d1 d2 ->

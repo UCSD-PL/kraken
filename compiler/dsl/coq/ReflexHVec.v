@@ -17,14 +17,14 @@ Fixpoint hvec (n : nat) : vec desc n -> Type :=
   end%type.
 
 Fixpoint hv_nth (n : nat) (v_d : vec desc n) (v : hvec n v_d) (i : fin n)
-  : [[ v_get desc n v_d i ]] :=
+  : [[ v_get v_d i ]] :=
   match n as _n return
-    forall (v_d : vec desc _n) (v : hvec _n v_d) (i : fin _n), [[ v_get desc _n v_d i ]]
+    forall (v_d : vec desc _n) (v : hvec _n v_d) (i : fin _n), [[ v_get v_d i ]]
   with
   | O => fun v_d v i => match i with end
   | S n' => fun (v_d : desc * vec desc n') (v : hvec (S n') v_d) i =>
     match v_d as _v_d return
-      forall (v : hvec (S n') _v_d) (i : fin (S n')), [[ v_get desc (S n') _v_d i ]]
+      forall (v : hvec (S n') _v_d) (i : fin (S n')), [[ @v_get desc (S n') _v_d i ]]
     with
     | (t, v_d') => fun (v : [[ t ]] * hvec n' v_d') (i : fin (S n')) =>
       match i with
@@ -35,3 +35,7 @@ Fixpoint hv_nth (n : nat) (v_d : vec desc n) (v : hvec n v_d) (i : fin n)
   end v_d v i.
 
 End HeterogeneousVector.
+
+Implicit Arguments hvec [desc Instance n].
+
+Implicit Arguments hv_nth [desc Instance n].

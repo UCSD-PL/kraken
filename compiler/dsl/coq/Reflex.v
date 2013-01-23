@@ -43,7 +43,7 @@ Qed.
 
 Inductive desc : Set := num_d | str_d | fd_d.
 
-Definition denote_desc (d : desc) : Type :=
+Definition denote_desc (d : desc) : Set :=
   match d with
   | num_d => num
   | str_d => str
@@ -55,10 +55,10 @@ Instance Denoted_desc : Denoted desc :=
 { denote := denote_desc
 }.
 
-Definition payload_desc' n : Type := vec desc n.
+Definition payload_desc' n : Set := svec desc n.
 
-Definition denote_payload_desc' n (pt : payload_desc' n) : Type :=
-  hvec pt.
+Definition denote_payload_desc' n (pt : payload_desc' n) : Set :=
+  shvec denote_desc pt.
 
 Instance Denoted_payload_desc' { n } : Denoted (payload_desc' n) :=
 { denote := denote_payload_desc' n
@@ -81,9 +81,12 @@ Variable PDV : payload_desc_vec NB_MSG.
 Definition lkup_tag (tag : fin NB_MSG) : payload_desc :=
   v_get PDV tag.
 
-Record msg : Type :=
+Definition denote_payload_desc (pd : payload_desc) : Set :=
+  denote_payload_desc' (projT1 pd) (projT2 pd).
+
+Record msg : Set :=
   { tag : fin NB_MSG
-  ; pay : [[ lkup_tag tag ]]
+  ; pay : denote_payload_desc (lkup_tag tag)
   }.
 
 Definition trace_recv (f : fd) (d : desc) : [[ d ]] -> Trace :=
@@ -343,7 +346,7 @@ Proof.
   rewrite app_assoc; sep'.
 Qed.
 
-Inductive KAction : Type :=
+Inductive KAction : Set :=
 | KExec   : str -> list str -> fd -> KAction
 | KCall   : str -> list str -> fd -> KAction
 | KSelect : list fd -> fd -> KAction
@@ -352,7 +355,7 @@ Inductive KAction : Type :=
 | KBogus  : fd -> bogus_msg -> KAction
 .
 
-Definition KTrace : Type :=
+Definition KTrace : Set :=
   list KAction.
 
 Definition expand_kaction (ka : KAction) : Trace :=
@@ -508,18 +511,32 @@ Variable CST : kstate.
 Variable CFD : fd.
 Variable CMSG : msg.
 
-Print msg.
-
 Let CPAY : payload_desc := lkup_tag (tag CMSG).
 
-Inductive base_expr : desc -> Type :=
+Definition msg_param_i (i : fin (projT1 CPAY)) : [[ sv_get (projT2 CPAY) i ]] :=
+  match CPAY as _CPAY return
+    forall (p : [[ _CPAY ]]) (i : fin (projT1 _CPAY)), [[ sv_get (projT2 _CPAY) i ]]
+  with
+  | existT n pd => fun (p : [[ existT _ n pd ]]) (i : fin n) =>
+    shv_nth denote_desc pd p i
+  end (pay CMSG) i.
+
+Definition msg_fds_ok : Prop :=
+  forall i,
+  let d := sv_get (projT2 CPAY) i in
+  match d as _d return [[ _d ]] -> Prop with
+  | fd_d => fun (f : [[ fd_d ]]) => In f (components CST)
+  | _ => fun _ => True
+  end (msg_param_i i).
+
+Inductive base_expr : desc -> Set :=
 (* no fd lit, otherwise would make lit ctor polymorphic *)
 | NLit : num -> base_expr num_d
 | SLit : str -> base_expr str_d
 | CurChan : base_expr fd_d
 | Param :
   forall (i : fin (projT1 CPAY)),
-  base_expr (v_get (projT2 CPAY) i)
+  base_expr (sv_get (projT2 CPAY) i)
 | UnOp :
   forall d1 d2,
   unop d1 d2 ->
@@ -538,13 +555,7 @@ Fixpoint eval_base_expr (d : desc) (e : base_expr d) : [[ d ]] :=
   | NLit n => n
   | SLit s => s
   | CurChan => CFD
-  | Param i =>
-    match CPAY as _CPAY return
-      forall (p : [[ _CPAY ]]) (i : fin (projT1 _CPAY)), [[ v_get (projT2 _CPAY) i ]]
-    with
-    | existT n pd => fun (p : [[ existT _ n pd ]]) (i : fin n) =>
-      hv_nth pd p i
-    end (pay CMSG) i
+  | Param i => msg_param_i i
   | UnOp t1 t2 op e =>
     let v := eval_base_expr t1 e in
     eval_unop op v
@@ -553,6 +564,22 @@ Fixpoint eval_base_expr (d : desc) (e : base_expr d) : [[ d ]] :=
     let v2 := eval_base_expr t2 e2 in
     eval_binop op v1 v2
   end.
+
+Lemma base_expr_fd_in :
+  forall t e v,
+  msg_fds_ok ->
+  In CFD (components CST)->
+  eval_base_expr t e = v ->
+  match t as _t return ([[ _t ]] -> Prop) with
+  | fd_d => fun f => In f (components CST)
+  | _ => fun _ => True
+  end v.
+Proof.
+  destruct e; simpl; intros; subst; auto.
+  specialize (H i); auto.
+  destruct d2; auto. inv u.
+  destruct d3; auto. inv b.
+Qed.
 
 Fixpoint payload_expr' (n : nat) (pd : payload_desc' n) : Type :=
   match n as _n return payload_desc' _n -> Type with
@@ -625,7 +652,7 @@ Inductive cmd : Type :=
 | Send : base_expr fd_d -> expr msg_expr_d -> cmd
 .
 
-Definition run_cmd (s : kstate) (c : cmd) : kstate :=
+Definition kstate_run_cmd (s : kstate) (c : cmd) : kstate :=
   match c with
   | Send fe me =>
     let f := eval_base_expr _ fe in
@@ -639,17 +666,15 @@ Definition run_cmd (s : kstate) (c : cmd) : kstate :=
 Definition prog : Type :=
   list cmd.
 
-Fixpoint run_prog (s : kstate) (p : prog) : kstate :=
+Fixpoint kstate_run_prog (s : kstate) (p : prog) : kstate :=
   match p with
-  | c :: cs => run_prog (run_cmd s c) cs
+  | c :: cs => kstate_run_prog (kstate_run_cmd s c) cs
   | nil => s
   end.
 
 End WITH_ENV.
 
-TODO.
-
-Definition handler : Set :=
+Definition handler : Type :=
   forall m : msg, prog m.
 
 Section WITH_HANDLER.
@@ -663,26 +688,15 @@ Inductive Reach : kstate -> Prop :=
     {| components := f :: nil
      ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) nil f :: nil]
      |}
-| Reach_valid :
+| Reach_msg :
   forall s f m tr s',
-  msg_fds_ok s m ->
   let cs := components s in
   ktr s = [tr]%inhabited ->
   Reach s ->
   s' = {| components := cs
         ; ktr := [KRecv f m :: KSelect cs f :: tr]
         |} ->
-  Reach (RunProg f m s' (HANDLER m))
-| Reach_bad_fds :
-  forall s f m tr,
-  ~ msg_fds_ok s m ->
-  let cs := components s in
-  ktr s = [tr]%inhabited ->
-  Reach s ->
-  Reach
-    {| components := cs
-     ; ktr := [KRecv f m :: KSelect cs f :: tr]
-     |}
+  Reach (kstate_run_prog f m s' (HANDLER m))
 | Reach_bogus :
   forall s f bmsg tr,
   let cs := components s in
@@ -742,16 +756,14 @@ Ltac uninhabit :=
   | [ H1 : ktr ?s = [_]%inhabited, H2 : ktr ?s = [_]%inhabited |- _ ] =>
     rewrite H1 in H2; apply pack_injective in H2;
     rewrite -> H2 in * || rewrite <- H2 in * (* subst may be blocked *)
+  | [ H : [_]%inhabited = [_]%inhabited |- _ ] =>
+    apply pack_injective in H; subst
   end.
 
 Ltac misc :=
   match goal with
   | [ |- Reach _ ] =>
       econstructor; eauto
-  | [ H : msg_fds_ck _ ?m = true |- msg_fds_ok _ ?m ] =>
-    apply msg_fds_ck_correct; auto
-  | [ H1 : msg_fds_ck _ ?m = false, H2 : msg_fds_ok _ ?m |- False ] =>
-    apply msg_fds_ck_correct in H2; congruence
   end.
 
 Ltac unfoldr :=
@@ -781,13 +793,13 @@ Proof.
 Qed.
 
 Definition run_cmd :
-  forall (cfd : fd) (cm : Msg) (s : kstate) (c : cmd cm),
+  forall (cfd : fd) (cm : msg) (s : kstate) (c : cmd cm),
   STsep (tr :~~ ktr s in
           traced (expand_ktrace tr) * all_bound (components s) *
           [In cfd (components s)] * [msg_fds_ok s cm])
         (fun s' : kstate => tr :~~ ktr s' in
           traced (expand_ktrace tr) * all_bound (components s') *
-          [In cfd (components s')] * [msg_fds_ok s' cm] * [RunCmd cfd cm s c = s']).
+          [In cfd (components s')] * [msg_fds_ok s' cm] * [kstate_run_cmd cfd cm s c = s']).
 Proof.
   intros; refine (
     let comps := components s in
@@ -805,18 +817,18 @@ Proof.
     end
   );
   sep''.
-  eapply (base_expr_fd_in s cfd cm fd_t); eauto.
-  eapply (base_expr_fd_in s cfd cm fd_t); eauto.
+  eapply (base_expr_fd_in s cfd cm fd_d); eauto.
+  eapply (base_expr_fd_in s cfd cm fd_d); eauto.
 Qed.
 
 Definition run_prog :
-  forall (cfd : fd) (cm : Msg) (s : kstate) (p : prog cm),
+  forall (cfd : fd) (cm : msg) (s : kstate) (p : prog cm),
   STsep (tr :~~ ktr s in
           traced (expand_ktrace tr) * all_bound (components s) *
           [In cfd (components s)] * [msg_fds_ok s cm])
         (fun s' : kstate => tr :~~ ktr s' in
           traced (expand_ktrace tr) * all_bound (components s') *
-          [In cfd (components s')] * [msg_fds_ok s' cm] * [RunProg cfd cm s p = s']).
+          [In cfd (components s')] * [msg_fds_ok s' cm] * [kstate_run_prog cfd cm s p = s']).
 Proof.
   intros; refine (
     Fix2
@@ -827,14 +839,14 @@ Proof.
       (fun p s (s' : kstate) =>
         tr :~~ ktr s' in
           traced (expand_ktrace tr) * all_bound (components s') *
-          [In cfd (components s')] * [msg_fds_ok s' cm] * [RunProg cfd cm s p = s'])
+          [In cfd (components s')] * [msg_fds_ok s' cm] * [kstate_run_prog cfd cm s p = s'])
       (fun self p s =>
         match p with
         | nil =>
           {{ Return s }}
         | c::cs =>
           s' <- run_cmd cfd cm s c;
-          s'' <- self cs s' <@> [RunCmd cfd cm s c = s'];
+          s'' <- self cs s' <@> [kstate_run_cmd cfd cm s c = s'];
           {{ Return s'' }}
         end)
     p s
@@ -860,8 +872,10 @@ Proof.
     (tr ~~~ expand_ktrace tr)
     <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);
 
+    let i : nat := mm in
+
     match mm with
-    | ValidTag m =>
+    | inleft m =>
       let tr := tr ~~~ KRecv c m :: tr in
       let ck := msg_fds_ck kst m in
       match ck as ck' return ck = ck' -> _ with
@@ -873,7 +887,7 @@ Proof.
         {{Return {|components := comps; ktr := tr|}}}
       end (refl_equal ck)
 
-    | BogusTag m =>
+    | inright m =>
       let tr := tr ~~~ KBogus c m :: tr in
       {{Return {|components := comps; ktr := tr|}}}
     end

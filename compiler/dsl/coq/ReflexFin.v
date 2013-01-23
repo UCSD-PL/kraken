@@ -1,7 +1,7 @@
 Require Import Arith.
 
 (* isomorphic to nats less than n *)
-Fixpoint fin (n : nat) : Type :=
+Fixpoint fin (n : nat) : Set :=
   match n with
   | O => False
   | S n' => option (fin n')

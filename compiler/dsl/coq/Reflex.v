@@ -43,7 +43,7 @@ Qed.
 
 Inductive desc : Set := num_d | str_d | fd_d.
 
-Definition denote_desc (d : desc) : Set :=
+Definition sdenote_desc (d : desc) : Set :=
   match d with
   | num_d => num
   | str_d => str
@@ -51,24 +51,24 @@ Definition denote_desc (d : desc) : Set :=
   end
 .
 
-Instance Denoted_desc : Denoted desc :=
-{ denote := denote_desc
+Instance SDenoted_desc : SDenoted desc :=
+{ sdenote := sdenote_desc
 }.
 
 Definition payload_desc' n : Set := svec desc n.
 
-Definition denote_payload_desc' n (pt : payload_desc' n) : Set :=
-  shvec denote_desc pt.
+Definition sdenote_payload_desc' n (pt : payload_desc' n) : Set :=
+  shvec sdenote_desc pt.
 
-Instance Denoted_payload_desc' { n } : Denoted (payload_desc' n) :=
-{ denote := denote_payload_desc' n
+Instance SDenoted_payload_desc' { n } : SDenoted (payload_desc' n) :=
+{ sdenote := sdenote_payload_desc' n
 }.
 
 (* Thank you Ynot for breaking sigT notation... *)
 Definition payload_desc := (sigT (fun (n : nat) => payload_desc' n)).
 
-Instance Denoted_payload_desc : Denoted payload_desc :=
-{ denote := fun pd => @denote _ (@Denoted_payload_desc' (projT1 pd)) (projT2 pd)
+Instance SDenoted_payload_desc : SDenoted payload_desc :=
+{ sdenote := fun pd => @sdenote _ (@SDenoted_payload_desc' (projT1 pd)) (projT2 pd)
 }.
 
 Definition payload_desc_vec n := vec payload_desc n.
@@ -81,22 +81,22 @@ Variable PDV : payload_desc_vec NB_MSG.
 Definition lkup_tag (tag : fin NB_MSG) : payload_desc :=
   v_get PDV tag.
 
-Definition denote_payload_desc (pd : payload_desc) : Set :=
-  denote_payload_desc' (projT1 pd) (projT2 pd).
+Definition sdenote_payload_desc (pd : payload_desc) : Set :=
+  sdenote_payload_desc' (projT1 pd) (projT2 pd).
 
 Record msg : Set :=
   { tag : fin NB_MSG
-  ; pay : denote_payload_desc (lkup_tag tag)
+  ; pay : s[[ lkup_tag tag ]]
   }.
 
-Definition trace_recv (f : fd) (d : desc) : [[ d ]] -> Trace :=
+Definition trace_recv (f : fd) (d : desc) : s[[ d ]] -> Trace :=
   match d with
   | num_d => fun n : num => RecvNum f n
   | str_d => fun s : str => RecvStr f s
   | fd_d  => fun g : fd  => RecvFD  f g :: nil
   end.
 
-Definition trace_send (f : fd) (d : desc) : [[ d ]] -> Trace :=
+Definition trace_send (f : fd) (d : desc) : s[[ d ]] -> Trace :=
   match d with
   | num_d => fun n : num => SendNum f n
   | str_d => fun s : str => SendStr f s
@@ -112,17 +112,17 @@ Definition maybe_msg := (msg + bogus_msg)%type.
 
 Section WITH_TRACE_FUN.
 
-Variable trace_fun : fd -> forall (d : desc), [[ d ]] -> list Action.
+Variable trace_fun : fd -> forall (d : desc), s[[ d ]] -> list Action.
 
 Fixpoint trace_payload_desc'
-  (n : nat) (pd : payload_desc' n) (f : fd) (p : [[ pd ]]) : Trace :=
+  (n : nat) (pd : payload_desc' n) (f : fd) (p : s[[ pd ]]) : Trace :=
   match n as _n return
-    forall (pd : payload_desc' _n) (p : [[ pd ]]), Trace
+    forall (pd : payload_desc' _n) (p : s[[ pd ]]), Trace
   with
   | O => fun _ _ => nil
-  | S n' => fun (pd : payload_desc' (S n')) (p : [[ pd ]]) =>
+  | S n' => fun (pd : payload_desc' (S n')) (p : s[[ pd ]]) =>
     match pd as _pd return
-      forall (p : @denote _ (@Denoted_payload_desc' (S n')) _pd), Trace
+      forall (p : @sdenote _ (@SDenoted_payload_desc' (S n')) _pd), Trace
     with
     | (d, pd') => fun p => trace_payload_desc' n' pd' f (snd p) ++ trace_fun f d (fst p)
     end p
@@ -133,8 +133,8 @@ Definition trace_payload_desc (pd : payload_desc) :=
   trace_payload_desc' (projT1 pd) (projT2 pd).
 
 Definition trace_opt_payload_desc (opd : option payload_desc) (f : fd)
-  : [! opd !] -> Trace :=
-  match opd as _opd return [! _opd !] -> Trace with
+  : s[! opd !] -> Trace :=
+  match opd as _opd return s[! _opd !] -> Trace with
   | None => fun p => match p with end
   | Some spt => fun p => trace_payload_desc spt f p
   end.
@@ -173,10 +173,10 @@ Definition trace_send_msg (f : fd) (m : msg) : Trace :=
 Definition recv_arg :
   forall (f : fd) (ps : list Perm) (t : desc) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
-        (fun v : [[ t ]] => tr ~~ traced (trace_recv f t v ++ tr) * open f ps).
+        (fun v : s[[ t ]] => tr ~~ traced (trace_recv f t v ++ tr) * open f ps).
 Proof.
   intros; refine (
-    match t as _t return STsep _ (fun v : [[ _t ]] => _) with
+    match t as _t return STsep _ (fun v : s[[ _t ]] => _) with
     | num_d =>
       n <- recv_num f ps tr;
       {{ Return n }}
@@ -192,13 +192,13 @@ Proof.
 Qed.
 
 Definition send_arg :
-  forall (f : fd) (ps : list Perm) (d : desc) (v : [[ d ]]) (tr : [Trace]),
+  forall (f : fd) (ps : list Perm) (d : desc) (v : s[[ d ]]) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
         (fun _ : unit => tr ~~ traced (trace_send f d v ++ tr) * open f ps).
 Proof.
   intros; refine (
     match d as _d return
-      forall v : [[ _d ]],
+      forall v : s[[ _d ]],
       STsep _ (fun _ => tr ~~ traced (trace_send f _d v ++ tr) * _)
     with
     | num_d => fun v =>
@@ -218,17 +218,17 @@ Qed.
 Definition recv_payload' :
   forall (f : fd) (ps : list Perm) (n : nat) (pd : payload_desc' n) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
-        (fun pv : [[ pd ]] =>
+        (fun pv : s[[ pd ]] =>
            tr ~~ traced (trace_payload_recv' n pd f pv ++ tr) * open f ps).
 Proof.
   intros; refine (
     Fix3
       (fun n pd tr => tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
-      (fun n pd tr (pv : [[ pd ]]) =>
+      (fun n pd tr (pv : s[[ pd ]]) =>
          tr ~~ traced (trace_payload_recv' n pd f pv ++ tr) * open f ps)
       (fun self (n : nat) (pd : payload_desc' n) tr =>
          match n as _n return
-           forall (pd : payload_desc' _n), STsep _ (fun x : [[ pd ]] => _)
+           forall (pd : payload_desc' _n), STsep _ (fun x : s[[ pd ]] => _)
          with
          | O => fun _ => {{ Return tt }}
          | S n' => fun pt =>
@@ -249,7 +249,7 @@ Qed.
 Definition recv_payload :
   forall (f : fd) (ps : list Perm) (pd : payload_desc) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In RecvP ps] * [In RecvFDP ps])
-        (fun pv : [[ pd ]] =>
+        (fun pv : s[[ pd ]] =>
            tr ~~ traced (trace_payload_recv pd f pv ++ tr) * open f ps).
 Proof.
   intros f ps pd. destruct pd as [n pd].
@@ -257,7 +257,7 @@ Proof.
 Qed.
 
 Definition send_payload' :
-  forall (f : fd) (ps : list Perm) (n : nat) (pd : payload_desc' n) (pv : [[ pd ]])
+  forall (f : fd) (ps : list Perm) (n : nat) (pd : payload_desc' n) (pv : s[[ pd ]])
          (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
         (fun _ : unit =>
@@ -271,15 +271,15 @@ Proof.
       (fun self (n : nat) (pd : payload_desc' n) pv (tr : [Trace])
        =>
          match n as _n return
-           forall (pd : payload_desc' _n) (pv : [[ pd ]]),
+           forall (pd : payload_desc' _n) (pv : s[[ pd ]]),
              STsep _ (fun _ =>
                         tr ~~ traced (trace_payload_send' _n pd f pv ++ tr) * _)
          with
          | O => fun _ _ => {{ Return tt }}
          | S n' => fun (pd : payload_desc' (S n'))
-                       (pv : @denote _ (@Denoted_payload_desc' (S n')) pd) =>
+                       (pv : @sdenote _ (@SDenoted_payload_desc' (S n')) pd) =>
            match pd as _pd return
-             forall (pv : @denote _ (@Denoted_payload_desc' (S n')) _pd), STsep _ (fun _ => _)
+             forall (pv : @sdenote _ (@SDenoted_payload_desc' (S n')) _pd), STsep _ (fun _ => _)
            with
            | (d, pt') => fun pv =>
              match pv with
@@ -296,7 +296,7 @@ Proof.
 Qed.
 
 Definition send_payload :
-  forall (f : fd) (ps : list Perm) (pd : payload_desc) (pv : [[ pd ]]) (tr : [Trace]),
+  forall (f : fd) (ps : list Perm) (pd : payload_desc) (pv : s[[ pd ]]) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f ps * [In SendP ps] * [In SendFDP ps])
         (fun _ : unit => tr ~~ traced (trace_payload_send pd f pv ++ tr) * open f ps).
 Proof.
@@ -384,8 +384,8 @@ Inductive unop : desc -> desc -> Set :=
 .
 
 Definition eval_unop
-  (d1 d2 : desc) (op : unop d1 d2) (v : [[ d1 ]]) : [[ d2 ]] :=
-  match op in unop t1 t2 return [[ t1 ]] -> [[ t2 ]] with
+  (d1 d2 : desc) (op : unop d1 d2) (v : s[[ d1 ]]) : s[[ d2 ]] :=
+  match op in unop t1 t2 return s[[ t1 ]] -> s[[ t2 ]] with
   | Not => fun v => if num_eq v FALSE then TRUE else FALSE
   end v.
 
@@ -400,10 +400,10 @@ Inductive binop : desc -> desc -> desc -> Set :=
 .
 
 Definition eval_binop
-  (d1 d2 d3: desc) (op : binop d1 d2 d3) (v1 : [[ d1 ]]) (v2 : [[ d2 ]]) : [[ d3 ]] :=
-  match op in binop _d1 _d2 _d3 return [[ _d1 ]] -> [[ _d2 ]] -> [[ _d3 ]] with
-  | Eq d => fun v1 v2 : [[ d ]] =>
-    let teq : forall (x y : [[ d ]]), {x = y} + {x <> y} :=
+  (d1 d2 d3: desc) (op : binop d1 d2 d3) (v1 : s[[ d1 ]]) (v2 : s[[ d2 ]]) : s[[ d3 ]] :=
+  match op in binop _d1 _d2 _d3 return s[[ _d1 ]] -> s[[ _d2 ]] -> s[[ _d3 ]] with
+  | Eq d => fun v1 v2 : s[[ d ]] =>
+    let teq : forall (x y : s[[ d ]]), {x = y} + {x <> y} :=
       match d with
       | num_d => num_eq
       | str_d => str_eq
@@ -513,19 +513,19 @@ Variable CMSG : msg.
 
 Let CPAY : payload_desc := lkup_tag (tag CMSG).
 
-Definition msg_param_i (i : fin (projT1 CPAY)) : [[ sv_get (projT2 CPAY) i ]] :=
+Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ sv_get (projT2 CPAY) i ]] :=
   match CPAY as _CPAY return
-    forall (p : [[ _CPAY ]]) (i : fin (projT1 _CPAY)), [[ sv_get (projT2 _CPAY) i ]]
+    forall (p : s[[ _CPAY ]]) (i : fin (projT1 _CPAY)), s[[ sv_get (projT2 _CPAY) i ]]
   with
-  | existT n pd => fun (p : [[ existT _ n pd ]]) (i : fin n) =>
-    shv_nth denote_desc pd p i
+  | existT n pd => fun (p : s[[ existT _ n pd ]]) (i : fin n) =>
+    shv_nth sdenote_desc pd p i
   end (pay CMSG) i.
 
 Definition msg_fds_ok : Prop :=
   forall i,
   let d := sv_get (projT2 CPAY) i in
-  match d as _d return [[ _d ]] -> Prop with
-  | fd_d => fun (f : [[ fd_d ]]) => In f (components CST)
+  match d as _d return s[[ _d ]] -> Prop with
+  | fd_d => fun (f : s[[ fd_d ]]) => In f (components CST)
   | _ => fun _ => True
   end (msg_param_i i).
 
@@ -550,8 +550,8 @@ Inductive base_expr : desc -> Set :=
   base_expr d3
 .
 
-Fixpoint eval_base_expr (d : desc) (e : base_expr d) : [[ d ]] :=
-  match e in base_expr _d return [[ _d ]] with
+Fixpoint eval_base_expr (d : desc) (e : base_expr d) : s[[ d ]] :=
+  match e in base_expr _d return s[[ _d ]] with
   | NLit n => n
   | SLit s => s
   | CurChan => CFD
@@ -570,7 +570,7 @@ Lemma base_expr_fd_in :
   msg_fds_ok ->
   In CFD (components CST)->
   eval_base_expr t e = v ->
-  match t as _t return ([[ _t ]] -> Prop) with
+  match t as _t return (s[[ _t ]] -> Prop) with
   | fd_d => fun f => In f (components CST)
   | _ => fun _ => True
   end v.
@@ -594,16 +594,16 @@ Definition payload_expr (pd : payload_desc) : Type :=
   payload_expr' (projT1 pd) (projT2 pd).
 
 Fixpoint eval_payload_expr' (n : nat) (pd : payload_desc' n) (e : payload_expr' n pd)
-  : [[ pd ]] :=
+  : s[[ pd ]] :=
   match n as _n return
-    forall (pd : payload_desc' _n) (e : payload_expr' _n pd), [[ pd ]]
+    forall (pd : payload_desc' _n) (e : payload_expr' _n pd), s[[ pd ]]
   with
   | O => fun pd e => tt
   | S n' => fun (pd : payload_desc' (S n')) (e : payload_expr' (S n') pd) =>
-    match pd as _pd return payload_expr' (S n') _pd -> [[ _pd ]] with
+    match pd as _pd return payload_expr' (S n') _pd -> s[[ _pd ]] with
     | (d, pd') => fun e =>
       match e return
-        @denote (payload_desc' (S n')) (@Denoted_payload_desc' (S n')) (d, pd')
+        @sdenote (payload_desc' (S n')) (@SDenoted_payload_desc' (S n')) (d, pd')
       with
       | (v, e') =>
         (eval_base_expr d v, eval_payload_expr' n' pd' e')
@@ -611,7 +611,7 @@ Fixpoint eval_payload_expr' (n : nat) (pd : payload_desc' n) (e : payload_expr' 
     end e
   end pd e.
 
-Definition eval_payload_expr (pd : payload_desc) (e : payload_expr pd) : [[ pd ]] :=
+Definition eval_payload_expr (pd : payload_desc) (e : payload_expr pd) : s[[ pd ]] :=
   eval_payload_expr' (projT1 pd) (projT2 pd) e.
 
 Inductive expr_desc : Set :=
@@ -619,14 +619,14 @@ Inductive expr_desc : Set :=
 | msg_expr_d : expr_desc
 .
 
-Definition denote_expr_desc t :=
+Definition sdenote_expr_desc t :=
   match t with
-  | base_expr_d d => [[ d ]]
+  | base_expr_d d => s[[ d ]]
   | msg_expr_d => msg
   end.
 
-Instance Denoted_expr_t : Denoted expr_desc :=
-{ denote := denote_expr_desc
+Instance SDenoted_expr_t : SDenoted expr_desc :=
+{ sdenote := sdenote_expr_desc
 }.
 
 Inductive expr : expr_desc -> Type :=
@@ -640,8 +640,8 @@ Inductive expr : expr_desc -> Type :=
   expr msg_expr_d
 .
 
-Definition eval_expr (d : expr_desc) (e : expr d) : [[ d ]] :=
-  match e in expr _d return [[ _d ]] with
+Definition eval_expr (d : expr_desc) (e : expr d) : s[[ d ]] :=
+  match e in expr _d return s[[ _d ]] with
   | Base t e => eval_base_expr t e
   | MsgExpr t pe =>
     let p := eval_payload_expr (lkup_tag t) pe in

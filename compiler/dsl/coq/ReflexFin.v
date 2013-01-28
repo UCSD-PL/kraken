@@ -35,3 +35,121 @@ Fixpoint opt_fin (bound : nat) (n : nat)
       end
     end
   end.
+
+(* same number, increment bound *)
+Fixpoint lift_fin {n} (f : fin n) : fin (S n) :=
+  match n as _n return fin _n -> fin (S _n) with
+  | O => fun f => match f with end
+  | S n' => fun f =>
+    match f with
+    | None => None
+    | Some f' =>
+      let lf' : fin (S n') := lift_fin f' in
+      Some lf'
+    end
+  end f.
+
+(* increment number and bound *)
+Fixpoint shift_fin {n} (f : fin n) : fin (S n) :=
+  match n as _n return fin _n -> fin (S _n) with
+  | O => fun f => match f with end
+  | S n' => fun f =>
+    match f with
+    | None => Some None
+    | Some f' => Some (Some f')
+    end
+  end f.
+
+(* returns [n] as a [fin (S n)] *)
+Fixpoint max_fin n : fin (S n) :=
+  match n as _n return fin (S _n) with
+  | O => None
+  | S n' => Some (max_fin n')
+  end.
+
+(* turns a [fin (S n)] into a [fin n] if possible, returns a proof that it cannot otherwise *)
+Fixpoint proj_fin n (f : fin (S n)) : (fin n) + (f = max_fin n) :=
+  let res n f := ((fin n) + (f = max_fin n))%type in
+  match n as _n return
+    forall (f : fin (S _n)), res _n f
+  with
+  | O => fun f =>
+    match f as _f return res 0 _f with
+    | None => inr _ (eq_refl None)
+    | Some f' => match f' with end
+    end
+  | S n' => fun f =>
+    match f as _f return res (S n') _f with
+    | None => inl _ None
+    | Some f' =>
+      match proj_fin _ f' with
+      | inl p => inl _ (Some p)
+      | inr p => inr _ (eq_ind_r
+                          (fun f => Some f = max_fin (S n'))
+                          (eq_refl (max_fin (S n'))) p)
+      end
+    end
+  end f.
+
+Definition proj_fin_ok {n} (f : fin (S n)) (H : f <> max_fin n) : fin n :=
+  match proj_fin n f with
+  | inl f => f
+  | inr P => match H P with end
+  end.
+
+Theorem nat_of_proj_fin_ok : forall n (f : fin (S n)) H,
+  nat_of_fin (proj_fin_ok f H) = nat_of_fin f.
+Proof.
+  intros. induction n.
+  simpl. destruct f. destruct f. simpl in H. now elim H.
+  simpl in f. destruct f as [f|].
+  specialize (IHn f (fun EQ => H (f_equal (@Some _) EQ))).
+  simpl in *. unfold proj_fin_ok in *. destruct f.
+  rewrite <- IHn. clear IHn. simpl. destruct (proj_fin n (Some f)) as []_eqn.
+  reflexivity. elim H. now rewrite e.
+  simpl. destruct (proj_fin n (@None (fin n))) as []_eqn. auto.
+  destruct (H (f_equal _ e)).
+  now simpl.
+Qed.
+
+Definition decide P := { P } + { ~ P }.
+
+Definition fin_eq_dec : forall {n} (x y : fin n), decide (x = y).
+Proof.
+  intros. unfold decide. induction n. destruct x.
+  simpl in x, y. destruct x as [x|], y as [y|].
+  destruct (IHn x y). left. now subst. right. congruence.
+  now right. now right. now left.
+Qed.
+
+Definition proj_prop_fin {n} (P : fin (S n) -> Prop) : (fin n -> Prop) :=
+  fun fn => P (lift_fin fn).
+
+Theorem lift_proj_fin : forall n i OK, lift_fin (@proj_fin_ok n i OK) = i.
+Proof.
+  intros. induction n.
+  destruct i. destruct f. simpl in OK. congruence.
+  simpl in i. destruct i as [i|].
+  specialize (IHn i (fun EQ => OK (f_equal (@Some _) EQ))).
+  simpl. unfold proj_fin_ok in *. simpl.
+  destruct (proj_fin n i) as []_eqn. now rewrite IHn.
+  destruct (OK (f_equal _ e)).
+  now simpl.
+Qed.
+
+Definition forall_fin {n : nat} (P : fin n -> Prop) (Pdec : forall i, decide (P i))
+  : decide (forall i, P i).
+Proof.
+  induction n.
+  left. destruct 0.
+  specialize (IHn (proj_prop_fin P) (fun i => Pdec (lift_fin i))).
+  unfold proj_prop_fin in IHn.
+  destruct IHn. destruct (Pdec (max_fin n)).
+  left.
+  intros i.
+  destruct (fin_eq_dec i (max_fin n)).
+  now subst. specialize (p (proj_fin_ok i n0)).
+  now rewrite lift_proj_fin in p.
+  right. intro H. exact (n0 (H (max_fin n))).
+  right. intro. apply n0. intro. apply H.
+Qed.

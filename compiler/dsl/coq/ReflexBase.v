@@ -8,6 +8,8 @@ Open Scope char_scope.
 Open Scope hprop_scope.
 Open Scope stsepi_scope.
 
+Notation decide P := ({ P } + { ~ P }).
+
 (* follow ascii design, little endian *)
 Inductive num : Set :=
 | Num : ascii -> ascii -> num.
@@ -43,7 +45,7 @@ Proof with try discriminate.
   apply nat_of_ascii_bound.
 Qed.
 
-Definition num_eq (n1 n2 : num) : {n1 = n2} + {n1 <> n2}.
+Definition num_eq (n1 n2 : num) : decide (n1 = n2).
   decide equality; apply ascii_dec.
 Qed.
 
@@ -59,13 +61,13 @@ Fixpoint str_of_string (s : string) : str :=
   | String c rest => c :: str_of_string rest
   end.
 
-Definition str_eq (s1 s2 : str) : {s1 = s2} + {s1 <> s2} :=
+Definition str_eq (s1 s2 : str) : decide (s1 = s2) :=
   list_eq_dec ascii_dec s1 s2.
 
 Definition fd : Set :=
   num.
 
-Definition fd_eq (f1 f2 : fd) : {f1 = f2} + {f1 <> f2} :=
+Definition fd_eq (f1 f2 : fd) : decide (f1 = f2) :=
   num_eq f1 f2.
 
 Lemma fd_eq_true :

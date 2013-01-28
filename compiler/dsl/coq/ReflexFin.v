@@ -1,5 +1,7 @@
 Require Import Arith.
 
+Require Import ReflexBase.
+
 (* isomorphic to nats less than n *)
 Fixpoint fin (n : nat) : Set :=
   match n with
@@ -112,11 +114,9 @@ Proof.
   now simpl.
 Qed.
 
-Definition decide P := { P } + { ~ P }.
-
 Definition fin_eq_dec : forall {n} (x y : fin n), decide (x = y).
 Proof.
-  intros. unfold decide. induction n. destruct x.
+  intros. induction n. destruct x.
   simpl in x, y. destruct x as [x|], y as [y|].
   destruct (IHn x y). left. now subst. right. congruence.
   now right. now right. now left.
@@ -137,7 +137,7 @@ Proof.
   now simpl.
 Qed.
 
-Definition forall_fin {n : nat} (P : fin n -> Prop) (Pdec : forall i, decide (P i))
+Definition forall_fin {n : nat} {P : fin n -> Prop} (Pdec : forall i, decide (P i))
   : decide (forall i, P i).
 Proof.
   induction n.
@@ -152,4 +152,16 @@ Proof.
   now rewrite lift_proj_fin in p.
   right. intro H. exact (n0 (H (max_fin n))).
   right. intro. apply n0. intro. apply H.
+Qed.
+
+Definition fin_ind : forall {n} {P},
+  (forall i : fin n, proj_prop_fin P i) ->
+  (P (max_fin n)) ->
+  forall i : fin (S n), P i.
+Proof.
+  intros n P PP PM. destruct n. destruct i. destruct f. exact PM.
+  intros i. destruct (fin_eq_dec i (max_fin (S n))).
+  now subst.
+  specialize (PP (proj_fin_ok i n0)).
+  unfold proj_prop_fin in PP. now rewrite lift_proj_fin in PP.
 Qed.

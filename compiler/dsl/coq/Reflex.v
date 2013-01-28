@@ -529,6 +529,14 @@ Definition msg_fds_ok : Prop :=
   | _ => fun _ => True
   end (msg_param_i i).
 
+Definition msg_fds_ck : decide msg_fds_ok.
+Proof.
+  apply forall_fin. intros i. generalize (msg_param_i i).
+  destruct (sv_get (projT2 CPAY) i).
+  now left. now left.
+  intros s. destruct CST as [comps ktr]. simpl in *. apply in_dec. exact fd_eq.
+Qed.
+
 Inductive base_expr : desc -> Set :=
 (* no fd lit, otherwise would make lit ctor polymorphic *)
 | NLit : num -> base_expr num_d
@@ -688,8 +696,9 @@ Inductive Reach : kstate -> Prop :=
     {| components := f :: nil
      ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) nil f :: nil]
      |}
-| Reach_msg :
+| Reach_valid :
   forall s f m tr s',
+  msg_fds_ok s m ->
   let cs := components s in
   ktr s = [tr]%inhabited ->
   Reach s ->
@@ -697,6 +706,15 @@ Inductive Reach : kstate -> Prop :=
         ; ktr := [KRecv f m :: KSelect cs f :: tr]
         |} ->
   Reach (kstate_run_prog f m s' (HANDLER m))
+| Reach_bad_fds :
+  forall s f m tr,
+  let cs := components s in
+  ~ msg_fds_ok s m ->
+  ktr s = [tr]%inhabited ->
+  Reach s ->
+  Reach {| components := cs
+        ; ktr := [KRecv f m :: KSelect cs f :: tr]
+        |}
 | Reach_bogus :
   forall s f bmsg tr,
   let cs := components s in
@@ -872,33 +890,29 @@ Proof.
     (tr ~~~ expand_ktrace tr)
     <@> (tr ~~ [In c comps] * [Reach kst] * all_bound_drop comps c);
 
-    let i : nat := mm in
-
     match mm with
-    | inleft m =>
+    | inl m =>
       let tr := tr ~~~ KRecv c m :: tr in
       let ck := msg_fds_ck kst m in
       match ck as ck' return ck = ck' -> _ with
-      | true => fun _ =>
+      | left _ => fun _ =>
         let s' := {|components := comps; ktr := tr|} in
         s'' <- run_prog c m s' (HANDLER m) <@> [Reach kst];
         {{Return s''}}
-      | false => fun _ =>
+      | right _ => fun _ =>
         {{Return {|components := comps; ktr := tr|}}}
       end (refl_equal ck)
 
-    | inright m =>
+    | inr m =>
       let tr := tr ~~~ KBogus c m :: tr in
       {{Return {|components := comps; ktr := tr|}}}
     end
   );
   sep''.
   subst v; sep''.
-
   econstructor; eauto.
   unfold s' in *; rewrite <- H6.
   eapply (Reach_valid kst); eauto.
-  apply msg_fds_ck_correct; auto.
   f_equal; auto. sep''.
 Qed.
 
@@ -936,4 +950,4 @@ Qed.
 
 End WITH_HANDLER.
 
-End WITH_MSG_T.
+End WITH_PAYLOAD_DESC_VEC.

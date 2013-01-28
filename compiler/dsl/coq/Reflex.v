@@ -423,88 +423,6 @@ Definition eval_binop
 
 Implicit Arguments eval_binop.
 
-(*
-
-Lemma some_eq_inv :
-  forall A (x y : A),
-  Some x = Some y ->
-  x = y.
-Proof.
-  intros. inv H; auto.
-Qed.
-
-Implicit Arguments some_eq_inv.
-
-Lemma opt_eq_contra :
-  forall A (a : A),
-  None = Some a ->
-  False.
-Proof.
-  intros; inv H.
-Qed.
-
-Implicit Arguments opt_eq_contra.
-
-Fixpoint get_param_idx
-  (pt : payload_t) (p : PayloadD pt) (i : nat) (t : type_t)
-  (pf : List.nth_error pt i = Some t) : TypeD t :=
-  match pt as pt' return
-    PayloadD pt' -> forall pf : List.nth_error pt' i = Some t, TypeD t
-  with
-  | x :: xs =>
-    fun (p : TypeD x * PayloadD xs) (pf : List.nth_error (x :: xs) i = Some t) =>
-    match p with
-    | (v, vs) =>
-      match i as i' return
-        forall pf : List.nth_error (x :: xs) i' = Some t, TypeD t
-      with
-      | O => fun pf : Some x = Some t =>
-        eq_rec _ _ v _ (some_eq_inv pf)
-      | S j => fun pf : List.nth_error xs j = Some t =>
-        get_param_idx xs vs j t pf
-      end pf
-    end
-  | nil =>
-    fun (p : unit) (pf : List.nth_error nil i = Some t) =>
-    match i as i' return List.nth_error nil i' = Some t -> _ with
-    | O => fun pf : None = Some t => False_rec _ (opt_eq_contra pf)
-    | S _ => fun pf : None = Some t => False_rec _ (opt_eq_contra pf)
-    end pf
-  end p pf.
-
-*)
-
-(*
-Definition optpayload_get_t (opt : option payload_t) (i : nat) : type_t :=
-  match opt with
-  | Some pt => List.nth i pt str_t
-  | None => str_t
-  end.
-
-Fixpoint payload_get_v
-  (i : nat) (pt : payload_t) (p : PayloadD pt) : TypeD (List.nth i pt str_t) :=
-  match i as i' return TypeD (List.nth i' pt str_t) with
-  | S j =>
-    match pt as pt' return
-      PayloadD pt' -> TypeD (List.nth (S j) pt' str_t)
-    with
-    | t :: ts => fun p =>
-      match p with (v, vs) => payload_get_v j ts vs end
-    | nil => fun _ =>
-      str_of_string "BOGUS"
-    end p
-  | O =>
-    match pt as pt' return
-      PayloadD pt' -> TypeD (List.nth O pt' str_t)
-    with
-    | t :: ts => fun p =>
-      match p with (v, vs) => v end
-    | nil => fun _ =>
-      str_of_string "BOGUS"
-    end p
-  end.
-*)
-
 Section WITH_ENV.
 
 Variable CST : kstate.
@@ -951,3 +869,5 @@ Qed.
 End WITH_HANDLER.
 
 End WITH_PAYLOAD_DESC_VEC.
+
+Definition main_zero := main O tt (fun m => match tag _ _ m with end).

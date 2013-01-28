@@ -26,7 +26,7 @@ let ascii_of_char c =
     , c land 128 <> 0
     )
 
-let int_of_num = function ReflexBase.Coq_num (l, h) ->
+let int_of_num = function ReflexBase.Num (l, h) ->
   let l = Char.code (char_of_ascii l) in
   let h = Char.code (char_of_ascii h) in
   l + h * 256
@@ -34,7 +34,7 @@ let int_of_num = function ReflexBase.Coq_num (l, h) ->
 let num_of_int i =
   let l = ascii_of_char (Char.chr (i mod 256)) in
   let h = ascii_of_char (Char.chr (i / 256)) in
-  ReflexBase.Coq_num (l, h)
+  ReflexBase.Num (l, h)
 
 let explode s =
   let rec loop i cs =

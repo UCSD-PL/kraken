@@ -1,1 +1,1 @@
-STImpl.exec (Reflex.main []) ()
+STImpl.exec (Reflex.main_zero) ()

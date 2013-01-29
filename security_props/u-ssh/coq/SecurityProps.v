@@ -130,3 +130,56 @@ Proof.
       tauto.
       discriminate.
 Qed.
+
+Definition not_att (act : KAction) : bool :=
+  match act with
+  | KSend _ (SysLoginReq _) => true
+  | _                       => false
+  end.
+
+Theorem auth_att_equiv : forall tr n,
+  auth_attempts n [(filter not_att tr)] <-> auth_attempts n [tr].
+Proof.
+  (*intros tr n Hauth.
+  generalize dependent n.
+  induction tr; simpl in *.
+    auto.
+
+    destruct a; simpl in *;
+      try (constructor; auto || discriminate).
+
+      destruct m; simpl in *;
+        try (constructor; auto || discriminate).
+
+        intros n' Hauth.
+        simple inversion Hauth; simpl in *.
+          apply pack_injective in H0; inversion H0.
+
+          apply pack_injective in H2.
+          inversion H2.
+          intros.
+          contradict H4.
+          eauto.
+
+          rewrite <- H0.
+          apply pack_injective in H1.
+          inversion H1.
+          intro.
+          apply attempt.
+          auto.
+Qed.*)
+Admitted.
+
+Theorem auth_att_contra : forall n st,
+  n >= 4 -> auth_attempts n (ktr st) -> ~ KInvariant st.
+Proof.
+  intro n.
+  induction n.
+    intros; omega.
+
+    intros st Hn Hauth.
+    simple inversion Hauth.
+      discriminate.
+
+      intros Hauth' Hact.
+Admitted.

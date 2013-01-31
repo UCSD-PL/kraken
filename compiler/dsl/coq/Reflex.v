@@ -588,7 +588,7 @@ Definition kstate_run_cmd (s : kstate) (c : cmd) : kstate :=
      ; ktr := tr ~~~ KSend f m :: tr
      |}
   end.
-  
+
 Definition prog : Type :=
   list cmd.
 
@@ -607,12 +607,14 @@ Section WITH_HANDLER.
 
 Variable HANDLER : handler.
 
+Definition init_str := str_of_string "test/echo-00/test.py".
+
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
   forall f,
   Reach
     {| components := f :: nil
-     ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) nil f :: nil]
+     ; ktr := [KExec init_str nil f :: nil]
      |}
 | Reach_valid :
   forall s f m tr s',
@@ -721,8 +723,8 @@ Definition kinit :
 Proof.
   intros; refine (
     let tr := [nil]%inhabited in
-    c <- exec (str_of_string "test.py") nil tr;
-    let tr := tr ~~~ KExec (str_of_string "test.py") nil c :: nil in
+    c <- exec init_str nil tr;
+    let tr := tr ~~~ KExec init_str nil c :: nil in
     {{Return {|components := c :: nil; ktr := tr|}}}
   );
   sep''.
@@ -820,7 +822,6 @@ Proof.
       | right _ => fun _ =>
         {{Return {|components := comps; ktr := tr|}}}
       end (refl_equal ck)
-
     | inr m =>
       let tr := tr ~~~ KBogus c m :: tr in
       {{Return {|components := comps; ktr := tr|}}}
@@ -870,4 +871,10 @@ End WITH_HANDLER.
 
 End WITH_PAYLOAD_DESC_VEC.
 
-Definition main_zero := main O tt (fun m => match tag _ _ m with end).
+Record spec :=
+{ NB_MSG   : nat
+; PAY_DESC : payload_desc_vec NB_MSG
+; HANDLERS : handler NB_MSG PAY_DESC
+}.
+
+Definition mk_main (s : spec) := main (NB_MSG s) (PAY_DESC s) (HANDLERS s).

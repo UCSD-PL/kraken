@@ -8,4 +8,7 @@ clean:
 	$(MAKE) -C c-stubs clean
 	$(MAKE) -C ml clean
 
-.PHONY: all clean
+run: all
+	ocamlrun -I c-stubs/ ml/_build/Main.byte
+
+.PHONY: all clean run

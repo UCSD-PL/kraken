@@ -23,20 +23,11 @@ Ltac inv H := inversion H; subst; clear H.
 
 Definition num_of_fin {bound : nat} (n : fin bound) := num_of_nat (nat_of_fin n).
 
-Theorem num_nat_nat_fin : forall (bound : nat) (ft : fin bound),
-  num_of_nat (nat_of_fin ft) = num_of_fin ft.
-Proof.
-  induction bound. destruct 0.
-  intros. simpl in ft. destruct ft as [ft'|].
-  unfold num_of_fin. now simpl.
-  now simpl.
-Qed.
-
 Lemma eq_nat_num_of_fin : forall {bound : nat} (f : fin bound) n,
   nat_of_fin f = nat_of_num n -> num_of_fin f = n.
 Proof.
   intros ? f n P. pose proof (f_equal num_of_nat P) as P'. rewrite num_nat_embedding in P'.
-  rewrite num_nat_nat_fin in P'. now rewrite P'.
+  exact P'.
 Qed.
 
 Inductive desc : Set := num_d | str_d | fd_d.

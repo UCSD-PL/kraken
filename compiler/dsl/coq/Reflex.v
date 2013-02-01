@@ -21,11 +21,9 @@ Ltac inv H := inversion H; subst; clear H.
 
 (* Some num/fin/nat stuff *)
 
-Definition num_of_fin (bound : nat) (n : fin bound) := num_of_nat (nat_of_fin n).
+Definition num_of_fin {bound : nat} (n : fin bound) := num_of_nat (nat_of_fin n).
 
-Implicit Arguments num_of_fin [bound].
-
-Theorem num_nat_nat_fin : forall {bound : nat} (ft : fin bound),
+Theorem num_nat_nat_fin : forall (bound : nat) (ft : fin bound),
   num_of_nat (nat_of_fin ft) = num_of_fin ft.
 Proof.
   induction bound. destruct 0.
@@ -75,8 +73,8 @@ Definition payload_desc_vec n := vec payload_desc n.
 
 Section WITH_PAYLOAD_DESC_VEC.
 
-Variable NB_MSG : nat.
-Variable PDV : payload_desc_vec NB_MSG.
+Context {NB_MSG : nat}.
+Context {PDV : payload_desc_vec NB_MSG}.
 
 Definition lkup_tag (tag : fin NB_MSG) : payload_desc :=
   v_get PDV tag.
@@ -601,7 +599,7 @@ Fixpoint kstate_run_prog (s : kstate) (p : prog) : kstate :=
 End WITH_ENV.
 
 Definition handler : Type :=
-  forall m : msg, prog m.
+  forall m : msg, prog (CMSG:=m).
 
 Section WITH_HANDLER.
 
@@ -874,7 +872,7 @@ End WITH_PAYLOAD_DESC_VEC.
 Record spec :=
 { NB_MSG   : nat
 ; PAY_DESC : payload_desc_vec NB_MSG
-; HANDLERS : handler NB_MSG PAY_DESC
+; HANDLERS : handler (PDV:=PAY_DESC)
 }.
 
-Definition mk_main (s : spec) := main (NB_MSG s) (PAY_DESC s) (HANDLERS s).
+Definition mk_main (s : spec) := main (HANDLERS s).

@@ -12,20 +12,18 @@ Definition PDV : payload_desc_vec NB_MSG :=
   , tt
   ).
 
-Definition HANDLERS : handler NB_MSG PDV :=
+Definition HANDLERS : handler (PDV:=PDV) :=
   (fun m =>
-    match tag _ _ m as _tm return
-      @sdenote _ SDenoted_payload_desc (lkup_tag NB_MSG PDV _tm) -> _
+    match tag m as _tm return
+      @sdenote _ SDenoted_payload_desc (lkup_tag (PDV:=PDV) _tm) -> _
     with
     | None => fun pl =>
       let (s, _) := pl in
-         Send _ _ m
-           (CurChan _ _ _)
-           (MsgExpr _ _ m None (SLit _ _ m s, tt))
+         Send m (CurChan m) (MsgExpr m None (SLit m s, tt))
       :: nil
     | Some bad => fun _ =>
       match bad with end
-    end (pay _ _ m)
+    end (pay m)
   )
 .
 

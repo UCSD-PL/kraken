@@ -21,24 +21,13 @@ Ltac inv H := inversion H; subst; clear H.
 
 (* Some num/fin/nat stuff *)
 
-Definition num_of_fin (bound : nat) (n : fin bound) := num_of_nat (nat_of_fin n).
-
-Implicit Arguments num_of_fin [bound].
-
-Theorem num_nat_nat_fin : forall {bound : nat} (ft : fin bound),
-  num_of_nat (nat_of_fin ft) = num_of_fin ft.
-Proof.
-  induction bound. destruct 0.
-  intros. simpl in ft. destruct ft as [ft'|].
-  unfold num_of_fin. now simpl.
-  now simpl.
-Qed.
+Definition num_of_fin {bound : nat} (n : fin bound) := num_of_nat (nat_of_fin n).
 
 Lemma eq_nat_num_of_fin : forall {bound : nat} (f : fin bound) n,
   nat_of_fin f = nat_of_num n -> num_of_fin f = n.
 Proof.
   intros ? f n P. pose proof (f_equal num_of_nat P) as P'. rewrite num_nat_embedding in P'.
-  rewrite num_nat_nat_fin in P'. now rewrite P'.
+  exact P'.
 Qed.
 
 Inductive desc : Set := num_d | str_d | fd_d.
@@ -75,8 +64,8 @@ Definition payload_desc_vec n := vec payload_desc n.
 
 Section WITH_PAYLOAD_DESC_VEC.
 
-Variable NB_MSG : nat.
-Variable PDV : payload_desc_vec NB_MSG.
+Context {NB_MSG : nat}.
+Context {PDV : payload_desc_vec NB_MSG}.
 
 Definition lkup_tag (tag : fin NB_MSG) : payload_desc :=
   v_get PDV tag.
@@ -588,7 +577,7 @@ Definition kstate_run_cmd (s : kstate) (c : cmd) : kstate :=
      ; ktr := tr ~~~ KSend f m :: tr
      |}
   end.
-  
+
 Definition prog : Type :=
   list cmd.
 
@@ -601,18 +590,20 @@ Fixpoint kstate_run_prog (s : kstate) (p : prog) : kstate :=
 End WITH_ENV.
 
 Definition handler : Type :=
-  forall m : msg, prog m.
+  forall m : msg, prog (CMSG:=m).
 
 Section WITH_HANDLER.
 
 Variable HANDLER : handler.
+
+Definition init_str := str_of_string "test/echo-00/test.py".
 
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
   forall f,
   Reach
     {| components := f :: nil
-     ; ktr := [KExec  ("t" :: "e" :: "s" :: "t" :: "." :: "p" :: "y" :: nil) nil f :: nil]
+     ; ktr := [KExec init_str nil f :: nil]
      |}
 | Reach_valid :
   forall s f m tr s',
@@ -721,8 +712,8 @@ Definition kinit :
 Proof.
   intros; refine (
     let tr := [nil]%inhabited in
-    c <- exec (str_of_string "test.py") nil tr;
-    let tr := tr ~~~ KExec (str_of_string "test.py") nil c :: nil in
+    c <- exec init_str nil tr;
+    let tr := tr ~~~ KExec init_str nil c :: nil in
     {{Return {|components := c :: nil; ktr := tr|}}}
   );
   sep''.
@@ -820,7 +811,6 @@ Proof.
       | right _ => fun _ =>
         {{Return {|components := comps; ktr := tr|}}}
       end (refl_equal ck)
-
     | inr m =>
       let tr := tr ~~~ KBogus c m :: tr in
       {{Return {|components := comps; ktr := tr|}}}
@@ -870,4 +860,10 @@ End WITH_HANDLER.
 
 End WITH_PAYLOAD_DESC_VEC.
 
-Definition main_zero := main O tt (fun m => match tag _ _ m with end).
+Record spec :=
+{ NB_MSG   : nat
+; PAY_DESC : payload_desc_vec NB_MSG
+; HANDLERS : handler (PDV:=PAY_DESC)
+}.
+
+Definition mk_main (s : spec) := main (HANDLERS s).

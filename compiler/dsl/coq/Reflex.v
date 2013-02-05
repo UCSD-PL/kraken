@@ -68,7 +68,7 @@ Context {NB_MSG : nat}.
 Context {PDV : payload_desc_vec NB_MSG}.
 
 Definition lkup_tag (tag : fin NB_MSG) : payload_desc :=
-  v_get PDV tag.
+  vec_ith PDV tag.
 
 Definition sdenote_payload_desc (pd : payload_desc) : Set :=
   sdenote_payload_desc' (projT1 pd) (projT2 pd).
@@ -420,17 +420,17 @@ Variable CMSG : msg.
 
 Let CPAY : payload_desc := lkup_tag (tag CMSG).
 
-Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ sv_get (projT2 CPAY) i ]] :=
+Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ svec_ith (projT2 CPAY) i ]] :=
   match CPAY as _CPAY return
-    forall (p : s[[ _CPAY ]]) (i : fin (projT1 _CPAY)), s[[ sv_get (projT2 _CPAY) i ]]
+    forall (p : s[[ _CPAY ]]) (i : fin (projT1 _CPAY)), s[[ svec_ith (projT2 _CPAY) i ]]
   with
   | existT n pd => fun (p : s[[ existT _ n pd ]]) (i : fin n) =>
-    shv_nth sdenote_desc pd p i
+    shvec_ith sdenote_desc pd p i
   end (pay CMSG) i.
 
 Definition msg_fds_ok : Prop :=
   forall i,
-  let d := sv_get (projT2 CPAY) i in
+  let d := svec_ith (projT2 CPAY) i in
   match d as _d return s[[ _d ]] -> Prop with
   | fd_d => fun (f : s[[ fd_d ]]) => In f (components CST)
   | _ => fun _ => True
@@ -439,7 +439,7 @@ Definition msg_fds_ok : Prop :=
 Definition msg_fds_ck : decide msg_fds_ok.
 Proof.
   apply forall_fin. intros i. generalize (msg_param_i i).
-  destruct (sv_get (projT2 CPAY) i).
+  destruct (svec_ith (projT2 CPAY) i).
   now left. now left.
   intros s. destruct CST as [comps ktr]. simpl in *. apply in_dec. exact fd_eq.
 Qed.
@@ -451,7 +451,7 @@ Inductive base_expr : desc -> Set :=
 | CurChan : base_expr fd_d
 | Param :
   forall (i : fin (projT1 CPAY)),
-  base_expr (sv_get (projT2 CPAY) i)
+  base_expr (svec_ith (projT2 CPAY) i)
 | UnOp :
   forall d1 d2,
   unop d1 d2 ->
@@ -590,7 +590,7 @@ Fixpoint kstate_run_prog (s : kstate) (p : prog) : kstate :=
 End WITH_ENV.
 
 Definition handler : Type :=
-  forall m : msg, prog (CMSG:=m).
+  forall m : msg, prog m.
 
 Section WITH_HANDLER.
 

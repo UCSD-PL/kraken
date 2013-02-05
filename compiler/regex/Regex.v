@@ -28,7 +28,7 @@ Context {PLT:payload_desc_vec NB_MSG}.
 
 Record opt_msg : Set :=
   { opt_tag : fin NB_MSG
-  ; opt_pay : s[[ C_opttag (lkup_tag NB_MSG PLT opt_tag) ]]
+  ; opt_pay : s[[ C_opttag (@lkup_tag NB_MSG PLT opt_tag) ]]
   }.
 
 (*Definition KTrace := KTrace NB_MSG PLT.*)
@@ -82,64 +82,64 @@ Fixpoint unpackedPLMatch n (pd:payload_desc' n)
 
 Definition packedPLMatch
   (tag:fin NB_MSG)
-  (opt_pay:s[[C_opttag (lkup_tag NB_MSG PLT tag)]])
-  (pay:s[[lkup_tag NB_MSG PLT tag]]) : Prop :=
-  match lkup_tag NB_MSG PLT tag as _l return
+  (opt_pay:s[[C_opttag (@lkup_tag NB_MSG PLT tag)]])
+  (pay:s[[@lkup_tag NB_MSG PLT tag]]) : Prop :=
+  match @lkup_tag NB_MSG PLT tag as _l return
         s[[C_opttag _l ]] -> s[[ _l ]] -> Prop
   with
   | existT n pl' => unpackedPLMatch n pl'
   end opt_pay pay.
 
-Definition msgMatch' (opt_pl:opt_msg) (pl:msg NB_MSG PLT) : Prop :=
+Definition msgMatch' (opt_pl:opt_msg) (pl:msg) : Prop :=
   let opt_tag := (opt_tag opt_pl) in
-  let tag := (tag NB_MSG PLT pl) in
+  let tag := (tag pl) in
   match fin_eq_dec tag opt_tag with
   | left H => match H in eq _ _tag return
-                s[[C_opttag (lkup_tag NB_MSG PLT _tag)]] -> Prop
+                s[[C_opttag (@lkup_tag NB_MSG PLT _tag)]] -> Prop
               with
               | eq_refl => fun opt_pay =>
-                 packedPLMatch tag opt_pay (pay NB_MSG PLT pl)
+                 packedPLMatch tag opt_pay (pay pl)
               end (opt_pay opt_pl)
   | right H => False
   end.
 
-Definition msgMatch (opt_pl:option opt_msg) (pl:msg NB_MSG PLT) : Prop :=
+Definition msgMatch (opt_pl:option opt_msg) (pl:msg) : Prop :=
   match opt_pl with
   | None => True
   | Some opt_pl' => msgMatch' opt_pl' pl
   end.
 
-Inductive AMatch : KOAction -> KAction NB_MSG PLT -> Prop :=
+Inductive AMatch : KOAction -> @KAction NB_MSG PLT -> Prop :=
 | AM_KExec : forall s s' ls ls' fd fd', argMatch s s' ->
                                         argMatch ls ls' ->
                                         argMatch fd fd' ->
                                         AMatch (KOExec s ls fd)
-                                               (KExec _ _ s' ls' fd')
+                                               (KExec s' ls' fd')
 | AM_KCall : forall s s' ls ls' fd fd', argMatch s s' ->
                                         argMatch ls ls' ->
                                         argMatch fd fd' ->
                                         AMatch (KOCall s ls fd)
-                                               (KCall _ _ s' ls' fd')
+                                               (KCall s' ls' fd')
 | AM_KSelect : forall lfd lfd' fd fd', argMatch lfd lfd' ->
                                        argMatch fd fd' ->
                                        AMatch (KOSelect lfd fd)
-                                              (KSelect _ _ lfd' fd')
+                                              (KSelect lfd' fd')
 | AM_KSend : forall fd fd' msg msg', argMatch fd fd' ->
                                      msgMatch msg msg' ->
                                      AMatch (KOSend fd msg)
-                                            (KSend _ _ fd' msg')
+                                            (KSend fd' msg')
 | AM_KRecv : forall fd fd' msg msg', argMatch fd fd' ->
                                      msgMatch msg msg' ->
                                      AMatch (KORecv fd msg)
-                                            (KRecv _ _ fd' msg')
+                                            (KRecv fd' msg')
 (**I don't know if this is the right thing to do for KBogus matching.
    It just checks if the message tags and fds are the same**)
 | AM_KBogus : forall fd fd' optbtag bmsg, argMatch fd fd' ->
-                                          argMatch optbtag (btag _ bmsg) ->
+                                          argMatch optbtag (btag bmsg) ->
                                           AMatch (KOBogus fd optbtag)
-                                                 (KBogus _ _ fd' bmsg).
+                                                 (KBogus fd' bmsg).
 
-Inductive RMatch : Regexp -> KTrace NB_MSG PLT -> Prop :=
+Inductive RMatch : Regexp -> @KTrace NB_MSG PLT -> Prop :=
 | RM_Atom     : forall a a', AMatch a a' ->
                              RMatch (RE_Atom a) (a'::nil)
 | RM_NAtom    : forall a a', ~ AMatch a a' ->

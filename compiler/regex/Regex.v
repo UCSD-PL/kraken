@@ -38,8 +38,8 @@ Inductive KOAction : Set :=
 | KOExec   : option str -> option (list str) -> option fd -> KOAction
 | KOCall   : option str -> option (list str) -> option fd -> KOAction
 | KOSelect : option (list fd) -> option fd -> KOAction
-| KOSend   : option fd -> opt_msg -> KOAction
-| KORecv   : option fd -> opt_msg -> KOAction
+| KOSend   : option fd -> option opt_msg -> KOAction
+| KORecv   : option fd -> option opt_msg -> KOAction
 | KOBogus  : option fd -> option num -> KOAction.
 
 Inductive Regexp : Type :=
@@ -90,7 +90,7 @@ Definition packedPLMatch
   | existT n pl' => unpackedPLMatch n pl'
   end opt_pay pay.
 
-Definition msgMatch (opt_pl:opt_msg) (pl:msg NB_MSG PLT) : Prop :=
+Definition msgMatch' (opt_pl:opt_msg) (pl:msg NB_MSG PLT) : Prop :=
   let opt_tag := (opt_tag opt_pl) in
   let tag := (tag NB_MSG PLT pl) in
   match fin_eq_dec tag opt_tag with
@@ -101,6 +101,12 @@ Definition msgMatch (opt_pl:opt_msg) (pl:msg NB_MSG PLT) : Prop :=
                  packedPLMatch tag opt_pay (pay NB_MSG PLT pl)
               end (opt_pay opt_pl)
   | right H => False
+  end.
+
+Definition msgMatch (opt_pl:option opt_msg) (pl:msg NB_MSG PLT) : Prop :=
+  match opt_pl with
+  | None => True
+  | Some opt_pl' => msgMatch' opt_pl' pl
   end.
 
 Inductive AMatch : KOAction -> KAction NB_MSG PLT -> Prop :=
@@ -144,11 +150,9 @@ Inductive RMatch : Regexp -> KTrace NB_MSG PLT -> Prop :=
 | RM_StarInit : forall re, RMatch (RE_Star re) nil
 | RM_Star     : forall re tr tr', RMatch (RE_Star re) tr ->
                                   RMatch re tr' ->
-                                  RMatch (RE_Star re) (tr ++ tr')
+                                  RMatch (RE_Star re) (tr' ++ tr)
 | RM_Concat   : forall re re' tr tr', RMatch re tr ->
                                       RMatch re' tr' ->
                                       RMatch (RE_Concat re re') (tr ++ tr').
 
 End KOAction.
-
-

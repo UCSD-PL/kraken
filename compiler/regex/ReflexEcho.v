@@ -8,7 +8,7 @@ Require Import ReflexVec.
 Require Import Regex.
 Require Import Ynot.
 Require Import List.
-Require Import Eqdep.
+Require Import RegexTacs.
 
 Definition NB_MSG : nat := 1.
 
@@ -55,89 +55,134 @@ Definition echo_re :=
                             (Some (@Build_opt_msg NB_MSG PDV
                                                   None (None, tt))))))).
 
-Ltac unpack :=
-  match goal with
-  | [ s : kstate, H : ?s = _ |- _ ]
-      (*This is problematic because it destroys information about s*)
-      => apply f_equal with (f:=ktr) in H; rewrite H in *;
-         simpl in *; unpack
-  | [ H: [_]%inhabited = [_]%inhabited |- _ ] =>
-    apply pack_injective in H;
-    rewrite -> H in * || rewrite <- H in *
+Definition echo_re_var m :=
+  RE_Star
+    (RE_Alt
+       (RE_NAtom (@KOSend NB_MSG PDV None
+                          (Some (@Build_opt_msg NB_MSG PDV
+                                                None (Some m, tt)))))
+       (RE_Concat
+          (RE_Atom (@KOSend NB_MSG PDV None
+                            (Some (@Build_opt_msg NB_MSG PDV
+                                                  None (Some m, tt)))))
+          (RE_Atom (@KORecv NB_MSG PDV None
+                            (Some (@Build_opt_msg NB_MSG PDV
+                                                  None (Some m, tt))))))).
+
+Ltac get_leftmost RE :=
+  match RE with
+  | RE_Atom ?A => A
+  | RE_NAtom ?A => A
+  | RE_Any => constr:"."
+  | RE_Star ?R => get_leftmost R
+  | RE_Alt ?R1 ?R2 => get_leftmost R1
+  | RE_Concat ?R1 ?R2 => get_leftmost R1
   end.
 
-Ltac computeMsgMatch NUM_MSG :=
-  match goal with
-  | [ |- context[msgMatch _ _] ]
-    => unfold msgMatch; unfold msgMatch';
-       simpl; computeMsgMatch NUM_MSG
-  | [ |- context[match fin_eq_dec ?fin1 ?fin2 with
-                 | left _ => _ | right _ => _ end] ]
-    => destruct (@fin_eq_dec NUM_MSG fin1 fin2) as [ ?Heq | ?Hneq ];
-       [ assert (Heq = eq_refl fin1) as ?F by apply UIP_refl;
-         rewrite F; compute; intuition
-       | intuition ]
+Ltac match_dec oact act :=
+  match oact with
+  | KOSend ?ofd ?omsg => match act with
+                         | KSend ?fd ?msg
+      => assert (decide (argMatch ofd fd /\ msgMatch omsg msg)
+                 (*~(argMatch ofd fd /\ msgMatch omsg msg)*))
+                         end
   end.
 
-Ltac printCtxt :=
-  repeat (match goal with [ H: _ |- _ ] => revert H end);
-  match goal with |- ?G => idtac G end.
+Ltac match_cond oact act :=
+   match oact with
+   | KOSend ?ofd ?omsg => match act with
+                         | KSend ?fd ?msg
+                          => constr:(argMatch ofd fd
+                                     /\ msgMatch omsg msg)
+                         end
+   end.
 
-Ltac matchAtom NUM_MSG :=
-  match goal with
-  | [ |- RMatch (RE_Atom _) (_::nil) ]
-      => apply RM_Atom; constructor; auto; matchAtom NUM_MSG
-  | [ |- RMatch (RE_NAtom _) (_::nil) ]
-      => apply RM_NAtom; unfold not; inversion 1; matchAtom NUM_MSG
-  | [ |- context G[msgMatch _ _ ] ]
-      => computeMsgMatch NUM_MSG
-  | [ H : msgMatch _ _ |- _ ]
-      => revert H; computeMsgMatch NUM_MSG
+Ltac nmatch_cond oact act :=
+   match oact with
+   | KOSend ?ofd ?omsg => match act with
+                         | KSend ?fd ?msg
+                          => constr:(~(argMatch ofd fd)
+                                     \/ ~(msgMatch omsg msg))
+                         end
+   end.
+
+Ltac act_cond act RE :=
+  match RE with
+  | RE_Atom ?oact => match_cond oact act
+  | RE_NAtom ?oact => nmatch_cond oact act
+  | RE_Any => True
+  | RE_Star ?R => act_cond act R
+  | RE_Alt ?R1 ?R2 => let l_cond := act_cond act R1 in
+                      let r_cond := act_cond act R2 in
+                      constr:(l_cond \/ r_cond)
+  | RE_Concat ?R1 _ => act_cond act R1
   end.
 
-Ltac matchRE NUM_MSG :=
-  match goal with
-  | [ |- RMatch (RE_Atom _) (_::nil) ]
-      => solve [ matchAtom NUM_MSG ]
-  | [ |- RMatch (RE_NAtom _) (_::nil) ]
-      => solve [ matchAtom NUM_MSG ]
-  | [ |- RMatch (RE_Alt _ _) _ ]
-      => constructor; (left; matchRE NUM_MSG) || (right; matchRE NUM_MSG)
-  | [ |- RMatch (RE_Concat _ _) (_ ++ _) ]
-      => constructor; matchRE NUM_MSG
-  | [ |- RMatch (RE_Star _) (_ ++ _) ]
-      => constructor; matchRE NUM_MSG
-  | [ |- RMatch (RE_Star _) nil ]
-      => solve [constructor]
+Lemma stupid : forall P:Prop, P -> (P /\ True).
+Proof.
+  auto.
+Qed.
 
-  (*If there are no matches, we may need to get the trace
-    into the right form by breaking it into two lists.*)
-  | [ |- RMatch _ (?tr1 ++ ?act1::?tr2) ]
-      => replace (tr1 ++ act1::tr2) with
-         ((tr1 ++ (act1::nil)) ++ tr2) by reflexivity;
-         simpl (tr1 ++ (act1::nil)); matchRE NUM_MSG
-  | [ |- RMatch _ (?act::?tl) ]
-      => replace (act::tl) with
-         ((act::nil) ++ tl) by reflexivity; matchRE NUM_MSG
+Theorem echo_var : forall st tr m,
+  Reach HANDLERS st -> inhabits tr = ktr st ->
+  RMatch (echo_re_var m) tr.
+Proof.
+  intros.
+  unfold echo_re_var.
+  generalize dependent tr.
+  induction H; intros; simpl in *.
+    unpack.
+    matchRE NB_MSG.
 
-  (*If all else fails, hopefully the goal follows easily from
-    the context.*)
-  | [ |- RMatch _ _ ]
-      => solve [auto]
-  end.
+    destruct_msg.
+    unpack.
+    compute.
+    match goal with
+    |- RMatch ?re (?act::_)
+       => let cond := act_cond act re in assert cond
+    end.
+    computeMsgMatch NB_MSG.
+      admit.
 
-Ltac destruct_msg :=
-  match goal with
-  (*Tag is Some False*)
-  | [ f : False |- _ ]
-      => destruct f
-  | [ pay : s[[lkup_tag _]] |- _ ]
-      => destruct pay; simpl in *
-  | [ tag : fin _ |- _ ]
-      => destruct tag; destruct_msg
-  | [ m : msg |- _ ]
-      => destruct m; destruct_msg
-  end.
+    destruct H4.
+      revert H4.
+      computeMsgMatch NB_MSG.
+      matchRE NB_MSG.
+
+      idtac.
+      revert H4.
+      computeMsgMatch NB_MSG.
+      matchRE NB_MSG.
+      idtac.
+
+    match goal with
+    |- RMatch ?re (?act::_)
+       => let oact := get_leftmost re in
+          match_dec oact act
+    end.
+    computeMsgMatch NB_MSG.
+    
+    cut (decide (m = s0)).
+    tauto.
+    apply str_eq.
+
+    destruct H4.
+    destruct H4.
+    revert H5.
+    computeMsgMatch NB_MSG.
+    matchRE NB_MSG.
+    idtac.
+
+    revert H4.
+    computeMsgMatch NB_MSG.
+    matchRE NB_MSG.
+
+    unpack.
+    matchRE NB_MSG.
+
+    unpack.
+    matchRE NB_MSG.
+Qed.
 
 Theorem always_send : forall st tr,
   Reach HANDLERS st -> inhabits tr = ktr st ->

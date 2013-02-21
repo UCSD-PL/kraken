@@ -35,8 +35,6 @@ Fixpoint shvec_ith (n : nat) :
     end
   end.
 
-Axiom TODO : forall {T}, T.
-
 Variable desc_eqdec : forall (x y : desc), decide (x = y).
 Variable d : desc.
 Variable x : s[[ d ]].

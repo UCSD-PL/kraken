@@ -165,3 +165,23 @@ Proof.
   specialize (PP (proj_fin_ok i n0)).
   unfold proj_prop_fin in PP. now rewrite lift_proj_fin in PP.
 Qed.
+
+Fixpoint fin_of_nat (bound : nat) (n : nat) : (fin bound) + (~ n < bound) :=
+  match bound with
+  | O => inr _ (fun H => match lt_n_O _ H with end)
+  | S bound' =>
+    match n with
+    | O => inl _ None
+    | S n' =>
+      match fin_of_nat bound' n' with
+      | inl fb' => inl _ (Some fb')
+      | inr P => inr _ (fun Q => P (lt_S_n _ _ Q))
+      end
+    end
+  end.
+
+Definition fin_of_nat_ok (bound : nat) (n : nat) (H : n < bound) : fin bound :=
+  match fin_of_nat bound n with
+  | inl fb => fb
+  | inr P => match P H with end
+  end.

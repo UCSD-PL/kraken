@@ -172,10 +172,17 @@ Definition trace_send_msg (f : fd) (m : msg) : Trace :=
   let t := tag m in
   trace_payload_send (lkup_tag t) f (pay m) ++ SendNum f (num_of_fin t).
 
+Definition open_if_fd (t : desc) : s[[ t ]] -> hprop :=
+  match t as _t return s[[ _t ]] -> hprop with
+  | fd_d => fun v => open v | _ => fun _ => emp
+  end.
+
 Definition recv_arg :
   forall (f : fd) (t : desc) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
-        (fun v : s[[ t ]] => tr ~~ traced (trace_recv f t v ++ tr) * open f).
+        (fun v : s[[ t ]] => tr ~~
+          traced (trace_recv f t v ++ tr) * open f * open_if_fd _ v
+        ).
 Proof.
   intros; refine (
     match t as _t return STsep _ (fun v : s[[ _t ]] => _) with
@@ -217,17 +224,39 @@ Proof.
   sep'.
 Qed.
 
+Fixpoint all_open_payload' (n : nat) :
+  forall (v : vdesc' n), sdenote_vdesc' n v -> hprop :=
+  match n with
+  | 0 => fun _ _ => emp
+  | S n' => fun v =>
+    let (d, v') as _v return (sdenote_vdesc' (S n') _v -> hprop) := v in
+    match d with
+    | fd_d => fun vv =>
+      let (vd, vv') := vv in
+      open vd * all_open_payload' n' v' vv'
+    | _ => fun vv =>
+      let (_, vv') := vv in
+      all_open_payload' n' v' vv'
+    end
+  end.
+
+Definition all_open_payload {v : vdesc} : s[[ v ]] -> hprop :=
+  all_open_payload' (projT1 v) (projT2 v).
+
 Definition recv_payload' :
   forall (f : fd) (n : nat) (pd : vdesc' n) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
-        (fun pv : s[[ pd ]] =>
-           tr ~~ traced (trace_payload_recv' f n pd pv ++ tr) * open f).
+        (fun pv : s[[ pd ]] => tr ~~
+          traced (trace_payload_recv' f n pd pv ++ tr) * open f
+          * all_open_payload' n pd pv
+        ).
 Proof.
   intros; refine (
     Fix3
       (fun n pd tr => tr ~~ traced tr * open f)
-      (fun n pd tr (pv : s[[ pd ]]) =>
-         tr ~~ traced (trace_payload_recv' f n pd pv ++ tr) * open f)
+      (fun n pd tr (pv : s[[ pd ]]) => tr ~~
+        traced (trace_payload_recv' f n pd pv ++ tr) * open f
+        * all_open_payload' n pd pv)
       (fun self (n : nat) (pd : vdesc' n) tr =>
          match n as _n return
            forall (pd : vdesc' _n), STsep _ (fun x : s[[ pd ]] => _)
@@ -237,22 +266,24 @@ Proof.
            match pt with
            | (d, pt') =>
              v  <- recv_arg f d tr;
-             vs <- self n' pt' (tr ~~~ trace_recv f d v ++ tr);
+             vs <- self n' pt' (tr ~~~ trace_recv f d v ++ tr) <@> open_if_fd _ v;
              {{ Return (v, vs) }}
            end
          end pd
       )
     n pd tr
-  );
-  sep'.
+  ); sep'.
   inv H; rewrite app_assoc; sep'.
+  destruct d; sep'.
 Qed.
 
 Definition recv_payload :
   forall (f : fd) (pd : vdesc) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
-        (fun pv : s[[ pd ]] =>
-           tr ~~ traced (trace_payload_recv pd f pv ++ tr) * open f).
+        (fun pv : s[[ pd ]] => tr ~~
+          traced (trace_payload_recv pd f pv ++ tr) * open f
+          * all_open_payload pv
+        ).
 Proof.
   intros f pd. destruct pd as [n pd].
   exact (recv_payload' f n pd).
@@ -308,7 +339,10 @@ Qed.
 Definition recv_msg :
   forall (f : fd) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
-        (fun m : maybe_msg => tr ~~ traced (trace_recv_maybe_msg f m ++ tr) * open f).
+        (fun m : maybe_msg => tr ~~
+          traced (trace_recv_maybe_msg f m ++ tr) * open f
+          * match m with inl msg => all_open_payload (pay msg) | inr bog => emp end
+        ).
 Proof.
   intros; refine (
     t <- recv_num f tr;
@@ -379,9 +413,10 @@ Context {KST_DESC_SIZE : nat}.
 Variable KST_DESC : vdesc' KST_DESC_SIZE.
 
 Record kstate : Set := mkst
-  { components : list fd
+  { kcs : list fd
   ; ktr : [KTrace]
   ; kst : s[[ KST_DESC ]]
+  ; kfd : list fd (* need to keep track of all the open fds... *)
   }.
 
 Inductive unop : desc -> desc -> Set :=
@@ -497,25 +532,6 @@ Definition payload_ith (vd : vdesc) :
 Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ svec_ith (projT2 CPAY) i ]] :=
   payload_ith CPAY (pay CMSG) i.
 
-Fixpoint all_open_payload' (n : nat) :
-  forall (v : vdesc' n), sdenote_vdesc' n v -> hprop :=
-  match n with
-  | 0 => fun _ _ => emp
-  | S n' => fun v =>
-    let (d, v') as _v return (sdenote_vdesc' (S n') _v -> hprop) := v in
-    match d with
-    | fd_d => fun vv =>
-      let (vd, vv') := vv in
-      open vd * all_open_payload' n' v' vv'
-    | _ => fun vv =>
-      let (_, vv') := vv in
-      all_open_payload' n' v' vv'
-    end
-  end.
-
-Definition all_open_payload {v : vdesc} : s[[ v ]] -> hprop :=
-  all_open_payload' (projT1 v) (projT2 v).
-
 Fixpoint all_open_payload_drop' (n : nat) :
   forall (v : vdesc' n) (drop : fd), sdenote_vdesc' n v -> hprop :=
   match n with
@@ -601,13 +617,11 @@ Definition env_fds_in l (envd : vdesc) (env : s[[ envd ]]) : Prop :=
   | _ => fun _ => True
   end (payload_ith envd env i).
 
-Definition env_fds_ok := env_fds_in (components CST).
-
 Definition msg_fds_ok : Prop :=
   forall i,
   let d := svec_ith (projT2 CPAY) i in
   match d as _d return s[[ _d ]] -> Prop with
-  | fd_d => fun (f : s[[ fd_d ]]) => In f (components CST)
+  | fd_d => fun (f : s[[ fd_d ]]) => In f (kcs CST)
   | _ => fun _ => True
   end (msg_param_i i).
 
@@ -784,16 +798,17 @@ Record hdlr_state :=
 (* This should probably move out once the environment can change *)
 Definition hdlr_state_run_cmd (s : hdlr_state) : hdlr_cmd -> hdlr_state :=
   let (s', env) := s in
-  let (cs, tr, st) := s' in
+  let (cs, tr, st, fd) := s' in
   fun c =>
     match c with
     | Send fe me =>
       let f := eval_hdlr_expr env _ fe in
       let m := eval_expr env _ me in
       {| hdlr_kst :=
-           {| components := cs
+           {| kcs := cs
             ; ktr := tr ~~~ KSend f m :: tr
             ; kst := st
+            ; kfd := fd
             |}
        ; hdlr_env := env
       |}
@@ -806,6 +821,8 @@ Fixpoint hdlr_state_run_prog (s : hdlr_state) (p : hdlr_prog) : hdlr_state :=
   end.
 
 Axiom devnull : fd.
+
+Axiom devnull_open : emp ==> open devnull.
 
 Fixpoint default_payload' (n : nat) :
   forall (v : vdesc' n), sdenote_vdesc' n v :=
@@ -850,47 +867,73 @@ Section WITH_HANDLER.
 
 Variable HANDLER : forall (m : msg), sigT (fun (vd : vdesc) => hdlr_prog m vd).
 
+Fixpoint payload_fds' (n : nat) :
+  forall (v : vdesc' n), sdenote_vdesc' n v -> list fd :=
+  match n with
+  | 0 => fun _ _ => nil
+  | S n' => fun v =>
+    let (d, v') as _v return (sdenote_vdesc' (S n') _v -> list fd) := v in
+    match d with
+    | fd_d => fun vv =>
+      let (vd, vv') := vv in
+      vd :: payload_fds' n' v' vv'
+    | _ => fun vv =>
+      let (_, vv') := vv in
+      payload_fds' n' v' vv'
+    end
+  end.
+
+Definition payload_fds (v : vdesc) : s[[ v ]] -> list fd :=
+  payload_fds' (projT1 v) (projT2 v).
+
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
   Reach (MK_KSTATE (init_state_run_prog INIT_ENVD initial_init_state INIT_PROG))
 | Reach_valid :
-  forall s f m tr s' envdp,
+  forall s f m tr s' s'' envdp,
   msg_fds_ok s m ->
-  let cs := components s in
+  let cs := kcs s in
   ktr s = [tr]%inhabited ->
   Reach s ->
-  s' = {| components := cs
+  s' = {| kcs := cs
         ; ktr := [KRecv f m :: KSelect cs f :: tr]
         ; kst := kst s
+        ; kfd := kfd s
         |} ->
-  Reach (kstate_run_prog f m (projT1 envdp) s' (projT2 envdp))
+  s'' = kstate_run_prog f m (projT1 envdp) s' (projT2 envdp) ->
+  Reach {| kcs := kcs s''
+         ; ktr := ktr s''
+         ; kst := kst s''
+         ; kfd := kfd s'' ++ payload_fds _ (pay m)
+         |}
 | Reach_bad_fds :
   forall s f m tr,
-  let cs := components s in
+  let cs := kcs s in
   ~ msg_fds_ok s m ->
   ktr s = [tr]%inhabited ->
   Reach s ->
-  Reach {| components := cs
-        ; ktr := [KRecv f m :: KSelect cs f :: tr]
-        ; kst := kst s
-        |}
+  Reach {| kcs := cs
+         ; ktr := [KRecv f m :: KSelect cs f :: tr]
+         ; kst := kst s
+         ; kfd := kfd s ++ payload_fds _ (pay m)
+         |}
 | Reach_bogus :
   forall s f bmsg tr,
-  let cs := components s in
+  let cs := kcs s in
   ktr s = [tr]%inhabited ->
   Reach s ->
   Reach
-    {| components := cs
+    {| kcs := cs
      ; ktr := [KBogus f bmsg :: KSelect cs f :: tr]
      ; kst := kst s
+     ; kfd := kfd s
      |}
 .
 
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in emp
-  * traced (expand_ktrace tr)
-  * [Reach s]
-  * all_open (components s)
+  * traced (expand_ktrace tr) * [Reach s]
+  * all_open (kcs s) * all_open (kfd s)
   .
 
 Ltac isolate t :=
@@ -1072,7 +1115,7 @@ Proof.
   (* dirty proof, could be made nicer... *)
 Qed.
 
-(* is this needed? *)
+(* that seems wrong and unneeded
 Fixpoint init_env_fds_ok' (n : nat) : forall (v : vdesc' n), sdenote_vdesc' n v -> hprop.
 Proof.
   destruct n as [|n']. exact (fun _ _ => emp).
@@ -1098,6 +1141,7 @@ Fixpoint init_env_fds_ok'' (n : nat) :
     end vd
   end
 .
+*)
 
 Definition run_init_prog :
   forall (envd : vdesc) (s : init_state envd) (p : init_prog envd),
@@ -1132,7 +1176,7 @@ Definition kinit :
         (fun s => kstate_inv s).
 Proof.
   intros; refine (
-    let tr := [nil]%inhabited in
+    let t3r := [nil]%inhabited in
     c <- exec init_str nil tr;
     let tr := tr ~~~ KExec init_str nil c :: nil in
     {{Return {|components := c :: nil; ktr := tr; kst := INIT_KST |}}}
@@ -1150,33 +1194,39 @@ Definition run_init_cmd :
           init_invariant s' * traced (expand_ktrace tr) * [s' = init_state_run_cmd envd s c]).
 *)
 
-Theorem eval_hdlr_expr_fd_in_payload : forall cfd cm envd d fe v s,
-  let kst := hdlr_kst envd s in
-  let env := hdlr_env envd s in
-  env_fds_ok kst envd env ->
+Definition env_fds_ok envd (hs : hdlr_state envd) :=
+  env_fds_in (kfd (hdlr_kst envd hs)) envd (hdlr_env envd hs).
+
+Theorem eval_hdlr_expr_fd_in : forall cfd cm envd d fe v (s : hdlr_state envd),
+  let (kst, env) := s in
+  env_fds_ok envd s ->
   msg_fds_ok kst cm ->
-  In cfd (components kst) ->
+  In cfd (kcs kst) ->
   eval_hdlr_expr cfd cm envd env d fe = v ->
   match d as _d return sdenote_expr_desc _d -> Prop with
-  | base_expr_d fd_d => fun f => In f (components kst)
+  | base_expr_d fd_d => fun f => In f (kcs kst) \/ In f (kfd kst)
   | _ => fun _ => True
   end v.
 Proof.
-  intros until s. destruct s as [kst env]. simpl. intros F M E I. subst.
+  intros until s. destruct s as [kst env]. simpl. intros F M I E. subst.
   destruct fe; simpl in *; try tauto.
   destruct e; simpl in *; try tauto.
   destruct b; simpl in *; try tauto.
-  exact (F i).
+  specialize (F i). simpl in F.
+  generalize dependent (payload_ith envd env i).
+  destruct (svec_ith (projT2 envd) i); tauto.
   now destruct u.
   now destruct b1.
-  exact (M i).
+  specialize (M i). simpl in *.
+  generalize dependent (msg_param_i cm i).
+  destruct (svec_ith (projT2 (lkup_tag (tag cm))) i); tauto.
 Qed.
 
 Definition hdlr_invariant {envd} (cfd : fd) (cm : msg) (s : hdlr_state envd) :=
-  let kst := hdlr_kst _ s in
-  let env := hdlr_env _ s in
-  all_open (components kst) * all_open_payload env
-  * [In cfd (components kst)] * [msg_fds_ok kst cm] * [env_fds_ok kst _ env]
+  let (kst, env) := s in
+  all_open (kcs kst ++ kfd kst)
+  * all_open_payload (pay cm) (* this might become problematic *)
+  * [In cfd (kcs kst)] * [msg_fds_ok kst cm] * [env_fds_ok envd s]
 .
 
 Definition run_hdlr_cmd :
@@ -1188,34 +1238,37 @@ Definition run_hdlr_cmd :
           * [s' = hdlr_state_run_cmd cfd cm envd s c]).
 Proof.
   intros; refine (
+    (* you lose the equations if you try to let (st, env, fds) := s *)
     let st := hdlr_kst _ s in
-    let comps := components st in
-    let tr := ktr st in
     let env := hdlr_env _ s in
+    let comps := kcs st in
+    let tr := ktr st in
+    let fds := kfd st in
     match c with
     | Send fe me =>
       let f := eval_hdlr_expr cfd cm _ env _ fe in
       let m := eval_expr envd env _ me in
       send_msg f m
       (tr ~~~ expand_ktrace tr)
-      <@> all_open_drop comps f * all_open_payload env * [In cfd comps]
-      * [msg_fds_ok st cm] * [env_fds_ok st _ env];;
+      <@> all_open_drop (comps ++ fds) f * all_open_payload (pay cm)
+      * [In cfd comps] * [msg_fds_ok st cm] * [env_fds_ok envd s];;
 
       let tr := tr ~~~ KSend f m :: tr in
-      {{Return {| hdlr_kst := {| components := comps ; ktr := tr ; kst := kst st |}
+      {{Return {| hdlr_kst := {| kcs := comps ; ktr := tr ; kst := kst st ; kfd := fds |}
                 ; hdlr_env := env
                 |}
       }}
     end
-  ); unfold hdlr_invariant; sep''.
-  pose proof (eval_hdlr_expr_fd_in_payload cfd cm _ _ fe f s) as E.
-  unfold env in *. clear env. destruct s as [kst env]. simpl in *.
-  apply E; auto.
-  pose proof (eval_hdlr_expr_fd_in_payload cfd cm _ _ fe f s) as E.
-  unfold env in *. clear env. destruct s as [kst env]. simpl in *.
-  apply E; auto.
-  unfold env, comps, st in *. clear env comps st. destruct s as [ [cs tr st] env].
-  simpl in *. sep''.
+  ); unfold env, fds, hdlr_invariant in *; clear env fds; sep fail idtac;
+  pose proof (eval_hdlr_expr_fd_in cfd cm _ _ fe f s) as E;
+  destruct s as (kst, env).
+  sep''.
+  sep''.
+  apply himp_pure'. destruct kst as (kcs, ktr, kst, kfd). simpl in *.
+  unfold comps in *. clear comps. sep''.
+  apply himp_pure'. destruct kst as (cs, ktr, kst, kfd). simpl in *.
+  unfold comps in *. clear comps. sep''.
+  (* so ugly... *)
 Qed.
 
 Definition run_hdlr_prog :
@@ -1249,51 +1302,142 @@ Proof.
   sep''.
 Qed.
 
+Theorem all_open_default_payload : forall henv,
+  emp ==> all_open_payload (default_payload henv).
+Proof.
+  intros [n envd]. induction n.
+  unfold all_open_payload, all_open_payload'. now simpl.
+  destruct envd as [d envd']. unfold default_payload. simpl.
+  destruct d.
+  exact (IHn envd').
+  exact (IHn envd').
+  unfold all_open_payload, all_open_payload'. simpl.
+  isolate (emp ==> open devnull). exact devnull_open.
+  exact (IHn envd').
+Qed.
+
+Theorem all_open_concat : forall a b,
+  all_open a * all_open b ==> all_open (a ++ b).
+Proof.
+  induction a.
+  simpl. sep'.
+  simpl. sep'.
+Qed.
+
+Theorem all_open_unconcat : forall a b,
+  all_open (a ++ b) ==> all_open a * all_open b.
+Proof.
+  induction a.
+  simpl. sep'.
+  simpl. sep'.
+Qed.
+
+Axiom in_devnull_default_payload: forall henv l,
+  env_fds_in (devnull :: l) henv (default_payload henv).
+
+Axiom all_open_payload_to_all_open : forall m,
+  all_open_payload (pay m) ==> all_open (payload_fds _ (pay m)).
+
 Definition kbody:
   forall s,
   STsep (kstate_inv s)
         (fun s' => kstate_inv s').
 Proof.
-  intro st.
-  remember (components st) as comps.
+  intro s.
   refine (
-    let tr := ktr st in
-    c <- select comps
+    let cs := kcs s in
+    let tr := ktr s in
+    let st := kst s in
+    let fd := kfd s in
+    c <- select cs
     (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [Reach st] * all_open comps);
+    <@> (tr ~~ [Reach s] * all_open cs * all_open fd);
 
-    let tr := tr ~~~ KSelect comps c :: tr in
+    let tr := tr ~~~ KSelect cs c :: tr in
     mm <- recv_msg c
     (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [In c comps] * [Reach st] * all_open_drop comps c);
+    <@> (tr ~~ [In c cs] * [Reach s] * all_open_drop cs c * all_open fd);
 
     match mm with
     | inl m =>
       let tr := tr ~~~ KRecv c m :: tr in
-      let ck := msg_fds_ck st m in
+      let ck := msg_fds_ck s m in
       match ck as ck' return ck = ck' -> _ with
       | left _ => fun _ =>
         match HANDLER m with existT henv hprog =>
-        let s' := {| hdlr_kst := {|components := comps; ktr := tr; kst := kst st |}
+        let s' := {| hdlr_kst := {| kcs := cs
+                                  ; ktr := tr
+                                  ; kst := st
+                                  ; kfd := (*devnull ::*) fd |}
                    ; hdlr_env := default_payload henv
                    |}
         in
-        s'' <- run_hdlr_prog c m henv s' hprog <@> [Reach st];
-        {{ Return (hdlr_kst _ s'') }}
+        s'' <- run_hdlr_prog c m henv s' hprog <@> [Reach s];
+        (* we need to add the payload open fds to kfd so as not to keep track of any
+           linear resource *)
+        let s''' := {| hdlr_kst := {| kcs := kcs (hdlr_kst _ s'')
+                                    ; ktr := ktr (hdlr_kst _ s'')
+                                    ; kst := kst (hdlr_kst _ s'')
+                                    ; kfd := kfd (hdlr_kst _ s'') ++ payload_fds _ (pay m) |}
+                     ; hdlr_env := hdlr_env _ s''
+                     |}
+        in
+        {{ Return (hdlr_kst _ s''') }}
         end
       | right _ => fun _ =>
-        {{Return {|components := comps; ktr := tr|}}}
+        {{Return {|kcs := cs; ktr := tr; kfd := fd ++ payload_fds _ (pay m)|}}}
       end (refl_equal ck)
     | inr m =>
       let tr := tr ~~~ KBogus c m :: tr in
-      {{Return {|components := comps; ktr := tr|}}}
+      {{Return {|kcs := cs; ktr := tr; kfd := fd|}}}
     end
-  ); unfold hdlr_invariant;
-  sep''.
+  ); unfold hdlr_invariant in *; sep''.
+
+  isolate (
+    all_open_drop cs c * open c * all_open fd
+    ==> all_open (cs ++ (*devnull ::*) fd)
+  ).
+
+  apply himp_trans with (Q := all_open cs * all_open fd); sep''.
+  apply himp_trans with (Q := all_open cs * all_open ((*devnull ::*) fd)).
+  sep''. (*apply devnull_open.*) apply all_open_concat.
+  apply himp_pure'. unfold env_fds_ok. simpl. admit. (*apply in_devnull_default_payload.*)
+
+  destruct (hdlr_state_run_prog c m henv s' hprog) as [kst'' env'']_eqn.
+  simpl in *. sep''.
+  isolate (
+    all_open (kcs kst'' ++ kfd kst'') * all_open_payload (pay m)
+    ==> all_open (kcs kst'') * all_open (kfd kst'' ++ payload_fds _ (pay m))
+  ).
+  apply himp_trans with
+  (Q := all_open (kcs kst'') * all_open (kfd kst'') * all_open_payload (pay m)); sep''.
+  apply all_open_unconcat.
+  apply himp_trans with
+  (Q := all_open (kfd kst'') * all_open (payload_fds _ (pay m))); sep''.
+  apply all_open_payload_to_all_open.
+  apply all_open_concat.
+
+  sep''. constructor; auto.
+  eapply Reach_valid with (s := s) (s' := (hdlr_kst _ s')) (envdp := existT _ henv hprog); eauto.
+  unfold s'. simpl. unfold cs, st, fd. sep''.
+
+  unfold kstate_run_prog. simpl.
+  unfold s' in Heqh. rewrite Heqh. now simpl.
+
+  isolate (
+    all_open_payload (pay m) * all_open fd ==>
+    all_open (fd ++ payload_fds (lkup_tag (tag m)) (pay m))
+  ).
+  eapply himp_trans; [ | apply all_open_concat ]. sep''.
+  apply all_open_payload_to_all_open.
+
+  apply himp_pure'.
+  eapply Reach_bogus; eauto. valid; eauto.
+
   subst v; sep''.
   econstructor; eauto.
   unfold s' in *; rewrite <- H6.
-  eapply (Reach_valid kst); eauto.
+  eapply (Reach_valid kst''); eauto.
   f_equal; auto. sep''.
 Qed.
 

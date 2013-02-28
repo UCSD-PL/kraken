@@ -59,7 +59,7 @@ Axiom send :
 Axiom recv_fd :
   forall (f : fd) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
-        (fun f' : fd => tr ~~ traced (RecvFD f f' :: tr) * open f).
+        (fun f' : fd => tr ~~ traced (RecvFD f f' :: tr) * open f * open f').
 
 Axiom send_fd :
   forall (f : fd) (f' : fd) (tr : [Trace]),

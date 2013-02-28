@@ -120,7 +120,7 @@ Proof.
   simpl in x, y. destruct x as [x|], y as [y|].
   destruct (IHn x y). left. now subst. right. congruence.
   now right. now right. now left.
-Qed.
+Defined.
 
 Definition proj_prop_fin {n} (P : fin (S n) -> Prop) : (fin n -> Prop) :=
   fun fn => P (lift_fin fn).

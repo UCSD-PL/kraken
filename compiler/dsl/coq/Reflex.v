@@ -1431,14 +1431,7 @@ Proof.
   eapply himp_trans; [ | apply all_open_concat ]. sep''.
   apply all_open_payload_to_all_open.
 
-  apply himp_pure'.
-  eapply Reach_bogus; eauto. valid; eauto.
-
-  subst v; sep''.
-  econstructor; eauto.
-  unfold s' in *; rewrite <- H6.
-  eapply (Reach_valid kst''); eauto.
-  f_equal; auto. sep''.
+  sep''.
 Qed.
 
 Definition kloop:

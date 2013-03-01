@@ -411,12 +411,12 @@ Fixpoint expand_ktrace (kt : KTrace) : Trace :=
 
 Context {KST_DESC_SIZE : nat}.
 Variable KST_DESC' : vdesc' KST_DESC_SIZE.
-Definition KST_DESC := existT _ KST_DESC_SIZE KST_DESC'.
+Definition KST_DESC_ := existT _ KST_DESC_SIZE KST_DESC'.
 
 Record kstate : Set := mkst
   { kcs : list fd
   ; ktr : [KTrace]
-  ; kst : s[[ KST_DESC ]]
+  ; kst : s[[ KST_DESC_ ]]
   ; kfd : list fd (* need to keep track of all the open fds... *)
   }.
 
@@ -770,7 +770,7 @@ Record init_state :=
 { init_comps : list fd
 ; init_ktr   : [KTrace]%type
 ; init_env   : s[[ ENVD ]]
-; init_kst   : s[[ KST_DESC ]]
+; init_kst   : s[[ KST_DESC_ ]]
 }.
 
 Definition init_state_run_cmd (s : init_state) : init_cmd -> init_state :=
@@ -863,7 +863,7 @@ Definition initial_init_state :=
   {| init_comps := nil
    ; init_ktr   := [nil]%inhabited
    ; init_env   := default_payload INIT_ENVD
-   ; init_kst   := default_payload KST_DESC
+   ; init_kst   := default_payload KST_DESC_
    |}.
 
 Section WITH_HANDLER.
@@ -1494,8 +1494,9 @@ Record spec :=
 ; PAY_DESC  : vvdesc NB_MSG
 ; INIT_ENVD : vdesc
 ; INIT      : @init_prog NB_MSG PAY_DESC INIT_ENVD
+; KST_DESC  : vdesc
 ; HANDLERS  : handlers (VVD := PAY_DESC)
 }.
 
 Definition mk_main (s : spec) :=
-  main (projT2 (INIT_ENVD s)) (INIT_ENVD s) (INIT s) (HANDLERS s).
+  @main _ (PAY_DESC s) _ (projT2 (KST_DESC s)) _ (INIT s) (HANDLERS s).

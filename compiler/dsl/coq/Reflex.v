@@ -901,7 +901,7 @@ Inductive Reach : kstate -> Prop :=
          ; kfd := payload_fds _ (init_env _ s)
          |}
 | Reach_valid :
-  forall s f m tr s' s'' envdp,
+  forall s f m tr s' s'',
   msg_fds_ok s m ->
   let cs := kcs s in
   ktr s = [tr]%inhabited ->
@@ -911,7 +911,7 @@ Inductive Reach : kstate -> Prop :=
         ; kst := kst s
         ; kfd := kfd s
         |} ->
-  s'' = kstate_run_prog f m (projT1 envdp) s' (projT2 envdp) ->
+  s'' = kstate_run_prog f m (projT1 (HANDLERS m)) s' (projT2 (HANDLERS m)) ->
   Reach {| kcs := kcs s''
          ; ktr := ktr s''
          ; kst := kst s''
@@ -1383,7 +1383,8 @@ Proof.
       let ck := msg_fds_ck s m in
       match ck as ck' return ck = ck' -> _ with
       | left _ => fun _ =>
-        match HANDLERS m with existT henv hprog =>
+        let henv  := projT1 (HANDLERS m) in
+        let hprog := projT2 (HANDLERS m) in
         let s' := {| hdlr_kst := {| kcs := cs
                                   ; ktr := tr
                                   ; kst := st
@@ -1402,7 +1403,6 @@ Proof.
                      |}
         in
         {{ Return (hdlr_kst _ s''') }}
-        end
       | right _ => fun _ =>
         {{Return {|kcs := cs; ktr := tr; kfd := fd ++ payload_fds _ (pay m)|}}}
       end (refl_equal ck)
@@ -1437,11 +1437,12 @@ Proof.
   apply all_open_concat.
 
   sep''. constructor; auto.
-  eapply Reach_valid with (s := s) (s' := (hdlr_kst _ s')) (envdp := existT _ henv hprog); eauto.
+  eapply Reach_valid with (s := s) (s' := (hdlr_kst _ s')); eauto.
   unfold s'. simpl. unfold cs, st, fd. sep''.
 
   unfold kstate_run_prog. simpl.
-  unfold s' in Heqh. rewrite Heqh. now simpl.
+  unfold s' in Heqh.
+  unfold henv, hprog in Heqh. rewrite Heqh. now simpl.
 
   isolate (
     all_open_payload (pay m) * all_open fd ==>

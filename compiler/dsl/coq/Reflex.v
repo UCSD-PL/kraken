@@ -410,7 +410,8 @@ Fixpoint expand_ktrace (kt : KTrace) : Trace :=
   end.
 
 Context {KST_DESC_SIZE : nat}.
-Variable KST_DESC : vdesc' KST_DESC_SIZE.
+Variable KST_DESC' : vdesc' KST_DESC_SIZE.
+Definition KST_DESC := existT _ KST_DESC_SIZE KST_DESC'.
 
 Record kstate : Set := mkst
   { kcs : list fd
@@ -769,10 +770,11 @@ Record init_state :=
 { init_comps : list fd
 ; init_ktr   : [KTrace]%type
 ; init_env   : s[[ ENVD ]]
+; init_kst   : s[[ KST_DESC ]]
 }.
 
 Definition init_state_run_cmd (s : init_state) : init_cmd -> init_state :=
-  let (cs, tr, e) := s in
+  let (cs, tr, e, st) := s in
   fun c =>
     match c with
     | Send fe me =>
@@ -781,6 +783,7 @@ Definition init_state_run_cmd (s : init_state) : init_cmd -> init_state :=
       {| init_comps := cs
        ; init_ktr   := tr ~~~ KSend f m :: tr
        ; init_env   := e
+       ; init_kst   := st
       |}
     end.
 
@@ -855,17 +858,19 @@ End WITHIN_HANDLER.
 
 Variable INIT_ENVD : vdesc.
 Variable INIT_PROG : init_prog INIT_ENVD.
-Variable MK_KSTATE : init_state INIT_ENVD -> kstate.
 
 Definition initial_init_state :=
   {| init_comps := nil
    ; init_ktr   := [nil]%inhabited
    ; init_env   := default_payload INIT_ENVD
+   ; init_kst   := default_payload KST_DESC
    |}.
 
 Section WITH_HANDLER.
 
-Variable HANDLER : forall (m : msg), sigT (fun (vd : vdesc) => hdlr_prog m vd).
+Definition handlers := forall (m : msg), sigT (fun (vd : vdesc) => hdlr_prog m vd).
+
+Variable HANDLERS : handlers.
 
 Fixpoint payload_fds' (n : nat) :
   forall (v : vdesc' n), sdenote_vdesc' n v -> list fd :=
@@ -888,7 +893,13 @@ Definition payload_fds (v : vdesc) : s[[ v ]] -> list fd :=
 
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
-  Reach (MK_KSTATE (init_state_run_prog INIT_ENVD initial_init_state INIT_PROG))
+  forall s,
+  s = init_state_run_prog INIT_ENVD initial_init_state INIT_PROG ->
+  Reach {| kcs := init_comps _ s
+         ; ktr := init_ktr _ s
+         ; kst := init_kst _ s
+         ; kfd := payload_fds _ (init_env _ s)
+         |}
 | Reach_valid :
   forall s f m tr s' s'' envdp,
   msg_fds_ok s m ->
@@ -1091,7 +1102,8 @@ Proof.
   intros; refine (
     let cs := init_comps _ s in
     let tr := init_ktr _ s in
-    let e := init_env _ s in
+    let e  := init_env _ s in
+    let st := init_kst _ s in
     match c with
     | Send fe me =>
       (* /!\ We lose track of the let-open equalities if existentials remain,
@@ -1102,7 +1114,11 @@ Proof.
       <@> all_open cs * all_open_payload_drop f e;;
 
       let tr := tr ~~~ KSend f m :: tr in
-      {{ Return {| init_comps := cs; init_ktr := tr; init_env := e |} }}
+      {{ Return {| init_comps := cs
+                 ; init_ktr   := tr
+                 ; init_env   := e
+                 ; init_kst   := st
+                 |} }}
     end
   ); unfold init_invariant, cs, e; sep''.
   pose proof eval_expr_fd_in_payload as E.
@@ -1169,21 +1185,41 @@ Proof.
   ); sep''.
 Qed.
 
-(*
+Theorem all_open_default_payload : forall henv,
+  emp ==> all_open_payload (default_payload henv).
+Proof.
+  intros [n envd]. induction n.
+  unfold all_open_payload, all_open_payload'. now simpl.
+  destruct envd as [d envd']. unfold default_payload. simpl.
+  destruct d.
+  exact (IHn envd').
+  exact (IHn envd').
+  unfold all_open_payload, all_open_payload'. simpl.
+  isolate (emp ==> open devnull). exact devnull_open.
+  exact (IHn envd').
+Qed.
+
+Axiom all_open_payload_to_all_open : forall v p,
+  all_open_payload p ==> all_open (payload_fds v p).
+
 Definition kinit :
   forall (_ : unit),
   STsep (traced nil)
         (fun s => kstate_inv s).
 Proof.
   intros; refine (
-    let t3r := [nil]%inhabited in
-    c <- exec init_str nil tr;
-    let tr := tr ~~~ KExec init_str nil c :: nil in
-    {{Return {|components := c :: nil; ktr := tr; kst := INIT_KST |}}}
-  );
-  sep''.
+    let s := initial_init_state in
+    s' <- run_init_prog _ s INIT_PROG;
+    {{ Return {| kcs := init_comps _ s'
+               ; ktr := init_ktr _ s'
+               ; kst := init_kst _ s'
+               ; kfd := nil ++ payload_fds _ (init_env _ s')
+               |}
+     }}
+  ); unfold init_invariant; sep''.
+  apply all_open_default_payload.
+  apply all_open_payload_to_all_open.
 Qed.
-*)
 
 (*
 Definition run_init_cmd :
@@ -1302,20 +1338,6 @@ Proof.
   sep''.
 Qed.
 
-Theorem all_open_default_payload : forall henv,
-  emp ==> all_open_payload (default_payload henv).
-Proof.
-  intros [n envd]. induction n.
-  unfold all_open_payload, all_open_payload'. now simpl.
-  destruct envd as [d envd']. unfold default_payload. simpl.
-  destruct d.
-  exact (IHn envd').
-  exact (IHn envd').
-  unfold all_open_payload, all_open_payload'. simpl.
-  isolate (emp ==> open devnull). exact devnull_open.
-  exact (IHn envd').
-Qed.
-
 Theorem all_open_concat : forall a b,
   all_open a * all_open b ==> all_open (a ++ b).
 Proof.
@@ -1334,9 +1356,6 @@ Qed.
 
 Axiom in_devnull_default_payload: forall henv l,
   env_fds_in (devnull :: l) henv (default_payload henv).
-
-Axiom all_open_payload_to_all_open : forall m,
-  all_open_payload (pay m) ==> all_open (payload_fds _ (pay m)).
 
 Definition kbody:
   forall s,
@@ -1364,7 +1383,7 @@ Proof.
       let ck := msg_fds_ck s m in
       match ck as ck' return ck = ck' -> _ with
       | left _ => fun _ =>
-        match HANDLER m with existT henv hprog =>
+        match HANDLERS m with existT henv hprog =>
         let s' := {| hdlr_kst := {| kcs := cs
                                   ; ktr := tr
                                   ; kst := st
@@ -1471,9 +1490,12 @@ End WITH_HANDLER.
 End WITH_PAYLOAD_DESC_VEC.
 
 Record spec :=
-{ NB_MSG   : nat
-; PAY_DESC : payload_desc_vec NB_MSG
-; HANDLERS : handler (PDV:=PAY_DESC)
+{ NB_MSG    : nat
+; PAY_DESC  : vvdesc NB_MSG
+; INIT_ENVD : vdesc
+; INIT      : @init_prog NB_MSG PAY_DESC INIT_ENVD
+; HANDLERS  : handlers (VVD := PAY_DESC)
 }.
 
-Definition mk_main (s : spec) := main (HANDLERS s).
+Definition mk_main (s : spec) :=
+  main (projT2 (INIT_ENVD s)) (INIT_ENVD s) (INIT s) (HANDLERS s).

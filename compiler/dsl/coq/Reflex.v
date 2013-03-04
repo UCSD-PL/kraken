@@ -754,6 +754,7 @@ Definition eval_hdlr_expr (d : expr_desc) (e : hdlr_expr d) : s[[ d ]] :=
 
 Inductive cmd (e : expr_desc -> Type) : Type :=
 | Send : e (base_expr_d fd_d) -> expr msg_expr_d -> cmd e
+| STChange : forall i, e (base_expr_d (svec_ith (projT2 KST_DESC_) i)) -> cmd e
 .
 
 Definition init_cmd := cmd expr.
@@ -785,6 +786,13 @@ Definition init_state_run_cmd (s : init_state) : init_cmd -> init_state :=
        ; init_env   := e
        ; init_kst   := st
       |}
+    | STChange i ve =>
+      let v := eval_expr e _ ve in
+      {| init_comps := cs
+       ; init_ktr   := tr
+       ; init_env   := e
+       ; init_kst   := shvec_replace_ith sdenote_desc (projT2 KST_DESC_) st i v
+      |}
     end.
 
 Fixpoint init_state_run_prog (s : init_state) (p : init_prog) : init_state :=
@@ -811,6 +819,16 @@ Definition hdlr_state_run_cmd (s : hdlr_state) : hdlr_cmd -> hdlr_state :=
            {| kcs := cs
             ; ktr := tr ~~~ KSend f m :: tr
             ; kst := st
+            ; kfd := fd
+            |}
+       ; hdlr_env := env
+      |}
+    | STChange i ve =>
+      let v := eval_hdlr_expr env _ ve in
+      {| hdlr_kst :=
+           {| kcs := cs
+            ; ktr := tr
+            ; kst := shvec_replace_ith sdenote_desc (projT2 KST_DESC_) st i v
             ; kfd := fd
             |}
        ; hdlr_env := env
@@ -868,7 +886,8 @@ Definition initial_init_state :=
 
 Section WITH_HANDLER.
 
-Definition handlers := forall (m : msg), sigT (fun (vd : vdesc) => hdlr_prog m vd).
+Definition handlers := forall (m : msg) (f : fd) (s : kstate),
+                         sigT (fun (vd : vdesc) => hdlr_prog m vd).
 
 Variable HANDLERS : handlers.
 
@@ -911,7 +930,7 @@ Inductive Reach : kstate -> Prop :=
         ; kst := kst s
         ; kfd := kfd s
         |} ->
-  s'' = kstate_run_prog f m (projT1 (HANDLERS m)) s' (projT2 (HANDLERS m)) ->
+  s'' = kstate_run_prog f m (projT1 (HANDLERS m f s')) s' (projT2 (HANDLERS m f s')) ->
   Reach {| kcs := kcs s''
          ; ktr := ktr s''
          ; kst := kst s''
@@ -940,7 +959,7 @@ Inductive Reach : kstate -> Prop :=
      ; kfd := kfd s
      |}
 .
-
+(*
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in emp
   * traced (expand_ktrace tr) * [Reach s]
@@ -1355,9 +1374,9 @@ Proof.
 Qed.
 
 Axiom in_devnull_default_payload: forall henv l,
-  env_fds_in (devnull :: l) henv (default_payload henv).
+  env_fds_in (devnull :: l) henv (default_payload henv).*)
 
-Definition kbody:
+(*Definition kbody:
   forall s,
   STsep (kstate_inv s)
         (fun s' => kstate_inv s').
@@ -1484,13 +1503,13 @@ Proof.
     {{ Return sN }}
   );
   sep'.
-Qed.
+Qed.*)
 
 End WITH_HANDLER.
 
 End WITH_PAYLOAD_DESC_VEC.
 
-Record spec :=
+(*Record spec :=
 { NB_MSG    : nat
 ; PAY_DESC  : vvdesc NB_MSG
 ; INIT_ENVD : vdesc
@@ -1501,3 +1520,4 @@ Record spec :=
 
 Definition mk_main (s : spec) :=
   @main _ (PAY_DESC s) _ (projT2 (KST_DESC s)) _ (INIT s) (HANDLERS s).
+*)

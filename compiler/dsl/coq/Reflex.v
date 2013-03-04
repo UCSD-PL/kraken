@@ -17,8 +17,6 @@ Open Scope hprop_scope.
 Open Scope stsepi_scope.
 Open Scope list_scope.
 
-Axiom TODO' : False. Definition TODO {A : Type} : A := match TODO' with end.
-
 Ltac sep' := sep fail idtac.
 Ltac inv H := inversion H; subst; clear H.
 

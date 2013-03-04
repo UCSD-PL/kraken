@@ -821,7 +821,7 @@ Fixpoint hdlr_state_run_prog (s : hdlr_state) (p : hdlr_prog) : hdlr_state :=
   | c::cs => hdlr_state_run_prog (hdlr_state_run_cmd s c) cs
   end.
 
-Axiom devnull : fd.
+Definition devnull := Num "000" "000".
 
 Axiom devnull_open : emp ==> open devnull.
 

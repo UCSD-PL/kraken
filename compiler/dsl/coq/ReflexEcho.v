@@ -7,24 +7,35 @@ Require Import ReflexVec.
 
 Definition NB_MSG : nat := 1.
 
-Definition PDV : payload_desc_vec NB_MSG :=
+Definition PAY_DESC : vvdesc NB_MSG :=
   ( existT _ 1 (str_d, tt)
   , tt
   ).
 
-Definition HANDLERS : handler (PDV:=PDV) :=
+Definition INIT_ENVD : vdesc := existT _ 0 tt.
+
+Definition INIT : @init_prog NB_MSG PAY_DESC INIT_ENVD :=
+  nil.
+
+Definition KST_DESC : vdesc := existT _ 0 tt.
+
+Definition HANDLERS : handlers (VVD := PAY_DESC) :=
   (fun m =>
     match tag m as _tm return
-      @sdenote _ SDenoted_payload_desc (lkup_tag (PDV:=PDV) _tm) -> _
+      @sdenote _ SDenoted_vdesc (lkup_tag (VVD := PAY_DESC) _tm) -> _
     with
     | None => fun pl =>
-      let (s, _) := pl in
-         Send m (CurChan m) (MsgExpr m None (SLit m s, tt))
-      :: nil
+       let envd := existT _ 0 tt in
+       existT _ envd (
+        let (s, _) := pl in
+        Send _ _
+          (HEchan _ _)
+          (@MEmsg _ PAY_DESC envd None (SLit _ s, tt))
+        :: nil
+      )
     | Some bad => fun _ =>
       match bad with end
     end (pay m)
-  )
-.
+  ).
 
-Definition main := mk_main (Build_spec NB_MSG PDV HANDLERS).
+Definition main := mk_main (Build_spec NB_MSG PAY_DESC INIT_ENVD INIT KST_DESC HANDLERS).

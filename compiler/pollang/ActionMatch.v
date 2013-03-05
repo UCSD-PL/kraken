@@ -42,14 +42,6 @@ Inductive KOAction : Set :=
 | KORecv   : option fd -> option opt_msg -> KOAction
 | KOBogus  : option fd -> option num -> KOAction.
 
-Inductive Regexp : Type :=
-| RE_Atom   : KOAction -> Regexp
-| RE_NAtom  : KOAction -> Regexp
-| RE_Any    : Regexp
-| RE_Alt    : Regexp -> Regexp -> Regexp
-| RE_Star   : Regexp -> Regexp
-| RE_Concat : Regexp -> Regexp -> Regexp.
-
 Definition argMatch {T:Type} (opt:option T) (arg:T) : Prop :=
   match opt with
   | None   => True
@@ -129,22 +121,6 @@ match oact, act with
                                          /\ argMatch optbtag (btag bmsg)
 | _, _ => False
 end.
-
-Inductive RMatch : Regexp -> @KTrace NB_MSG PLT -> Prop :=
-| RM_Atom     : forall a a', AMatch a a' ->
-                             RMatch (RE_Atom a) (a'::nil)
-| RM_NAtom    : forall a a', ~ AMatch a a' ->
-                             RMatch (RE_NAtom a) (a'::nil)
-| RM_Any      : forall a, RMatch (RE_Any) (a::nil)
-| RM_Alt      : forall re re' tr, RMatch re tr \/ RMatch re' tr ->
-                                  RMatch (RE_Alt re re') tr
-| RM_StarInit : forall re, RMatch (RE_Star re) nil
-| RM_Star     : forall re tr tr', RMatch (RE_Star re) tr ->
-                                  RMatch re tr' ->
-                                  RMatch (RE_Star re) (tr' ++ tr)
-| RM_Concat   : forall re re' tr tr', RMatch re tr ->
-                                      RMatch re' tr' ->
-                                      RMatch (RE_Concat re re') (tr ++ tr').
 
 End KOAction.
 

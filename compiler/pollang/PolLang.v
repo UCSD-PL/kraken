@@ -1,6 +1,6 @@
 Require Import Reflex.
 Require Import ReflexBase.
-Require Import RegexNoInd.
+Require Import ActionMatch.
 
 Section PolLang.
 

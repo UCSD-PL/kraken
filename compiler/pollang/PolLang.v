@@ -5,7 +5,7 @@ Require Import RegexNoInd.
 Section PolLang.
 
 Variable NB_MSG:nat.
-Variable PLT:payload_desc_vec NB_MSG.
+Variable PLT:vvdesc NB_MSG.
 
 (*after occurs immediately after before occurs.*)
 Inductive ImmAfter (after:@KOAction NB_MSG PLT) (before:@KOAction NB_MSG PLT)

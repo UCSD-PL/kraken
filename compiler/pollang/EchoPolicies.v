@@ -1,10 +1,8 @@
 Require Import ReflexEcho.
 Require Import RegexTacs.
-Require Import RegexProof.
 Require Import RegexNoInd.
 Require Import PolLang.
 Require Import Reflex.
-Require Import ReflexEcho.
 
 Ltac act_match :=
   match goal with
@@ -86,30 +84,35 @@ Ltac crush :=
   end.
 
 Theorem recv_before : forall st tr m,
-  Reach HANDLERS st -> inhabits tr = ktr st ->
-  ImmBefore NB_MSG PDV
-            (@KORecv NB_MSG PDV None
-                     (Some (@Build_opt_msg NB_MSG PDV
+  Reach _ _ INIT HANDLERS st -> inhabits tr = ktr _ st ->
+  ImmBefore NB_MSG PAY_DESC
+            (@KORecv NB_MSG PAY_DESC None
+                     (Some (@Build_opt_msg NB_MSG PAY_DESC
                                            None (Some m, tt))))
-            (@KOSend NB_MSG PDV None
-                     (Some (@Build_opt_msg NB_MSG PDV
+            (@KOSend NB_MSG PAY_DESC None
+                     (Some (@Build_opt_msg NB_MSG PAY_DESC
                                            None (Some m, tt))))
             tr.
 Proof.
   intros.
   generalize dependent tr.
-  induction H; simpl in *; intros;
-  crush.
+  induction H; simpl in *; intros.
+unpack.
+match_immbefore.
+
+destruct_msg.
+unpack || idtac "Fail".
+
 Qed.
 
 Theorem send_after : forall st tr m,
   Reach HANDLERS st -> inhabits tr = ktr st ->
-  ImmAfter NB_MSG PDV
-            (@KOSend NB_MSG PDV None
-                     (Some (@Build_opt_msg NB_MSG PDV
+  ImmAfter NB_MSG PAY_DESC
+            (@KOSend NB_MSG PAY_DESC None
+                     (Some (@Build_opt_msg NB_MSG PAY_DESC
                                            None (Some m, tt))))
-            (@KORecv NB_MSG PDV None
-                     (Some (@Build_opt_msg NB_MSG PDV
+            (@KORecv NB_MSG PAY_DESC None
+                     (Some (@Build_opt_msg NB_MSG PAY_DESC
                                            None (Some m, tt))))
             tr.
 Proof.

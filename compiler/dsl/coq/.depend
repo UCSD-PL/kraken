@@ -4,6 +4,6 @@ ReflexBase.vo ReflexBase.glob: ReflexBase.v /Users/daniel/Development/kraken/com
 ReflexDenoted.vo ReflexDenoted.glob: ReflexDenoted.v
 ReflexEcho.vo ReflexEcho.glob: ReflexEcho.v Reflex.vo ReflexBase.vo ReflexDenoted.vo ReflexVec.vo
 ReflexFin.vo ReflexFin.glob: ReflexFin.v ReflexBase.vo
-ReflexHVec.vo ReflexHVec.glob: ReflexHVec.v ReflexDenoted.vo ReflexFin.vo ReflexVec.vo
+ReflexHVec.vo ReflexHVec.glob: ReflexHVec.v ReflexBase.vo ReflexDenoted.vo ReflexFin.vo ReflexVec.vo
 ReflexIO.vo ReflexIO.glob: ReflexIO.v /Users/daniel/Development/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo
 ReflexVec.vo ReflexVec.glob: ReflexVec.v ReflexFin.vo

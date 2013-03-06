@@ -19,18 +19,16 @@ Definition INIT : @init_prog NB_MSG PAY_DESC INIT_ENVD :=
 
 Definition KST_DESC : vdesc := existT _ 0 tt.
 
-Definition HANDLERS : handlers (VVD := PAY_DESC) :=
+Definition HANDLERS : handlers (VVD := PAY_DESC) (projT2 KST_DESC) :=
   (fun m =>
     match tag m as _tm return
       @sdenote _ SDenoted_vdesc (lkup_tag (VVD := PAY_DESC) _tm) -> _
     with
     | None => fun pl =>
        let envd := existT _ 0 tt in
-       existT _ envd (
+       existT (fun d => hdlr_prog (projT2 KST_DESC) d) envd (fun cm cfd s =>
         let (s, _) := pl in
-        Send _ _
-          (HEchan _ _)
-          (@MEmsg _ PAY_DESC envd None (SLit _ s, tt))
+        Send (VVD := PAY_DESC) envd (CFd _) None (SLit _ s, tt)
         :: nil
       )
     | Some bad => fun _ =>

@@ -632,30 +632,19 @@ Proof.
   intros s. destruct CST as [comps ktr]. simpl in *. apply in_dec. exact fd_eq.
 Qed.
 
-(*
-Definition msg_fds_ok : hprop := all_open_payload (pay CMSG).
+Section WITH_PROG_ENVD.
 
-Definition msg_fds_in : Prop := env_fds_in (components CST) CPAY (pay CMSG).
+Variable PROG_ENVD : vdesc.
+Notation PROG_ENVD_SIZE := (projT1 PROG_ENVD).
+Notation PROG_ENVD_DESC := (projT2 PROG_ENVD).
 
-Definition decide_msg_fds_in : decide msg_fds_in.
-Proof.
-  apply forall_fin. intros i. generalize (payload_ith CPAY (pay CMSG) i).
-  destruct (svec_ith (projT2 CPAY) i).
-  now left. now left.
-  intros s. destruct CST as [comps ktr]. simpl in *. apply in_dec. exact fd_eq.
-Qed.
-*)
-
-Section WITH_ENVD.
-
-Variable ENVD : vdesc.
-
-Inductive base_expr : desc -> Set :=
-| NLit : num -> base_expr num_d
-| SLit : str -> base_expr str_d
-| Var : forall (i : fin (projT1 ENVD)), base_expr (svec_ith (projT2 ENVD) i)
-| UnOp : forall d1 d2, unop d1 d2 -> base_expr d1 -> base_expr d2
-| BinOp : forall d1 d2 d3, binop d1 d2 d3 -> base_expr d1 -> base_expr d2 -> base_expr d3
+Inductive expr : desc -> Set :=
+| SLit  : str -> expr str_d
+| NLit  : num -> expr num_d
+| CFd   : expr fd_d
+| Var   : forall (i : fin PROG_ENVD_SIZE), expr (svec_ith PROG_ENVD_DESC i)
+| UnOp  : forall d1 d2, unop d1 d2 -> expr d1 -> expr d2
+| BinOp : forall d1 d2 d3, binop d1 d2 d3 -> expr d1 -> expr d2 -> expr d3
 .
 
 Fixpoint payload_expr' (n : nat) (pd : vdesc' n) : Type :=
@@ -663,58 +652,28 @@ Fixpoint payload_expr' (n : nat) (pd : vdesc' n) : Type :=
   | O => fun p => unit
   | S n' => fun (pd : vdesc' (S n')) =>
     match pd with
-    | (d, pd') => base_expr d * payload_expr' n' pd'
+    | (d, pd') => expr d * payload_expr' n' pd'
     end
   end%type pd.
 
 Definition payload_expr pd := payload_expr' (projT1 pd) (projT2 pd).
 
-Inductive expr_desc :=
-| base_expr_d : desc -> expr_desc
-| msg_expr_d : expr_desc
-.
+Section WITH_PROG_ENV.
 
-Definition sdenote_expr_desc t :=
-  match t with
-  | base_expr_d d => s[[ d ]]
-  | msg_expr_d => msg
-  end.
+Variable PROG_ENV : s[[ PROG_ENVD ]].
 
-Instance SDenoted_expr_t : SDenoted expr_desc :=
-{ sdenote := sdenote_expr_desc
-}.
-
-Inductive expr : expr_desc -> Type :=
-(* an expression evaluating to one constant *)
-| MEbase : forall d, base_expr d -> expr (base_expr_d d)
-(* an expression evaluating to a vector of constants *)
-| MEmsg : forall tag, payload_expr (lkup_tag tag) -> expr msg_expr_d
-.
-
-(* Within a handler, an expression may also refer to handler-specific things *)
-Inductive hdlr_expr : expr_desc -> Type :=
-| HEexpr : forall d, expr d -> hdlr_expr d
-| HEchan : hdlr_expr (base_expr_d fd_d)
-| HEparam : forall (i : fin (projT1 CPAY)),
-  hdlr_expr (base_expr_d (svec_ith (projT2 CPAY) i))
-(* Here should be HEkst or something to access a kstate variable *)
-.
-
-Section WITH_ENV.
-
-Variable ENV : s[[ ENVD ]].
-
-Fixpoint eval_base_expr (d : desc) (e : base_expr d) : s[[ d ]] :=
-  match e in base_expr _d return sdenote_desc _d with
-  | NLit n => n
+Fixpoint eval_expr (d : desc) (e : expr d) : s[[ d ]] :=
+  match e in expr _d return sdenote_desc _d with
   | SLit s => s
-  | Var i => payload_ith ENVD ENV i
+  | NLit n => n
+  | CFd => CFD
+  | Var i => payload_ith PROG_ENVD PROG_ENV i
   | UnOp t1 t2 op e =>
-    let v := eval_base_expr t1 e in
+    let v := eval_expr t1 e in
     eval_unop op v
   | BinOp t1 t2 t3 op e1 e2 =>
-    let v1 := eval_base_expr t1 e1 in
-    let v2 := eval_base_expr t2 e2 in
+    let v1 := eval_expr t1 e1 in
+    let v2 := eval_expr t2 e2 in
     eval_binop op v1 v2
   end.
 
@@ -729,12 +688,13 @@ Fixpoint eval_payload_expr' (n : nat) :
     let (d, pd') as _pd return res (S n') _pd := pd in
     fun e =>
       let (v, e') := e in
-      (eval_base_expr d v, eval_payload_expr' n' pd' e')
+      (eval_expr d v, eval_payload_expr' n' pd' e')
   end.
 
 Definition eval_payload_expr (pd : vdesc) (e : payload_expr pd) : s[[ pd ]] :=
   eval_payload_expr' (projT1 pd) (projT2 pd) e.
 
+(*
 Definition eval_expr (d : expr_desc) (e : expr d) : s[[ d ]] :=
   match e with
   | MEbase d' e' => eval_base_expr d' e'
@@ -749,37 +709,34 @@ Definition eval_hdlr_expr (d : expr_desc) (e : hdlr_expr d) : s[[ d ]] :=
   | HEchan => CFD
   | HEparam i => msg_param_i i
   end.
+*)
 
-Inductive cmd (e : expr_desc -> Type) : Type :=
-| Send : e (base_expr_d fd_d) -> expr msg_expr_d -> cmd e
+Inductive cmd : Type :=
+| Send : expr fd_d -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
 .
 
-Definition init_cmd := cmd expr.
+Definition init_prog := list cmd.
 
-Definition init_prog := list init_cmd.
+Definition hdlr_prog := forall (m : msg) (c : fd) (s : kstate), list cmd.
 
-Definition hdlr_cmd := cmd hdlr_expr.
-
-Definition hdlr_prog := list hdlr_cmd.
-
-End WITH_ENV.
+End WITH_PROG_ENV.
 
 Record init_state :=
 { init_comps : list fd
 ; init_ktr   : [KTrace]%type
-; init_env   : s[[ ENVD ]]
+; init_env   : s[[ PROG_ENVD ]]
 ; init_kst   : s[[ KST_DESC_ ]]
 }.
 
-Definition init_state_run_cmd (s : init_state) : init_cmd -> init_state :=
+Definition init_state_run_cmd (s : init_state) : cmd -> init_state :=
   let (cs, tr, e, st) := s in
   fun c =>
     match c with
-    | Send fe me =>
+    | Send fe t me =>
       let f := eval_expr e _ fe in
-      let m := eval_expr e _ me in
+      let m := eval_payload_expr e _ me in
       {| init_comps := cs
-       ; init_ktr   := tr ~~~ KSend f m :: tr
+       ; init_ktr   := tr ~~~ KSend f (Build_msg t m) :: tr
        ; init_env   := e
        ; init_kst   := st
       |}
@@ -793,21 +750,21 @@ Fixpoint init_state_run_prog (s : init_state) (p : init_prog) : init_state :=
 
 Record hdlr_state :=
 { hdlr_kst : kstate
-; hdlr_env : s[[ ENVD ]]
+; hdlr_env : s[[ PROG_ENVD ]]
 }.
 
 (* This should probably move out once the environment can change *)
-Definition hdlr_state_run_cmd (s : hdlr_state) : hdlr_cmd -> hdlr_state :=
+Definition hdlr_state_run_cmd (s : hdlr_state) : cmd -> hdlr_state :=
   let (s', env) := s in
   let (cs, tr, st, fd) := s' in
   fun c =>
     match c with
-    | Send fe me =>
-      let f := eval_hdlr_expr env _ fe in
-      let m := eval_expr env _ me in
+    | Send fe t me =>
+      let f := eval_expr env _ fe in
+      let m := eval_payload_expr env _ me in
       {| hdlr_kst :=
            {| kcs := cs
-            ; ktr := tr ~~~ KSend f m :: tr
+            ; ktr := tr ~~~ KSend f (Build_msg t m) :: tr
             ; kst := st
             ; kfd := fd
             |}
@@ -815,11 +772,14 @@ Definition hdlr_state_run_cmd (s : hdlr_state) : hdlr_cmd -> hdlr_state :=
       |}
     end.
 
-Fixpoint hdlr_state_run_prog (s : hdlr_state) (p : hdlr_prog) : hdlr_state :=
-  match p with
+Fixpoint hdlr_state_run_prog' (l : list cmd) (s : hdlr_state) : hdlr_state :=
+  match l with
   | nil => s
-  | c::cs => hdlr_state_run_prog (hdlr_state_run_cmd s c) cs
+  | c::cs => hdlr_state_run_prog' cs (hdlr_state_run_cmd s c)
   end.
+
+Definition hdlr_state_run_prog (p : hdlr_prog) (s : hdlr_state) : hdlr_state :=
+  hdlr_state_run_prog' (p CMSG CFD (hdlr_kst s)) s.
 
 Definition devnull := Num "000" "000".
 
@@ -847,11 +807,12 @@ Definition default_payload (v : vdesc) : s[[ v ]] :=
 Fixpoint kstate_run_prog (s : kstate) (p : hdlr_prog) : kstate :=
   let hs :=
     {| hdlr_kst := s
-     ; hdlr_env := default_payload ENVD
+     ; hdlr_env := default_payload PROG_ENVD
      |} in
-  hdlr_kst (hdlr_state_run_prog hs p).
+  hdlr_kst (hdlr_state_run_prog p hs).
 
-End WITH_ENVD.
+End WITH_PROG_ENVD.
+
 End WITHIN_HANDLER.
 
 Variable INIT_ENVD : vdesc.
@@ -866,7 +827,7 @@ Definition initial_init_state :=
 
 Section WITH_HANDLER.
 
-Definition handlers := forall (m : msg), sigT (fun (vd : vdesc) => hdlr_prog m vd).
+Definition handlers := forall (m : msg), sigT (fun (prog_envd : vdesc) => hdlr_prog prog_envd).
 
 Variable HANDLERS : handlers.
 
@@ -892,7 +853,7 @@ Definition payload_fds (v : vdesc) : s[[ v ]] -> list fd :=
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
   forall s,
-  s = init_state_run_prog INIT_ENVD initial_init_state INIT_PROG ->
+  s = init_state_run_prog devnull INIT_ENVD initial_init_state INIT_PROG ->
   Reach {| kcs := init_comps _ s
          ; ktr := init_ktr _ s
          ; kst := init_kst _ s
@@ -940,7 +901,7 @@ Inductive Reach : kstate -> Prop :=
 .
 
 Definition kstate_inv s : hprop :=
-  tr :~~ ktr s in emp
+  tr :~~ ktr s in open devnull
   * traced (expand_ktrace tr) * [Reach s]
   * all_open (kcs s) * all_open (kfd s)
   .
@@ -1007,8 +968,8 @@ Ltac uninhabit :=
   | [ H1 : ktr ?s = [_]%inhabited, H2 : ktr ?s = [_]%inhabited |- _ ] =>
     rewrite H1 in H2; apply pack_injective in H2;
     rewrite -> H2 in * || rewrite <- H2 in * (* subst may be blocked *)
-  | [ H : [_]%inhabited = [_]%inhabited |- _ ] =>
-    apply pack_injective in H; subst
+  | [ H : [?x]%inhabited = [?y]%inhabited |- _ ] =>
+    apply pack_injective in H; try first [subst x | subst y]
   end.
 
 Ltac misc :=
@@ -1029,73 +990,79 @@ Ltac sep'' :=
   sep unfoldr simplr.
 
 Lemma eval_base_expr_fd :
-  forall l d envd e v env,
+  forall l cfd d envd e v env,
+  In cfd l ->
   env_fds_in l envd env ->
-  eval_base_expr envd env d e = v ->
+  eval_expr cfd envd env d e = v ->
   match d as _d return (s[[ _d ]] -> Prop) with
   | fd_d => fun f => In f l
   | _ => fun _ => True
   end v.
 Proof.
-  induction e; try tauto; intros vd env OK E; simpl in *.
+  induction e; try tauto; intros vd env IN OK E; simpl in *.
+  now subst.
   subst. exact (OK i).
   now destruct u.
   now destruct b.
 Qed.
 
 Lemma eval_expr_fd :
-  forall l d envd e v env,
+  forall cfd l d envd e v env,
+  In cfd l ->
   env_fds_in l envd env ->
-  eval_expr envd env d e = v ->
-  match d as _d return (sdenote_expr_desc _d -> Prop) with
-  | base_expr_d fd_d => fun f => In f l
+  eval_expr cfd envd env d e = v ->
+  match d as _d return (sdenote_desc _d -> Prop) with
+  | fd_d => fun f => In f l
   | _ => fun _ => True
   end v.
 Proof.
-  intros l d envd. induction e; intros vd env OK E; simpl in *.
-  destruct b; try tauto; simpl in *.
+  induction e; try tauto; intros v env IN OK E; simpl in *.
+  now subst.
   subst. exact (OK i).
   now destruct u.
-  now destruct b1.
-  exact I.
+  now destruct b.
 Qed.
 
-Theorem eval_expr_fd_in_payload : forall envd d fe v s,
-  eval_expr envd (init_env envd s) d fe = v ->
-  match d as _d return sdenote_expr_desc _d -> Prop with
-  | base_expr_d fd_d => fun f => fd_in_payload f envd (init_env envd s)
+Theorem eval_expr_fd_in_payload : forall cfd envd e d fe v,
+  eval_expr cfd envd e d fe = v ->
+  match d as _d return sdenote_desc _d -> Prop with
+  | fd_d => fun f => f = cfd \/ fd_in_payload f envd e
   | _ => fun _ => True
   end v.
 Proof.
-  intros envd d.
-  destruct fe; intros v s E; intuition simpl in *.
-  destruct b as []_eqn; intuition simpl in *. subst.
+  intros cfd envd e d.
+  destruct fe; intros v E; simpl in *; try tauto.
+  now left.
+  subst.
   pose proof (
     shvec_ith_in sdenote_desc desc_eqdec UIP_refl_desc (projT2 envd)
-    (init_env envd s) i
+    e i
   ).
   destruct envd as [n envd]. simpl in *.
-  unfold payload_ith.
-  generalize dependent (
-    shvec_ith sdenote_desc envd
-      (init_env (existT (fun n0 : nat => vdesc' n0) n envd) s) i
-  ).
+  generalize dependent (shvec_ith sdenote_desc envd e i).
   intros.
   destruct (svec_ith envd i); tauto.
   now destruct u.
-  now destruct b0.
+  now destruct b.
 Qed.
 
 Definition init_invariant {envd} (s : init_state envd) :=
-  all_open (init_comps _ s)
+  open devnull * all_open (init_comps _ s)
   * all_open_payload (init_env _ s).
 
+Definition open_payload_frame {envd} (cfd : fd) (f : fd) (pl : s[[ envd ]]) :=
+  if fd_eq f cfd
+  then all_open_payload pl
+  else open cfd * all_open_payload_drop f pl
+.
+
 Definition run_init_cmd :
-  forall (envd : vdesc) (s : init_state envd) (c : init_cmd envd),
-  STsep (tr :~~ init_ktr envd s in
+  forall (prog_envd : vdesc) (s : init_state prog_envd) (c : cmd prog_envd),
+  STsep (tr :~~ init_ktr prog_envd s in
           init_invariant s * traced (expand_ktrace tr))
-        (fun s' : init_state envd => tr :~~ init_ktr envd s' in
-          init_invariant s' * traced (expand_ktrace tr) * [s' = init_state_run_cmd envd s c]).
+        (fun s' : init_state prog_envd => tr :~~ init_ktr prog_envd s' in
+          init_invariant s' * traced (expand_ktrace tr) *
+          [s' = init_state_run_cmd devnull prog_envd s c]).
 Proof.
   intros; refine (
     let cs := init_comps _ s in
@@ -1103,79 +1070,62 @@ Proof.
     let e  := init_env _ s in
     let st := init_kst _ s in
     match c with
-    | Send fe me =>
+    | Send fe t me =>
       (* /!\ We lose track of the let-open equalities if existentials remain,
          make sure that Coq can infer _all_ the underscores. *)
-      let f := eval_expr _ e _ fe in
-      let m := eval_expr _ e _ me in
-      send_msg f m (tr ~~~ expand_ktrace tr)
-      <@> all_open cs * all_open_payload_drop f e;;
+      let f := eval_expr devnull _ e _ fe in
+      let m := eval_payload_expr devnull _ e _ me in
+      send_msg f (Build_msg t m) (tr ~~~ expand_ktrace tr)
+      <@> all_open cs * open_payload_frame devnull f e;;
 
-      let tr := tr ~~~ KSend f m :: tr in
+      let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
       {{ Return {| init_comps := cs
                  ; init_ktr   := tr
                  ; init_env   := e
                  ; init_kst   := st
                  |} }}
     end
-  ); unfold init_invariant, cs, e; sep''.
+  );
+  unfold init_invariant, cs, e, open_payload_frame; sep''.
+  destruct (fd_eq f devnull).
+  subst. sep''. rewrite e0. sep''.
   pose proof eval_expr_fd_in_payload as E.
-  specialize (E _ _ fe f s (Logic.eq_refl f)). now simpl in E.
-  pose proof eval_expr_fd_in_payload as E.
-  specialize (E _ _ fe f s (Logic.eq_refl f)). now simpl in E.
+  specialize (E _ _ _ _ fe f (Logic.eq_refl f)). simpl in E. intuition.
+  sep''.
+  destruct (fd_eq f devnull).
+  subst. rewrite e0. sep''.
   apply himp_pure'.
-  unfold init_state_run_cmd. destruct s. simpl.
-  sep''. unfold f, m, e. simpl in *. sep''.
+  unfold init_state_run_cmd. unfold m, e in *. destruct s. simpl in *. rewrite e0.
+  sep''.
+  pose proof eval_expr_fd_in_payload as E.
+  specialize (E _ _ _ _ fe f (Logic.eq_refl f)). simpl in E. intuition.
+  sep''.
+  apply himp_pure'.
+  unfold init_state_run_cmd. unfold m, e in *. destruct s. simpl in *.
+  sep''.
   (* dirty proof, could be made nicer... *)
 Qed.
-
-(* that seems wrong and unneeded
-Fixpoint init_env_fds_ok' (n : nat) : forall (v : vdesc' n), sdenote_vdesc' n v -> hprop.
-Proof.
-  destruct n as [|n']. exact (fun _ _ => emp).
-  intros v. destruct v as [d v']. destruct d.
-  intros vv. destruct vv as (vd, vv'). exact (init_env_fds_ok' n' v' vv').
-  intros vv. destruct vv as (vd, vv'). exact (init_env_fds_ok' n' v' vv').
-  intros vv. destruct vv as (vd, vv'). exact (open vd * init_env_fds_ok' n' v' vv').
-Qed.
-
-(* is this needed? *)
-Fixpoint init_env_fds_ok'' (n : nat) :
-  forall (v : vdesc' n), sdenote_vdesc' n v -> hprop :=
-  match n with
-  | 0 => fun _ _ => emp
-  | S n0 =>
-    fun v =>
-    let (d, v') as p return (sdenote_vdesc' (S n0) p -> hprop) := v in
-    fun vv =>
-    let (vd, _) := vv in
-    match d as d0 return (s[[d0]] -> hprop) with
-    | fd_d => fun vd => open vd
-    | _ => fun _ => emp
-    end vd
-  end
-.
-*)
 
 Definition run_init_prog :
   forall (envd : vdesc) (s : init_state envd) (p : init_prog envd),
   STsep (tr :~~ init_ktr envd s in
           init_invariant s * traced (expand_ktrace tr))
         (fun s' : init_state envd => tr :~~ init_ktr envd s' in
-          init_invariant s' * traced (expand_ktrace tr) * [s' = init_state_run_prog envd s p]).
+          init_invariant s' * traced (expand_ktrace tr)
+          * [s' = init_state_run_prog devnull envd s p]).
 Proof.
   intros; refine (
     Fix2
       (fun p s => tr :~~ init_ktr envd s in
         init_invariant s * traced (expand_ktrace tr))
       (fun p s (s' : init_state envd) => tr :~~ init_ktr envd s' in
-        init_invariant s' * traced (expand_ktrace tr) * [s' = init_state_run_prog envd s p])
+        init_invariant s' * traced (expand_ktrace tr) * [s' = init_state_run_prog devnull envd s p])
       (fun self p s =>
         match p with
         | nil => {{ Return s }}
         | c::cs =>
           s' <- run_init_cmd envd s c;
-          s'' <- self cs s' <@> [s' = init_state_run_cmd envd s c];
+          s'' <- self cs s' <@> [s' = init_state_run_cmd devnull envd s c];
           {{ Return s'' }}
         end
       )
@@ -1215,7 +1165,7 @@ Proof.
                |}
      }}
   ); unfold init_invariant; sep''.
-  apply all_open_default_payload.
+  isolate (emp ==> open devnull). apply devnull_open. apply all_open_default_payload.
   apply all_open_payload_to_all_open.
 Qed.
 
@@ -1231,31 +1181,6 @@ Definition run_init_cmd :
 Definition env_fds_ok envd (hs : hdlr_state envd) :=
   env_fds_in (kfd (hdlr_kst envd hs)) envd (hdlr_env envd hs).
 
-Theorem eval_hdlr_expr_fd_in : forall cfd cm envd d fe v (s : hdlr_state envd),
-  let (kst, env) := s in
-  env_fds_ok envd s ->
-  msg_fds_ok kst cm ->
-  In cfd (kcs kst) ->
-  eval_hdlr_expr cfd cm envd env d fe = v ->
-  match d as _d return sdenote_expr_desc _d -> Prop with
-  | base_expr_d fd_d => fun f => In f (kcs kst) \/ In f (kfd kst)
-  | _ => fun _ => True
-  end v.
-Proof.
-  intros until s. destruct s as [kst env]. simpl. intros F M I E. subst.
-  destruct fe; simpl in *; try tauto.
-  destruct e; simpl in *; try tauto.
-  destruct b; simpl in *; try tauto.
-  specialize (F i). simpl in F.
-  generalize dependent (payload_ith envd env i).
-  destruct (svec_ith (projT2 envd) i); tauto.
-  now destruct u.
-  now destruct b1.
-  specialize (M i). simpl in *.
-  generalize dependent (msg_param_i cm i).
-  destruct (svec_ith (projT2 (lkup_tag (tag cm))) i); tauto.
-Qed.
-
 Definition hdlr_invariant {envd} (cfd : fd) (cm : msg) (s : hdlr_state envd) :=
   let (kst, env) := s in
   all_open (kcs kst ++ kfd kst)
@@ -1263,13 +1188,24 @@ Definition hdlr_invariant {envd} (cfd : fd) (cm : msg) (s : hdlr_state envd) :=
   * [In cfd (kcs kst)] * [msg_fds_ok kst cm] * [env_fds_ok envd s]
 .
 
+Lemma env_fds_in_app_r : forall envd env a b,
+  env_fds_in a envd env ->
+  env_fds_in (b ++ a) envd env.
+Proof.
+  intros. induction b. now simpl. simpl. unfold env_fds_in in *.
+  intros i. specialize (IHb i). clear H.
+  generalize dependent (payload_ith envd env i).
+  destruct (svec_ith (projT2 envd) i); try tauto.
+  intros. now right.
+Qed.
+
 Definition run_hdlr_cmd :
-  forall (cfd : fd) (cm : msg) (envd : vdesc) (s : hdlr_state envd) (c : hdlr_cmd cm envd),
+  forall (cfd : fd) (cm : msg) (envd : vdesc) (s : hdlr_state envd) (c : cmd envd),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
           hdlr_invariant cfd cm s * traced (expand_ktrace tr))
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in
           hdlr_invariant cfd cm s' * traced (expand_ktrace tr)
-          * [s' = hdlr_state_run_cmd cfd cm envd s c]).
+          * [s' = hdlr_state_run_cmd cfd envd s c]).
 Proof.
   intros; refine (
     (* you lose the equations if you try to let (st, env, fds) := s *)
@@ -1279,39 +1215,51 @@ Proof.
     let tr := ktr st in
     let fds := kfd st in
     match c with
-    | Send fe me =>
-      let f := eval_hdlr_expr cfd cm _ env _ fe in
-      let m := eval_expr envd env _ me in
-      send_msg f m
+    | Send fe t me =>
+      let f := eval_expr cfd _ env _ fe in
+      let m := eval_payload_expr cfd envd env _ me in
+      send_msg f (Build_msg t m)
       (tr ~~~ expand_ktrace tr)
       <@> all_open_drop (comps ++ fds) f * all_open_payload (pay cm)
       * [In cfd comps] * [msg_fds_ok st cm] * [env_fds_ok envd s];;
 
-      let tr := tr ~~~ KSend f m :: tr in
+      let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
       {{Return {| hdlr_kst := {| kcs := comps ; ktr := tr ; kst := kst st ; kfd := fds |}
                 ; hdlr_env := env
                 |}
       }}
     end
   ); unfold env, fds, hdlr_invariant in *; clear env fds; sep fail idtac;
-  pose proof (eval_hdlr_expr_fd_in cfd cm _ _ fe f s) as E;
-  destruct s as (kst, env).
+  pose proof (eval_expr_fd_in_payload cfd envd (hdlr_env _ s) _ fe f) as E;
+  pose proof (eval_expr_fd cfd (kcs st ++ kfd st) fd_d envd fe f (hdlr_env _ s)) as E';
+  destruct s as (kst, env);
   sep''.
-  sep''.
-  apply himp_pure'. destruct kst as (kcs, ktr, kst, kfd). simpl in *.
-  unfold comps in *. clear comps. sep''.
+
+  rewrite H3. destruct (fd_eq cfd cfd); try congruence. sep''.
+
+  apply E'. apply in_or_app. now left.
+  unfold env_fds_ok in H5. simpl in H5. now apply env_fds_in_app_r.
+  reflexivity.
+
+  rewrite H6. destruct (fd_eq cfd cfd); try congruence. sep''.
+  apply himp_pure'. destruct kst. simpl in *. sep''.
+
+  apply E'. apply in_or_app. now left.
+  unfold env_fds_ok in H5. simpl in H5. now apply env_fds_in_app_r.
+  reflexivity.
+
   apply himp_pure'. destruct kst as (cs, ktr, kst, kfd). simpl in *.
   unfold comps in *. clear comps. sep''.
   (* so ugly... *)
 Qed.
 
 Definition run_hdlr_prog :
-  forall (cfd : fd) (cm : msg) (envd : vdesc) (s : hdlr_state envd) (p : hdlr_prog cm envd),
+  forall (cfd : fd) (cm : msg) (envd : vdesc) (s : hdlr_state envd) (p : hdlr_prog envd),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
           hdlr_invariant cfd cm s * traced (expand_ktrace tr))
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in
           hdlr_invariant cfd cm s' * traced (expand_ktrace tr)
-          * [s' = hdlr_state_run_prog cfd cm envd s p]).
+          * [s' = hdlr_state_run_prog cfd cm envd p s]).
 Proof.
   intros; refine (
     Fix2
@@ -1321,17 +1269,18 @@ Proof.
       (fun p s (s' : hdlr_state envd) =>
         tr :~~ ktr (hdlr_kst _ s') in
           hdlr_invariant cfd cm s' * traced (expand_ktrace tr)
-          * [s' = hdlr_state_run_prog cfd cm envd s p])
+                                            (* TODO: this works but seems wrong *)
+          * [s' = hdlr_state_run_prog cfd cm envd (fun _ _ _ => p) s])
       (fun self p s =>
         match p with
         | nil =>
           {{ Return s }}
         | c::cs =>
           s' <- run_hdlr_cmd cfd cm envd s c;
-          s'' <- self cs s' <@> [hdlr_state_run_cmd cfd cm envd s c = s'];
+          s'' <- self cs s' <@> [hdlr_state_run_cmd cfd envd s c = s'];
           {{ Return s'' }}
         end)
-    p s
+    (p cm cfd (hdlr_kst _ s)) s
   );
   sep''.
 Qed.
@@ -1368,12 +1317,12 @@ Proof.
     let fd := kfd s in
     c <- select cs
     (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [Reach s] * all_open cs * all_open fd);
+    <@> (tr ~~ [Reach s] * open devnull * all_open cs * all_open fd);
 
     let tr := tr ~~~ KSelect cs c :: tr in
     mm <- recv_msg c
     (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [In c cs] * [Reach s] * all_open_drop cs c * all_open fd);
+    <@> (tr ~~ [In c cs] * [Reach s] * open devnull * all_open_drop cs c * all_open fd);
 
     match mm with
     | inl m =>
@@ -1390,7 +1339,7 @@ Proof.
                    ; hdlr_env := default_payload henv
                    |}
         in
-        s'' <- run_hdlr_prog c m henv s' hprog <@> [Reach s];
+        s'' <- run_hdlr_prog c m henv s' hprog <@> [Reach s] * open devnull;
         (* we need to add the payload open fds to kfd so as not to keep track of any
            linear resource *)
         let s''' := {| hdlr_kst := {| kcs := kcs (hdlr_kst _ s'')
@@ -1411,8 +1360,8 @@ Proof.
   ); unfold hdlr_invariant in *; sep''.
 
   isolate (
-    all_open_drop cs c * open c * all_open fd
-    ==> all_open (cs ++ (*devnull ::*) fd)
+    open c * all_open_drop cs c * all_open fd
+    ==> all_open (cs ++ fd)
   ).
 
   apply himp_trans with (Q := all_open cs * all_open fd); sep''.
@@ -1420,7 +1369,7 @@ Proof.
   sep''. (*apply devnull_open.*) apply all_open_concat.
   apply himp_pure'. unfold env_fds_ok. simpl. admit. (*apply in_devnull_default_payload.*)
 
-  destruct (hdlr_state_run_prog c m henv s' hprog) as [kst'' env'']_eqn.
+  destruct (hdlr_state_run_prog c m henv hprog s') as [kst'' env'']_eqn.
   simpl in *. sep''.
   isolate (
     all_open (kcs kst'' ++ kfd kst'') * all_open_payload (pay m)
@@ -1494,7 +1443,7 @@ Record spec :=
 ; INIT_ENVD : vdesc
 ; INIT      : @init_prog NB_MSG PAY_DESC INIT_ENVD
 ; KST_DESC  : vdesc
-; HANDLERS  : handlers (VVD := PAY_DESC)
+; HANDLERS  : handlers (VVD := PAY_DESC) (projT2 KST_DESC)
 }.
 
 Definition mk_main (s : spec) :=

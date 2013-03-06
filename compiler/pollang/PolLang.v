@@ -1,6 +1,7 @@
 Require Import Reflex.
 Require Import ReflexBase.
 Require Import ActionMatch.
+Require Import List.
 
 Section PolLang.
 
@@ -32,5 +33,16 @@ Inductive ImmBefore (before:@KOAction NB_MSG PLT) (after:@KOAction NB_MSG PLT)
 | IB_A : forall after' before' tr, ImmBefore before after tr ->
                                    AMatch before before' ->
                                    ImmBefore before after (after'::before'::tr).
+
+Inductive Release (past:@KOAction NB_MSG PLT) (future:@KOAction NB_MSG PLT)
+  : @KTrace NB_MSG PLT -> Prop :=
+| R_nil : Release past future nil
+| R_not_future : forall act tr, Release past future tr ->
+                                ~AMatch future act ->
+                                Release past future (act::tr)
+| R_future : forall act tr, Release past future tr ->
+                            (exists past', In past' tr /\
+                                           AMatch past past') ->
+                            Release past future (act::tr).
 
 End PolLang.

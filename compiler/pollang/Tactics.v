@@ -24,6 +24,8 @@ Ltac destruct_msg :=
   (*Tag is Some False*)
   | [ f : False |- _ ]
       => destruct f
+  | [ f : option _, pay : s[[lkup_tag (Some ?f)]] |- _ ]
+      => destruct f; destruct_msg
   | [ pay : s[[lkup_tag _]] |- _ ]
       => destruct pay; simpl in *
   | [ tag : fin _ |- _ ]

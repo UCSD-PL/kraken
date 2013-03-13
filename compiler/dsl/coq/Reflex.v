@@ -856,22 +856,16 @@ Fixpoint default_payload' (n : nat) :
 Definition default_payload (v : vdesc) : s[[ v ]] :=
   default_payload' (projT1 v) (projT2 v).
 
-Definition kstate_run_prog_return_type s p :=
-  let hs :=
-    {| hdlr_kst := s
-     ; hdlr_env := default_payload ENVD
-     |}
-  in
-  hdlr_state_run_prog_return_type hs p.
+Definition default_hdlr_state s :=
+  {| hdlr_kst := s; hdlr_env := default_payload ENVD |}.
 
-Fixpoint kstate_run_prog (s : kstate) (p : hdlr_prog)
+Definition kstate_run_prog_return_type s p :=
+  hdlr_state_run_prog_return_type (default_hdlr_state s) p.
+
+Definition kstate_run_prog (s : kstate) (p : hdlr_prog)
   (input : kstate_run_prog_return_type s (p CMSG CFD s))
   : kstate :=
-  let hs :=
-    {| hdlr_kst := s
-     ; hdlr_env := default_payload ENVD
-     |} in
-  hdlr_kst (hdlr_state_run_prog hs (p CMSG CFD s) input).
+  hdlr_kst (hdlr_state_run_prog (default_hdlr_state s) (p CMSG CFD s) input).
 
 End WITH_ENVD.
 
@@ -1482,12 +1476,7 @@ Proof.
   sep''. (*apply devnull_open.*) apply all_open_concat.
   apply himp_pure'. unfold env_fds_ok. simpl. admit. (*apply in_devnull_default_payload.*)
 
-  destruct (hdlr_state_run_prog c henv (hprog m c {|
-             kcs := cs;
-             ktr := [KRecv c m :: KSelect cs c :: x1];
-             kst := st;
-             kfd := fd |}) s') as [kst'' env'']_eqn.
-  simpl in *. sep''.
+  destruct s'' as [kst'' ?]; simpl in *; sep''.
   isolate (
     all_open (kcs kst'' ++ kfd kst'') * all_open_payload (pay m)
     ==> all_open (kcs kst'') * all_open (kfd kst'' ++ payload_fds _ (pay m))
@@ -1500,11 +1489,139 @@ Proof.
   apply all_open_payload_to_all_open.
   apply all_open_concat.
 
-  sep''. constructor; auto.
-  eapply Reach_valid with (s := s) (s' := (hdlr_kst _ s')); eauto.
-  unfold s'. simpl. unfold cs, st, fd. sep''.
+  apply himp_pure'. destruct H4 as [input H4].
 
-  unfold kstate_run_prog. simpl.
+
+  assert (EQ:
+    hdlr_state_run_prog_return_type c henv s'
+      (hprog m c
+         {| kcs := cs
+          ; ktr := [KRecv c m :: KSelect cs c :: x1]
+          ; kst := st
+          ; kfd := fd
+          |})
+      =
+    kstate_run_prog_return_type c henv 
+    (hdlr_kst henv s') (hprog m c (hdlr_kst henv s'))
+  ).
+  unfold kstate_run_prog_return_type. unfold s'. repeat f_equal.
+  simpl. f_equal.
+  (* This is the only thing that is not definitionally equal?... *)
+  sep''.
+
+Print Reach_valid.
+
+(*
+
+Problem:
+
+input has type
+  hdlr_state_run_prog_return_type c henv s'
+    (hprog m c
+       {|
+       kcs := cs;
+       ktr := [KRecv c m :: KSelect cs c :: x1];
+       kst := st;
+       kfd := fd |})
+
+but Reach expects type
+  hdlr_state_run_prog_return_type c henv s'
+    (hprog m c
+       {|
+       kcs := cs;
+       ktr := inhabit_unpack (
+              inhabit_unpack x1
+                (fun tr => KSelect cs c :: tr))
+                (fun tr => KRecv c m :: tr);
+       kst := st;
+       kfd := fd |})
+
+The two types are propositionally provably equal, as exhibited by the term EQ in context,
+but they are not definitionally equal.
+It would be possible to create a type input' with the second type (using eq_rec to type cast),
+but then we could not prove this pre-condition of Reach_valid:
+
+s'' = kstate_run_prog f m (projT1 (HANDLERS m)) s' (projT2 (HANDLERS m)) input
+
+because instead of input we would have input', and it is not true that:
+input = input'
+
+*)
+
+  eapply Reach_valid with (f := c) (s := s) (s' := (hdlr_kst _ s')) (input := input); eauto.
+
+
+  refine (Reach_valid s c m _ s (hdlr_kst _ s') input).
+  apply Reach_valid with (s := s) (s' := (hdlr_kst _ s')) (s'' := kst'') (input := input); eauto.
+  simpl. f_equal. sep''.
+  apply f_equal with (f := hdlr_kst _) in H4. simpl in H4. subst kst''.
+  simpl. unfold kstate_run_prog. f_equal. unfold s', henv, hprog.
+
+
+  apply himp_pure'. destruct H4 as [input H4].
+
+  assert (EQ:
+    hdlr_state_run_prog_return_type c henv s'
+      (hprog m c
+         {| kcs := cs
+          ; ktr := [KRecv c m :: KSelect cs c :: x1]
+          ; kst := st
+          ; kfd := fd
+          |})
+      =
+    kstate_run_prog_return_type c (projT1 (HANDLERS m)) 
+    (hdlr_kst henv s') (projT2 (HANDLERS m) m c (hdlr_kst henv s'))
+  ).
+  unfold kstate_run_prog_return_type. f_equal. unfold hprog. f_equal.
+  unfold s'. simpl. f_equal. sep''.
+
+  pose proof (
+    eq_rec _ (fun (s : Set) => s) input
+      (kstate_run_prog_return_type c (projT1 (HANDLERS m))
+        (hdlr_kst henv s') (projT2 (HANDLERS m) m c (hdlr_kst henv s'))
+      )
+    EQ
+  ) as input'. simpl in input'.
+
+  eapply Reach_valid with (s := s) (s' := (hdlr_kst _ s'))
+    (s'' := kstate_run_prog _ _ _ (hdlr_kst _ s') _ input')
+    (input := input'); eauto.
+  simpl. f_equal. sep''.
+  apply f_equal with (f := hdlr_kst _) in H4. simpl in H4. subst kst''.
+  simpl. unfold kstate_run_prog. f_equal. unfold s', henv, hprog.
+
+  Print Reach.
+
+f_equal. simpl.
+
+  
+  unfold hprog. unfold s', henv. sep''. simpl.
+  sep''.
+
+  f_equal.
+  unfold hdlr_state_run_prog in H4.
+
+  unfold kstate_run_prog. simpl in *.
+  destruct H4 as [input H4].
+  assert (KST'' : kst'' = hdlr_kst _ (
+    hdlr_state_run_prog c henv s'
+      (hprog m c
+         {| kcs := cs;
+            ktr := [KRecv c m :: KSelect cs c :: x1];
+            kst := st;
+            kfd := fd |}) input
+  )). apply f_equal with (f := hdlr_kst _) in H4. now simpl in H4.
+
+
+
+
+  rewrite KST''. f_equal. unfold s', henv. sep''. simpl in *. reflexivity.
+
+reflexivity. simpl in *.
+
+simpl in *.
+
+  unfold kst''.
   unfold s' in Heqh.
   unfold henv, hprog in Heqh. sep''. rewrite Heqh. now simpl.
 

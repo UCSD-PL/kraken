@@ -45,4 +45,15 @@ Inductive Release (past:@KOAction NB_MSG PLT) (future:@KOAction NB_MSG PLT)
                                            AMatch past past') ->
                             Release past future (act::tr).
 
+Inductive Disables (disabler:@KOAction NB_MSG PLT) (disablee:@KOAction NB_MSG PLT)
+  : @KTrace NB_MSG PLT -> Prop :=
+| D_nil : Disables disabler disablee nil
+| D_not_disablee : forall act tr, Disables disabler disablee tr ->
+                                  ~AMatch disablee act ->
+                                  Disables disabler disablee (act::tr)
+| D_disablee : forall act tr, Disables disabler disablee tr ->
+                              (forall act', In act' tr ->
+                                            ~AMatch disabler act') ->
+                              Disables disabler disablee (act::tr).
+
 End PolLang.

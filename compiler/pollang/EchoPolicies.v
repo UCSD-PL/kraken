@@ -5,7 +5,7 @@ Require Import Reflex.
 Require Import Tactics.
 
 Theorem recv_before : forall st tr m,
-  Reach _ _ INIT HANDLERS st -> inhabits tr = ktr _ st ->
+  Reach _ _ INIT HANDLERS st -> ktr _ st = inhabits tr ->
   ImmBefore NB_MSG PAY_DESC
             (@KORecv NB_MSG PAY_DESC None
                      (Some (@Build_opt_msg NB_MSG PAY_DESC
@@ -15,14 +15,11 @@ Theorem recv_before : forall st tr m,
                                            None (Some m, tt))))
             tr.
 Proof.
-  intros.
-  generalize dependent tr.
-  induction H; simpl in *; intros;
   crush.
 Qed.
 
 Theorem send_after : forall st tr m,
-  Reach _ _ INIT HANDLERS st -> inhabits tr = ktr _ st ->
+  Reach _ _ INIT HANDLERS st -> ktr _ st = inhabits tr ->
   ImmAfter NB_MSG PAY_DESC
             (@KOSend NB_MSG PAY_DESC None
                      (Some (@Build_opt_msg NB_MSG PAY_DESC
@@ -32,8 +29,5 @@ Theorem send_after : forall st tr m,
                                            None (Some m, tt))))
             tr.
 Proof.
-  intros.
-  generalize dependent tr.
-  induction H; simpl in *; intros;
   crush.
 Qed.

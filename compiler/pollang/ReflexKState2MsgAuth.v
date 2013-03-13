@@ -6,12 +6,13 @@ Require Import ReflexDenoted.
 Require Import ReflexVec.
 Require Import ReflexHVec.
 
-Definition NB_MSG : nat := 2.
+Definition NB_MSG : nat := 3.
 
 Definition PAY_DESC : vvdesc NB_MSG :=
   ( existT _ 1 (str_d, tt) (*User name payload.*)
-   , ( existT _ 2 (str_d, (num_d, tt)) (*Auth response from system payload.*)
-    , tt)
+   , ( existT _ 1 (str_d, tt) (*Successful auth response from system payload.*)
+   , ( existT _ 1 (str_d, tt) (*Failed auth response from system payload.*)
+    , tt))
   ).
 
 Definition INIT_ENVD : vdesc := existT _ 0 tt.
@@ -52,15 +53,24 @@ Definition HANDLERS : handlers (VVD := PAY_DESC) KST_DESC :=
     | Some None => fun pl =>
        let envd := existT _ 0 tt in
        existT _ envd (
-        let (u, pl') := pl in
-        let (res, _) := pl' in
+        let (u, _) := pl in
         STChange KST_DESC _ _
           None (HEexpr _ _ _ (MEbase _ _ (SLit _ u)))
         :: STChange KST_DESC _ _
-             (Some None) (HEexpr _ _ _ (MEbase _ _ (NLit _ res)))
+             (Some None) (HEexpr _ _ _ (MEbase _ _ (NLit _ (num_of_nat 1))))
         :: nil
       )
-    | Some (Some bad) => fun _ =>
+    | Some (Some None) => fun pl =>
+       let envd := existT _ 0 tt in
+       existT _ envd (
+        let (u, _) := pl in
+        STChange KST_DESC _ _
+          None (HEexpr _ _ _ (MEbase _ _ (SLit _ u)))
+        :: STChange KST_DESC _ _
+             (Some None) (HEexpr _ _ _ (MEbase _ _ (NLit _ (num_of_nat 0 ))))
+        :: nil
+      )
+    | Some (Some (Some bad)) => fun _ =>
       match bad with end
     end (pay m)
   ).
@@ -68,6 +78,7 @@ Definition HANDLERS : handlers (VVD := PAY_DESC) KST_DESC :=
 Require Import PolLang.
 Require Import ActionMatch.
 Require Import Tactics.
+Require Import List.
 Require Import Ynot.
 
 Theorem release : forall st tr u,
@@ -75,7 +86,7 @@ Theorem release : forall st tr u,
   Release NB_MSG PAY_DESC
           (@KORecv NB_MSG PAY_DESC None
                    (Some (@Build_opt_msg NB_MSG PAY_DESC
-                                         (Some None) (Some u, (None, tt)))))
+                                         (Some None) (Some u, tt))))
           (@KOSend NB_MSG PAY_DESC None
                    (Some (@Build_opt_msg NB_MSG PAY_DESC
                                          None (Some u, tt))))

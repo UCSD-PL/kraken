@@ -1490,149 +1490,14 @@ Proof.
   apply all_open_concat.
 
   apply himp_pure'. destruct H4 as [input H4].
-
-
-  assert (EQ:
-    hdlr_state_run_prog_return_type c henv s'
-      (hprog m c
-         {| kcs := cs
-          ; ktr := [KRecv c m :: KSelect cs c :: x1]
-          ; kst := st
-          ; kfd := fd
-          |})
-      =
-    kstate_run_prog_return_type c henv 
-    (hdlr_kst henv s') (hprog m c (hdlr_kst henv s'))
-  ).
-  unfold kstate_run_prog_return_type. unfold s'. repeat f_equal.
-  simpl. f_equal.
-  (* This is the only thing that is not definitionally equal?... *)
-  sep''.
-
-Print Reach_valid.
-
-(*
-
-Problem:
-
-input has type
-  hdlr_state_run_prog_return_type c henv s'
-    (hprog m c
-       {|
-       kcs := cs;
-       ktr := [KRecv c m :: KSelect cs c :: x1];
-       kst := st;
-       kfd := fd |})
-
-but Reach expects type
-  hdlr_state_run_prog_return_type c henv s'
-    (hprog m c
-       {|
-       kcs := cs;
-       ktr := inhabit_unpack (
-              inhabit_unpack x1
-                (fun tr => KSelect cs c :: tr))
-                (fun tr => KRecv c m :: tr);
-       kst := st;
-       kfd := fd |})
-
-The two types are propositionally provably equal, as exhibited by the term EQ in context,
-but they are not definitionally equal.
-It would be possible to create a type input' with the second type (using eq_rec to type cast),
-but then we could not prove this pre-condition of Reach_valid:
-
-s'' = kstate_run_prog f m (projT1 (HANDLERS m)) s' (projT2 (HANDLERS m)) input
-
-because instead of input we would have input', and it is not true that:
-input = input'
-
-*)
-
+  destruct (ktr s) as []_eqn. simpl in *.
+  apply pack_injective in H1. subst x1.
   eapply Reach_valid with (f := c) (s := s) (s' := (hdlr_kst _ s')) (input := input); eauto.
+  unfold kstate_run_prog. simpl.
+  apply f_equal with (f := hdlr_kst _) in H4. simpl in H4. rewrite H4. f_equal.
 
-
-  refine (Reach_valid s c m _ s (hdlr_kst _ s') input).
-  apply Reach_valid with (s := s) (s' := (hdlr_kst _ s')) (s'' := kst'') (input := input); eauto.
-  simpl. f_equal. sep''.
-  apply f_equal with (f := hdlr_kst _) in H4. simpl in H4. subst kst''.
-  simpl. unfold kstate_run_prog. f_equal. unfold s', henv, hprog.
-
-
-  apply himp_pure'. destruct H4 as [input H4].
-
-  assert (EQ:
-    hdlr_state_run_prog_return_type c henv s'
-      (hprog m c
-         {| kcs := cs
-          ; ktr := [KRecv c m :: KSelect cs c :: x1]
-          ; kst := st
-          ; kfd := fd
-          |})
-      =
-    kstate_run_prog_return_type c (projT1 (HANDLERS m)) 
-    (hdlr_kst henv s') (projT2 (HANDLERS m) m c (hdlr_kst henv s'))
-  ).
-  unfold kstate_run_prog_return_type. f_equal. unfold hprog. f_equal.
-  unfold s'. simpl. f_equal. sep''.
-
-  pose proof (
-    eq_rec _ (fun (s : Set) => s) input
-      (kstate_run_prog_return_type c (projT1 (HANDLERS m))
-        (hdlr_kst henv s') (projT2 (HANDLERS m) m c (hdlr_kst henv s'))
-      )
-    EQ
-  ) as input'. simpl in input'.
-
-  eapply Reach_valid with (s := s) (s' := (hdlr_kst _ s'))
-    (s'' := kstate_run_prog _ _ _ (hdlr_kst _ s') _ input')
-    (input := input'); eauto.
-  simpl. f_equal. sep''.
-  apply f_equal with (f := hdlr_kst _) in H4. simpl in H4. subst kst''.
-  simpl. unfold kstate_run_prog. f_equal. unfold s', henv, hprog.
-
-  Print Reach.
-
-f_equal. simpl.
-
-  
-  unfold hprog. unfold s', henv. sep''. simpl.
-  sep''.
-
-  f_equal.
-  unfold hdlr_state_run_prog in H4.
-
-  unfold kstate_run_prog. simpl in *.
-  destruct H4 as [input H4].
-  assert (KST'' : kst'' = hdlr_kst _ (
-    hdlr_state_run_prog c henv s'
-      (hprog m c
-         {| kcs := cs;
-            ktr := [KRecv c m :: KSelect cs c :: x1];
-            kst := st;
-            kfd := fd |}) input
-  )). apply f_equal with (f := hdlr_kst _) in H4. now simpl in H4.
-
-
-
-
-  rewrite KST''. f_equal. unfold s', henv. sep''. simpl in *. reflexivity.
-
-reflexivity. simpl in *.
-
-simpl in *.
-
-  unfold kst''.
-  unfold s' in Heqh.
-  unfold henv, hprog in Heqh. sep''. rewrite Heqh. now simpl.
-
-  isolate (
-    all_open_payload (pay m) * all_open fd ==>
-    all_open (fd ++ payload_fds (lkup_tag (tag m)) (pay m))
-  ).
   eapply himp_trans; [ | apply all_open_concat ]. sep''.
   apply all_open_payload_to_all_open.
-
-  sep''.
 Qed.
 
 Definition kloop:
@@ -1676,9 +1541,11 @@ Record spec :=
 ; PAYD     : vvdesc NB_MSG
 ; IENVD    : vdesc
 ; KSTD     : vdesc
-; INIT     : init_prog PAYD KSTD IENVD
-; HANDLERS : handlers PAYD KSTD
+; COMPT    : Type
+; COMPS    : COMPT -> comp
+; INIT     : init_prog PAYD COMPT KSTD IENVD
+; HANDLERS : handlers PAYD COMPT KSTD
 }.
 
 Definition mk_main (s : spec) :=
-  @main _ (PAYD s) (KSTD s) (IENVD s) (INIT s) (HANDLERS s).
+  @main _ (PAYD s) (COMPT s) (COMPS s) (KSTD s) (IENVD s) (INIT s) (HANDLERS s).

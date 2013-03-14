@@ -30,7 +30,7 @@ Definition COMPS (t : COMPT) : comp :=
   end.
 
 Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
-  (fun s => Spawn _ _ _ Echo) ::
+  (fun s => Spawn _ _ _ _ Echo) ::
   nil.
 
 Definition HANDLERS : handlers PAYD COMPT KSTD :=
@@ -43,7 +43,7 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
          let (s, _) := pl in
          (fun st0 =>
-           (fun st => Send PAYD COMPT envd (CFd _) None (SLit _ s, tt))
+           (fun st => Send PAYD COMPT envd _ (CFd _) None (SLit _ s, tt))
            :: nil
          )
        )

@@ -706,6 +706,7 @@ Definition eval_payload_expr (pd : vdesc) (e : payload_expr pd) : s[[ pd ]] :=
 Inductive cmd : Type :=
 | Send  : expr fd_d -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
 | Spawn : COMPT -> cmd
+| StUpd : forall i, expr (svec_ith (projT2 KSTD) i) -> cmd
 .
 
 Record init_state :=
@@ -729,6 +730,7 @@ Definition cmd_input_desc c :=
   match c with
   | Send _ _ _ => None
   | Spawn _    => Some fd_d
+  | StUpd _ _  => None
   end.
 
 Definition sdenote_option {T : Type} (sdenote_content : T -> Set) (o : option T) : Set :=
@@ -757,6 +759,13 @@ Definition init_state_run_cmd (s : init_state) (cmd : cmd) : cmd_input cmd -> in
      ; init_ktr   := tr ~~~ KExec (comp_cmd comp) (comp_args comp) c :: tr
      ; init_env   := e
      ; init_kst   := st
+     |}
+  | StUpd i ve => fun _ =>
+    let v := eval_expr e _ ve in
+    {| init_comps := cs
+     ; init_ktr   := tr
+     ; init_env   := e
+     ; init_kst   := shvec_replace_ith _ _ st i v
      |}
   end.
 
@@ -807,6 +816,16 @@ Definition hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd) : cmd_input cmd -> hd
          {| kcs := c :: cs
           ; ktr := tr ~~~ KExec (comp_cmd comp) (comp_args comp) c :: tr
           ; kst := st
+          ; kfd := fd
+          |}
+     ; hdlr_env := env
+     |}
+  | StUpd i ve => fun _ =>
+    let v := eval_expr env _ ve in
+    {| hdlr_kst :=
+         {| kcs := cs
+          ; ktr := tr
+          ; kst := shvec_replace_ith _ _ st i v
           ; kfd := fd
           |}
      ; hdlr_env := env
@@ -1153,6 +1172,13 @@ Proof.
                  ; init_env   := e
                  ; init_kst   := st
                  |} }}
+    | StUpd i ve =>
+      let v := eval_expr devnull _ e _ ve in
+      {{ Return {| init_comps := cs
+                 ; init_ktr   := tr
+                 ; init_env   := e
+                 ; init_kst   := shvec_replace_ith _ _ st i v
+                 |} }}      
     end
   );
   unfold init_invariant, cs, e, open_payload_frame, cmd_input; sep''.
@@ -1174,6 +1200,7 @@ Proof.
   unfold init_state_run_cmd. unfold m, e in *. destruct s. simpl in *.
   sep''.
   apply himp_pure'. exists c0. destruct s. simpl in *. sep''.
+  apply himp_pure'. exists tt. destruct s. sep''.
   (* dirty proof, could be made nicer... *)
 Qed.
 
@@ -1279,42 +1306,52 @@ Definition run_hdlr_cmd :
           * [exists input, s' = hdlr_state_run_cmd cfd envd s c input]).
 Proof.
   intros; refine (
-    (* you lose the equations if you try to let (st, env, fds) := s *)
-    let st := hdlr_kst _ s in
-    let env := hdlr_env _ s in
-    let cs := kcs st in
-    let tr := ktr st in
-    let fds := kfd st in
-    match c with
-    | Send fe t me =>
-      let f := eval_expr cfd _ env _ fe in
-      let m := eval_payload_expr cfd envd env _ me in
-      send_msg f (Build_msg t m)
-      (tr ~~~ expand_ktrace tr)
-      <@> all_open_drop (cs ++ fds) f * all_open_payload (pay cm)
+  (* you lose the equations if you try to let (st, env, fds) := s *)
+  let st := hdlr_kst _ s in
+  let env := hdlr_env _ s in
+  let cs := kcs st in
+  let tr := ktr st in
+  let fds := kfd st in
+  match c with
+  | Send fe t me =>
+    let f := eval_expr cfd _ env _ fe in
+    let m := eval_payload_expr cfd envd env _ me in
+    send_msg f (Build_msg t m)
+    (tr ~~~ expand_ktrace tr)
+    <@> all_open_drop (cs ++ fds) f * all_open_payload (pay cm)
       * [In cfd cs] * [msg_fds_ok st cm] * [env_fds_ok envd s];;
 
-      let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
-      {{Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := kst st ; kfd := fds |}
-                ; hdlr_env := env
-                |}
-      }}
-    | Spawn ct =>
-      let c_cmd := comp_cmd (COMPS ct) in
-      let c_args := comp_args (COMPS ct) in
-      c <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
-        <@> all_open (cs ++ fds) * all_open_payload (pay cm)
-          * [In cfd cs] * [msg_fds_ok st cm] * [env_fds_ok envd s];
+    let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
+    {{Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := kst st ; kfd := fds |}
+              ; hdlr_env := env
+              |}
+    }}
+  | Spawn ct =>
+    let c_cmd := comp_cmd (COMPS ct) in
+    let c_args := comp_args (COMPS ct) in
+    c <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
+      <@> all_open (cs ++ fds) * all_open_payload (pay cm)
+        * [In cfd cs] * [msg_fds_ok st cm] * [env_fds_ok envd s];
 
-      let tr := tr ~~~ KExec c_cmd c_args c :: tr in
-      {{ Return {| hdlr_kst := {| kcs := c :: cs
-                                ; ktr := tr
-                                ; kst := kst st
-                                ; kfd := fds |}
-                 ; hdlr_env := env                
-                 |}
-       }}
-    end
+    let tr := tr ~~~ KExec c_cmd c_args c :: tr in
+    {{ Return {| hdlr_kst := {| kcs := c :: cs
+                              ; ktr := tr
+                              ; kst := kst st
+                              ; kfd := fds |}
+               ; hdlr_env := env                
+               |}
+    }}
+  | StUpd i ve =>
+    let v := eval_expr cfd _ env _ ve in
+    {{ Return {| hdlr_kst := {| kcs := cs
+                              ; ktr := tr
+                              ; kst := shvec_replace_ith _ _ (kst st) i v
+                              ; kfd := fds
+                              |}
+               ; hdlr_env := env
+               |}
+    }}
+  end
   ); unfold env, fds, hdlr_invariant, cmd_input in *; clear env fds; sep fail idtac.
 
   pose proof (eval_expr_fd_in_payload cfd envd (hdlr_env _ s) _ fe f) as E;
@@ -1348,6 +1385,7 @@ Proof.
   generalize dependent (msg_param_i cm i). intros.
   destruct (svec_ith (projT2 (lkup_tag (tag cm))) i); try tauto.
   exists c0. destruct s; destruct hdlr_kst0; simpl in *. sep''.
+  destruct s. sep''. apply himp_pure'. exists tt. destruct hdlr_kst0. sep''.
   (* so ugly... *)
 Qed.
 

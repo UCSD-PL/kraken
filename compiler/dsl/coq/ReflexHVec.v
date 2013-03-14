@@ -76,6 +76,20 @@ Proof.
   exact (shvec_in_dec _ _ vv').
 Qed.
 
+Fixpoint shvec_replace_ith (n : nat) : forall (v_d : svec desc n),
+  shvec n v_d -> forall (i : fin n), s[[ svec_ith v_d i ]] -> shvec n v_d :=
+  match n with
+  | O => fun _ _ i => match i with end
+  | S n' => fun v_d =>
+    match v_d with
+    | (t, v_d') => fun v i =>
+      match i with
+      | None    => fun ith => (ith, snd v)
+      | Some i' => fun ith => (fst v, shvec_replace_ith n' v_d' (snd v) i' ith)
+      end
+    end
+  end.
+
 End SHeterogeneousVector.
 
 Implicit Arguments shvec [desc n].
@@ -83,6 +97,8 @@ Implicit Arguments shvec [desc n].
 Implicit Arguments shvec_ith [desc n].
 
 Implicit Arguments shvec_in [desc n].
+
+Implicit Arguments shvec_replace_ith [desc n].
 
 Theorem shvec_ith_in
   (desc : Set) (sdenote_desc : desc -> Set) desc_eqdec

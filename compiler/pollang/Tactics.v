@@ -304,7 +304,7 @@ Ltac releaser_match :=
 
 Ltac use_IH_releases :=
 repeat match goal with
-       | [ IHReach : forall tr : KTrace, _ |- _ ]
+       | [ IHReach : context[ forall tr : KTrace, _ ] |- _ ]
          => apply IHReach; auto
        | _
          => apply cut_exists 

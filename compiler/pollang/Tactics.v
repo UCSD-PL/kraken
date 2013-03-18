@@ -6,6 +6,7 @@ Require Import ReflexFin.
 Require Import ReflexBase.
 Require Import Ynot.
 Require Import List.
+Require Import Decidable.
 
 (********Begin General Tactics*********)
 
@@ -78,6 +79,20 @@ Ltac clear_old_hyps :=
          end
   end.
 
+Ltac clear_useless_hyps :=
+  repeat match goal with
+         | [ H : _ = _ |- _ ]
+           => revert H
+         | [ H : _ <> _ |- _ ]
+           => revert H
+         | [ H : Reach _ _ _ _ _ |- _ ]
+           => revert H
+         | [ H : In _ _ |- _ ]
+           => revert H
+         | _
+           => idtac
+         end; clear; intros.
+
 Ltac destruct_unpack :=
   match goal with
   | [ m : msg, H : _ = kstate_run_prog _ _ _ _ _ _,
@@ -108,28 +123,41 @@ Ltac subst_assignments :=
       => idtac
   end.
 
-Ltac destruct_conjuncts H :=
+Lemma and_not_decide : forall P Q, decide P -> ~(P /\ Q) -> ~P \/ ~Q.
+intros P Q dP H.
+apply not_and in H.
+auto.
+unfold decidable; destruct dP; auto.
+Qed.
+
+Ltac get_decide P :=
+  match P with
+  | ?a = _ => match type of a with
+             | str => apply str_eq
+             | num => apply num_eq
+             | fd => apply fd_eq
+             end
+  | _ => auto
+  end.
+
+Ltac destruct_neg_conjuncts H :=
   match type of H with
-  | _ /\ _ => let L := fresh "L" in
-              let R := fresh "R" in
-              destruct H as [L R]; destruct_conjuncts R
+  | ~(?P /\ _) => let R := fresh "R" in
+                  apply and_not_decide in H;
+                  [ destruct H as [ | R ]; [ | destruct_neg_conjuncts R ] | get_decide P ]
   | _ => idtac
   end.
 
-Ltac destruct_disjuncts H :=
-  match type of H with
-  | _ \/ _ => let L := fresh "L" in
-              let R := fresh "R" in
-              destruct H as [L | R]; destruct_disjuncts R
-  | _ => idtac
-  end.
-
-Ltac destruct_action_match :=
-  match goal with
-  | [ H : AMatch ?future ?act |- _ ]
-      => compute in H (*produces a conjunction of Props*);
-         destruct_conjuncts H
-  end.
+Ltac destruct_action_matches :=
+  repeat match goal with
+         | [ H : AMatch ?future ?act |- _ ]
+           => compute in H (*maybe produces a conjunction of Props*);
+              decompose [and] H
+         | [ H : ~AMatch ?future ?act |- _ ]
+           => compute in H
+              (*maybe produces a negated conjunction of decidable Props*);
+              destruct_neg_conjuncts H
+         end.
 
 Ltac act_match :=
   match goal with
@@ -165,42 +193,64 @@ Ltac reach_induction :=
          (*msg_fds_are_ok eliminates bad fds case when that's impossible.*)
   end.
 
+Ltac impossible :=
+  match goal with
+  | [ H : ?x = _, H' : ?x = _ |- _ ]
+      => rewrite -> H in H'; discriminate
+  | [ H : _ = ?x, H' : _ = ?x |- _ ]
+      => rewrite <- H in H'; discriminate
+  end.
+
 (********End General Tactics*********)
 
 (********Begin Disable Tactics*********)
 
 Ltac use_IH_disables :=
   match goal with
-  | [ IHReach : context[forall tr' : KTrace, ktr _ ?s = inhabits tr' -> _],
+  | [ IHReach : context[forall tr' : KTrace, _],
       _ : ktr _ ?s = inhabits ?tr |- _ ]
-      => let act := fresh "act" in
-         let H'' := fresh "H" in
-         apply IHReach with (tr':=tr); auto (*TODO: auto may not always work here.*)
+      => apply IHReach with (tr':=tr); auto (*TODO: auto may not always work here.*)
   end.
+
 (*This function should be passed a state. It will then attempt to prove
   that there are no instances of the disabler (should it be passed the disabler?)
   anywhere in the trace of that state.*)
 (*There are two situations:
 1.) The trace of the state is fully concrete: no induction required.
 2.) The trace is not fully concrete: induction required.*)
-Ltac forall_not_disabler :=
-  let HIn := fresh "HIn" in
-  let act' := fresh "act'" in
-  (*Checks the concrete actions at the head of the trace.*)
-  intros act' HIn; simpl in HIn; destruct_disjuncts HIn;
-  try (subst act'; simpl; tauto);
-  destruct_action_match;
-  clear_old_hyps;
-  reach_induction;
-  match goal with
-  | [ H : _ = initial_init_state _ _, H' : context[ In _ _ ] |- _ ]
-      => destruct_disjuncts H'; (subst act'; tauto) || contradiction
-         (*subst act' works when it is set equal to actual action*)
-         (*contradiction works when act' is in nil*)
-  | [ H' : context[ In _ _ ] |- _ ]
-      => subst_assignments; subst_states; simpl in *;
-         destruct_disjuncts H';
-         try solve [(subst act'; tauto) | discriminate | use_IH_disables]
+Ltac forall_not_disabler s :=
+  let t := type of s in
+  match t with
+  | kstate _ =>
+     destruct_action_matches;
+     (*Probably have to do something more intelligent than subst here.*)
+     try subst;
+     (*This may not clear the old induction hypothesis. Does it matter?*)
+     clear_useless_hyps;
+     (*Should this take s as an argument?*)
+     reach_induction;
+     match goal with
+     | [ H : _ = initial_init_state _ _, H' : context[ In ?act _ ] |- _ ]
+       => decompose [or] H';
+          try solve [(subst act; tauto)
+                    | contradiction
+                    | discriminate
+                    | impossible]
+          (*subst act' works when it is set equal to actual action*)
+          (*contradiction works when act' is in nil*)
+          (*discriminate works when there is a
+            contradiction with some property of the state*)
+     | [ _ : ktr _ ?s' = inhabits _, H' : context[ In ?act _ ] |- _ ]
+       => subst_assignments; subst_states; simpl in *;
+          decompose [or] H';
+          try solve [(subst act; tauto)
+                    | discriminate
+                    | contradiction
+                    | use_IH_disables
+                    | impossible
+                    | forall_not_disabler s' ]
+     end
+  | _ => idtac "forall_not_disabler passed something which is not a kstate:" s t
   end.
 
 Ltac match_disables :=
@@ -214,12 +264,12 @@ Ltac match_disables :=
                        |- Disables _ _ ?past ?future ?tr ]
       => auto
   (*Branch on whether the head of the trace matches.*)
-  | [ |- Disables ?nb_msg ?pdv _ ?future (?act::_) ]
+  | [ _ : ktr _ ?s = inhabits _ |- Disables ?nb_msg ?pdv _ ?future (?act::_) ]
       => let H := fresh "H" in
          pose proof (decide_act nb_msg pdv future act) as H;
          destruct H;
          [ contradiction ||
-           (apply D_disablee; [ match_disables | forall_not_disabler ])
+           (apply D_disablee; [ match_disables | forall_not_disabler s])
          | contradiction ||
            (apply D_not_disablee; [ match_disables | assumption ]) ]
          (*In some cases, one branch is impossible, so contradiction
@@ -232,50 +282,71 @@ Ltac match_disables :=
 
 (********Begin Releases Tactics********)
 
-(*Should only be called by releaser_match.*)
-Ltac releaser_match' :=
-  match goal with
-  | [ |- (?act = _ \/ ?disj_R ) /\ ?conj_R ]
-    => (instantiate (1:=act); compute; tauto) ||
-       (cut (disj_R /\ conj_R); [ | releaser_match']; tauto)
-       (*The last call to tauto solves the first goal created by cut.
-         However, it can't solve this goal until the existential variable
-         is instantiated, which happens in the recursive call to releaser_match'.*)
-  | _ => fail 1
-  end.
+Lemma cut_exists : forall nb_msg plt act disj_R conj_R,
+  (exists past : @KAction nb_msg plt, (disj_R past) /\ (conj_R past)) ->
+  exists past, (act = past \/ disj_R past) /\ (conj_R past).
+Proof.
+  intros nb_msg plt act disj_R conj_R H.
+  destruct H.
+  exists x.
+  destruct H.
+  auto.
+Qed.
 
 Ltac releaser_match :=
-  eexists; releaser_match'.
-
-Ltac use_IH_releases :=
+  simpl;
   match goal with
-  | [ IHReach : ?H -> ?rest, H' : ?H, _ : ktr _ ?s = inhabits ?tr |- _ ]
-    => match rest with
-       | context[forall tr' : KTrace, ktr _ s = inhabits tr' -> _]
-          => let act := fresh "act" in
-             let H'' := fresh "H" in
-             apply IHReach with (tr':=tr) in H'; auto;
-             (*TODO: What if there is more than one hypothesis?*)
-             destruct H' as [ act H'' ]; exists act; tauto
-       end
+  | [ |- exists past : KAction, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
+    => (exists act; compute; tauto) ||
+       (apply cut_exists; releaser_match)
+  | _ => idtac
   end.
 
-(*TODO: Do we check the actions at the head of the trace? Maybe...*)
-Ltac exists_past :=
-  destruct_action_match;
-  clear_old_hyps;
-  reach_induction;
-  match goal with
-  | [ H : _ = initial_init_state _ _ |- _ ]
-      => rewrite H in *; intuition (*Initial state. Contradiction?*)
-         (*TODO: There may be the action we are looking for in this state.*)
-  | _
-      => subst_assignments; subst_states; repeat subst
-         (*For any equalities generated by destructing the action match*);
-         simpl in *;
-         try solve [contradiction | use_IH_releases | releaser_match]
-         (*destruct_eq might have created contradictions
+Ltac use_IH_releases :=
+repeat match goal with
+       | [ IHReach : forall tr : KTrace, _ |- _ ]
+         => apply IHReach; auto
+       | _
+         => apply cut_exists 
+       end.
+
+Ltac exists_past s :=
+  let t := type of s in
+  match t with
+  | kstate _ =>
+     destruct_action_matches;
+     (*Probably have to do something more intelligent than subst here.*)
+     subst_states;
+     (*Try to match stuff at head of trace.*)
+     releaser_match;
+     (*This may not clear the old induction hypothesis. Does it matter?*)
+     clear_useless_hyps;
+     (*Should this take s as an argument?*)
+     reach_induction;
+     match goal with
+     | [ H : _ = initial_init_state _ _ |- _ ]
+       => try rewrite H in *;
+          try solve [contradiction
+                    | discriminate
+                    | intuition
+                    | impossible ]
+          (*TODO: There may be the action we are looking for in this state.*)
+     | [ _ : ktr _ ?s' = inhabits _ |- _ ]
+       => subst_assignments; subst_states; repeat subst
+          (*For any equalities generated by destructing the action match*);
+          simpl in *;
+          try solve [contradiction
+                    | discriminate
+                    | intuition
+                    | impossible
+                    | use_IH_releases
+                    | releaser_match
+                    | exists_past s']
+          (*destruct_eq might have created contradictions
            with previous calls of destruct_eq*)
+     | _ => idtac
+     end
+  | _ => idtac "exists_past passed something which is not a kstate:" s t
   end.
 
 Ltac match_releases :=
@@ -289,12 +360,12 @@ Ltac match_releases :=
                        |- Release _ _ ?past ?future ?tr ]
       => auto
   (*Branch on whether the head of the trace matches.*)
-  | [ |- Release ?nb_msg ?pdv _ ?future (?act::_) ]
+  | [ _ : ktr _ ?s = inhabits _ |- Release ?nb_msg ?pdv _ ?future (?act::_) ]
       => let H := fresh "H" in
          pose proof (decide_act nb_msg pdv future act) as H;
          destruct H;
          [ contradiction ||
-           (apply R_future; [ match_releases | exists_past ])
+           (apply R_future; [ match_releases | exists_past s ])
          | contradiction ||
            (apply R_not_future; [ match_releases | assumption ]) ]
          (*In some cases, one branch is impossible, so contradiction

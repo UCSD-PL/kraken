@@ -5,28 +5,23 @@ Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexVec.
 
+Open Scope string_scope.
+
 Definition NB_MSG : nat := 1.
 
-Definition PAYD : vvdesc NB_MSG :=
-  ( existT _ 1 (str_d, tt)
-  , tt
-  ).
+Definition PAYD : vvdesc NB_MSG := mk_vvdesc
+  [ ("M", [str_d])
+  ].
 
-Definition KSTD : vdesc := existT _ 0 tt.
+Definition KSTD : vdesc := mk_vdesc [].
 
-Definition IENVD : vdesc := existT _ 0 tt.
+Definition IENVD : vdesc := mk_vdesc [].
 
-Inductive COMPT : Type :=
-| Echo
-.
+Inductive COMPT : Type := Echo.
 
 Definition COMPS (t : COMPT) : comp :=
   match t with
-  | Echo =>
-    {| comp_name := str_of_string "Echo"
-     ; comp_cmd  := str_of_string "test/echo-00/test.py"
-     ; comp_args := nil
-     |}
+  | Echo => mk_COMP "Echo" "test/echo-00/test.py" []
   end.
 
 Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
@@ -43,7 +38,7 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
          let (s, _) := pl in
          (fun st0 =>
-           (fun st => Send PAYD COMPT envd _ (CFd _) None (SLit _ s, tt))
+           (fun st => Send PAYD _ _ _ (CFd _) None (SLit _ s, tt))
            :: nil
          )
        )

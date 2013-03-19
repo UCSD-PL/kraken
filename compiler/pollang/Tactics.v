@@ -67,18 +67,6 @@ Ltac unpack :=
          end
   end.
 
-(*Erases hypothesis relating to old states on which we are not performing induction.*)
-(*First rewrites those states to avoid losing information.*)
-Ltac clear_old_hyps :=
-  match goal with
-  | [ s : kstate _, s' : kstate _ |- _ ]
-      => match goal with
-         | [ H : s = _, H' : s' = _,
-             IHReach : forall tr : KTrace, _ |- _ ]
-           => subst s; subst s'; clear IHReach
-         end
-  end.
-
 Ltac clear_useless_hyps :=
   repeat match goal with
          | [ H : _ = _ |- _ ]
@@ -105,23 +93,19 @@ Ltac destruct_unpack :=
   end.
 
 Ltac subst_states :=
-  match goal with 
-  | [ s : kstate _ |- _ ]
-      => match goal with
-         | [ _ : s = _ |- _ ]
-             => subst s; subst_states
-         end
-  | _
-      => idtac
-  end.
+  repeat match goal with 
+         | [ s : kstate _ |- _ ]
+           => match goal with
+              | [ _ : s = _ |- _ ]
+                => subst s
+              end
+         end.
 
 Ltac subst_assignments :=
-  match goal with
-  | [ a := _ |- _ ]
-      => subst a; subst_assignments
-  | _
-      => idtac
-  end.
+  repeat match goal with
+         | [ a := _ |- _ ]
+           => subst a
+         end.
 
 Lemma and_not_decide : forall P Q, decide P -> ~(P /\ Q) -> ~P \/ ~Q.
 intros P Q dP H.
@@ -144,7 +128,8 @@ Ltac destruct_neg_conjuncts H :=
   match type of H with
   | ~(?P /\ _) => let R := fresh "R" in
                   apply and_not_decide in H;
-                  [ destruct H as [ | R ]; [ | destruct_neg_conjuncts R ] | get_decide P ]
+                  [ destruct H as [ | R ];
+                    [ | destruct_neg_conjuncts R ] | get_decide P ]
   | _ => idtac
   end.
 
@@ -231,7 +216,7 @@ Ltac forall_not_disabler s :=
      reach_induction;
      match goal with
      | [ H : _ = initial_init_state _ _, H' : context[ In ?act _ ] |- _ ]
-       => decompose [or] H';
+       => simpl in H'; decompose [or] H';
           try solve [(subst act; tauto)
                     | contradiction
                     | discriminate

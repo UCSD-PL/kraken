@@ -1245,6 +1245,10 @@ Definition open_payload_frame {envd} (cfd : fd) (f : fd) (pl : s[[ envd ]]) :=
 .
 *)
 
+Theorem numd_neq_fdd : num_d = fd_d -> False. Proof. discriminate. Qed.
+Theorem strd_neq_fdd : str_d = fd_d -> False. Proof. discriminate. Qed.
+
+
 Definition run_init_cmd :
   forall (prog_envd : vdesc) (s : init_state prog_envd) (c : cmd prog_envd),
   STsep (tr :~~ init_ktr prog_envd s in
@@ -1259,6 +1263,7 @@ Proof.
     let e  := init_env _ s in
     let st := init_kst _ s in
     match c with
+
     | Send fe t me =>
       (* /!\ We lose track of the let-open equalities if existentials remain,
          make sure that Coq can infer _all_ the underscores. *)
@@ -1273,12 +1278,14 @@ Proof.
                  ; init_env   := e
                  ; init_kst   := st
                  |} }}
+
     | Spawn ct =>
       let c_cmd := comp_cmd (COMPS ct) in
       let c_args := comp_args (COMPS ct) in
       c <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
-        <@> open devnull * all_open (init_comps prog_envd s) *
-            all_open_payload (init_env prog_envd s);
+        <@> open devnull * all_open (init_comps prog_envd s)
+          * all_open_payload (init_env prog_envd s)
+          * all_open_payload (init_kst prog_envd s);
 
       let tr := tr ~~~ KExec c_cmd c_args c :: tr in
       {{ Return {| init_comps := c :: cs
@@ -1286,6 +1293,7 @@ Proof.
                  ; init_env   := e
                  ; init_kst   := st
                  |} }}
+
     | StUpd i ve =>
       let v := eval_expr devnull _ st e _ ve in
       {{ Return {| init_comps := cs
@@ -1293,31 +1301,23 @@ Proof.
                  ; init_env   := e
                  ; init_kst   := shvec_replace_ith _ _ st i v
                  |} }}      
+
     end
   );
   unfold init_invariant, cs, e, open_payload_frame, cmd_input; sep''.
 
   unfold f. clear f.
-
-Theorem a : num_d = fd_d -> False. Proof. discriminate. Qed.
-Theorem b : str_d = fd_d -> False. Proof. discriminate. Qed.
-
-idtac.
-
   refine (
     match fe as _fe in expr _ _d return (
       _d = fd_d ->
       all_open_payload (init_kst prog_envd s) *
       (all_open_payload (init_env prog_envd s) * open devnull) ==>
-
       match _d as __d return s[[ __d ]] -> hprop with
       | num_d => fun _ => emp
       | str_d => fun _ => emp
       | fd_d  => fun f => open f
       end (eval_expr devnull prog_envd st e _d _fe)
-
       *
-
       match _fe in expr _ __d return (sdenote_desc __d -> hprop) with
       | SLit _ => fun _ => emp
       | NLit _ => fun _ => emp
@@ -1347,47 +1347,46 @@ idtac.
       | UnOp _ d2 _ _ => fun _ => emp
       | BinOp _ _ d3 _ _ _ => fun _ => emp
       end (eval_expr devnull prog_envd st e _d _fe)
-
     ) with
-    | NLit _ => fun bad => match a bad with end
-    | SLit _ => fun bad => match b bad with end
+    | NLit _ => fun bad => match numd_neq_fdd bad with end
+    | SLit _ => fun bad => match strd_neq_fdd bad with end
     | _      => fun _   => _
     end (Logic.eq_refl fd_d)
   ).
+  simpl.
 
   assert (
-    match svec_ith (projT2 prog_envd) i as _x return expr _ _x -> Prop with
+    match svec_ith (projT2 prog_envd) i as _x return s[[ _x ]] -> Prop with
     | num_d => fun _ => True
     | str_d => fun _ => True
-    | fd_d  => fun v =>
-      fd_in_payload (eval_expr devnull prog_envd st e _ v) prog_envd
-                    (init_env prog_envd s)
-    end (Var prog_envd i)
+    | fd_d  => fun v => fd_in_payload v prog_envd (init_env prog_envd s)
+    end (shvec_ith sdenote_desc (projT2 prog_envd) e i)
   ).
-  admit.
+  pose proof (shvec_ith_in) as IN.
+  specialize (
+    IN desc sdenote_desc desc_eqdec UIP_refl_desc (projT1 prog_envd) (projT2 prog_envd) e i
+  ).
+  generalize dependent (shvec_ith sdenote_desc (projT2 prog_envd) e i).
+  destruct (svec_ith (projT2 prog_envd) i); tauto.
 
   revert H0.
 
   refine (
     match svec_ith (projT2 prog_envd) i as _x return (
-      _x = fd_d -> forall (v : expr prog_envd _x),
-   match _x as __x return (expr prog_envd __x -> Prop)
+      _x = fd_d -> forall (v : s[[ _x ]]),
+   match _x as __x return (s[[ __x ]] -> Prop)
    with
    | num_d => fun _ => True
    | str_d => fun _ => True
-   | fd_d =>
-       fun v =>
-       fd_in_payload (eval_expr devnull prog_envd st e _ v) prog_envd
-         (init_env prog_envd s)
-   end (Var prog_envd i) ->
+   | fd_d  => fun v => fd_in_payload v prog_envd (init_env prog_envd s)
+   end v ->
    all_open_payload (init_kst prog_envd s) *
    (all_open_payload (init_env prog_envd s) * open devnull) ==>
    match _x as __d return (s[[__d]] -> hprop) with
    | num_d => fun _ : s[[num_d]] => emp
    | str_d => fun _ : s[[str_d]] => emp
    | fd_d => fun f : s[[fd_d]] => open f
-   end
-     (eval_expr devnull prog_envd st e _x v) *
+   end v *
    match _x as _s return (sdenote_desc _s -> hprop)
    with
    | num_d => fun _ : sdenote_desc num_d => emp
@@ -1396,217 +1395,174 @@ idtac.
        fun f0 : fd =>
        open devnull * all_open_payload_drop f0 (init_env prog_envd s) *
        all_open_payload st
-   end
-     (eval_expr devnull prog_envd st e _x v)
-    ) with
-    | num_d => fun bad => match a bad with end
-    | str_d => fun bad => match b bad with end
-    | fd_d  => fun _ => _
-    end _H (Var prog_envd i)
-  ).
-
-  intros. sep''. unfold eval_expr.
-
-  rewrite _H.
-
-  destruct (svec_ith (projT2 prog_envd) i).
-
-Axiom TODO : forall {T}, T.
-
-  refine (
-  match svec_ith (projT2 prog_envd) i as _i return (forall (v : expr _ _i),
-   match _i as __d return (expr prog_envd __d -> Prop)
-   with
-   | num_d => fun _ : expr prog_envd num_d => True
-   | str_d => fun _ : expr prog_envd str_d => True
-   | fd_d =>
-       fun __fe : expr prog_envd fd_d =>
-       let f0 := eval_expr devnull prog_envd st e fd_d __fe in
-       all_open_payload (init_kst prog_envd s) *
-       (all_open_payload (init_env prog_envd s) * open devnull) ==>
-       open f0 *
-       match __fe with
-       | SLit _ => emp
-       | NLit _ => emp
-       | Var i0 =>
-           match svec_ith (projT2 prog_envd) i0 with
-           | num_d => emp
-           | str_d => emp
-           | fd_d =>
-               open devnull * all_open_payload_drop f0 (init_env prog_envd s) *
-               all_open_payload st
-           end
-       | CFd => all_open_payload (init_env prog_envd s) * all_open_payload st
-       | StVar _ =>
-           open devnull * all_open_payload (init_env prog_envd s) *
-           all_open_payload_drop f0 st
-       | UnOp _ _ _ _ => emp
-       | BinOp _ _ _ _ _ _ => emp
-       end
    end v
-  ) with
-  | num_d => fun _ => I
-  | str_d => fun _ => I
-  | fd_d  => _
-  end (Var prog_envd i)
+    ) with
+    | num_d => fun bad => match numd_neq_fdd bad with end
+    | str_d => fun bad => match strd_neq_fdd bad with end
+    | fd_d  => fun _ => _
+    end _H (shvec_ith sdenote_desc (projT2 prog_envd) e i)
   ).
 
-  remember (Var prog_envd i) as v. generalize dependent v. destruct v.
-  destruct (svec_ith (projT2 prog_envd) i). ; try tauto.
+  intros. sep''.
+  sep''.
+  sep''.
+  
+  assert (
+    match svec_ith KSTD_DESC i as _x return s[[ _x ]] -> Prop with
+    | num_d => fun _ => True
+    | str_d => fun _ => True
+    | fd_d  => fun v =>
+      fd_in_payload v KSTD st
+    end (shvec_ith sdenote_desc KSTD_DESC st i)
+  ).
+  pose proof (shvec_ith_in) as IN.
+  specialize (
+    IN desc sdenote_desc desc_eqdec UIP_refl_desc KSTD_SIZE KSTD_DESC st i
+  ).
+  generalize dependent (shvec_ith sdenote_desc KSTD_DESC st i).
+  destruct (svec_ith KSTD_DESC i); tauto.
 
+  generalize dependent (
+    shvec_ith sdenote_desc KSTD_DESC st i
+  ).
+  destruct (svec_ith KSTD_DESC i); try discriminate.
+  intros. sep''.
 
-  simpl.
-  admit.
-  simpl. sep''.
+  destruct u; discriminate.
+  destruct b; discriminate.
 
-admit. admit. destruct d2.
-
-
-
-
-
-
-
-  generalize dependent fe.
-
-  Axiom TODO : forall {T}, T.
-
-  intros fe.
-
+  unfold f. clear f.
   refine (
     match fe as _fe in expr _ _d return (
-      match _d as __d return expr _ __d -> Prop with
-      | num_d => fun _ => True
-      | str_d => fun _ => True
-      | fd_d => fun __fe =>
-        let f := eval_expr devnull prog_envd st e fd_d __fe in
-        all_open_payload (init_env prog_envd s) * open devnull ==>
-        open f *
-        match __fe with
-        | SLit _ => emp
-        | NLit _ => emp
-        | Var i =>
-          match svec_ith (projT2 prog_envd) i with
-          | num_d => emp
-          | str_d => emp
-          | fd_d =>
-            open devnull * all_open_payload_drop f (init_env prog_envd s) *
-            all_open_payload st
-          end
-        | CFd => all_open_payload (init_env prog_envd s) * all_open_payload st
-        | StVar _ =>
-          open devnull * all_open_payload (init_env prog_envd s) *
-          all_open_payload_drop f st
-        | UnOp _ _ _ _ => emp
-        | BinOp _ _ _ _ _ _ => emp
-        end
-      end _fe
-    )
-  with
-  | SLit _ => I
-  | NLit _ => I
-  | Var i => _
-  | CFd => _
-  | StVar i => _
-  | UnOp _ _ _ _ => _
-  | BinOp _ _ _ _ _ _ => _
-  end
-  )
-  .
-  let rt x := match x as _x return expr prog_envd _x -> _ with fd_d => fun fe =>
-   let f := eval_expr devnull prog_envd st e fd_d fe in
-   all_open_payload (init_env prog_envd s) * open devnull ==>
-   open f *
-   match fe with
-   | SLit _ => emp
-   | NLit _ => emp
+      _d = fd_d ->
+      match _d as __d return s[[ __d ]] -> hprop with
+      | num_d => fun _ => emp
+      | str_d => fun _ => emp
+      | fd_d  => fun f => open f
+      end (eval_expr devnull prog_envd st e _d _fe)
+      *
+   match _fe in expr _ __d return (sdenote_desc __d -> hprop) with
+   | SLit _ => fun _ : str => emp
+   | NLit _ => fun _ : num => emp
    | Var i =>
-       match svec_ith (projT2 prog_envd) i with
-       | num_d => emp
-       | str_d => emp
+       fun f : sdenote_desc (svec_ith (projT2 prog_envd) i) =>
+       match svec_ith (projT2 prog_envd) i as _s return (sdenote_desc _s -> hprop)
+       with
+       | num_d => fun _ : num => emp
+       | str_d => fun _ : str => emp
        | fd_d =>
-           open devnull * all_open_payload_drop f (init_env prog_envd s) *
+           fun f0 : fd =>
+           open devnull * all_open_payload_drop f0 (init_env prog_envd s) *
            all_open_payload st
-       end
-   | CFd => all_open_payload (init_env prog_envd s) * all_open_payload st
-   | StVar _ =>
-       open devnull * all_open_payload (init_env prog_envd s) *
-       all_open_payload_drop f st
-   | UnOp _ _ _ _ => emp
-   | BinOp _ _ _ _ _ _ => emp
-   end
-  | _ => fun _ => unit end in
-  match fe as _fe in expr _ _t return rt _t _fe with
-  | SLit _ => tt
-  | NLit _ => tt
-  | Var i => _
-  | CFd => _
-  | StVar i => _
-  | UnOp d1 d2 o1 o2 =>
-    match d2 as _d return forall (o1 : unop d1 _d), rt _d (UnOp _ d1 _d o1 o2) with fd_d => _ | str_d => fun _ => tt | num_d => fun _ => tt end o1
-  | BinOp d1 d2 d3 o1 o2 o3 =>
-    match d3 as _d return rt _d _ with fd_d => _ | _ => tt end
-  end
-  ). simpl. unfold rt.
+       end f
+   | CFd =>
+       fun _ : fd =>
+       all_open_payload (init_env prog_envd s) * all_open_payload st
+   | StVar i =>
+       fun f : sdenote_desc (svec_ith KSTD_DESC i) =>
+       match svec_ith KSTD_DESC i as _s return (sdenote_desc _s -> hprop) with
+       | num_d => fun _ : num => emp
+       | str_d => fun _ : str => emp
+       | fd_d =>
+           fun f0 : fd =>
+           open devnull * all_open_payload (init_env prog_envd s) *
+           all_open_payload_drop f0 st
+       end f
+   | UnOp _ d2 _ _ => fun _ : sdenote_desc d2 => emp
+   | BinOp _ _ d3 _ _ _ => fun _ : sdenote_desc d3 => emp
+   end (eval_expr devnull prog_envd st e _d _fe) ==>
+   all_open_payload st *
+   (all_open_payload (init_env prog_envd s) * open devnull) *
+   [exists input : unit,
+      {|
+      init_comps := init_comps prog_envd s;
+      init_ktr := [KSend (eval_expr devnull prog_envd st e fd_d fe)
+                     {| tag := t; pay := m |} :: x0];
+      init_env := init_env prog_envd s;
+      init_kst := st |} =
+      init_state_run_cmd devnull prog_envd s (Send prog_envd fe t me) input]
 
+    ) with
+    | NLit _ => fun bad => match numd_neq_fdd bad with end
+    | SLit _ => fun bad => match strd_neq_fdd bad with end
+    | _      => fun _   => _
+    end (Logic.eq_refl fd_d)
+  ).
+  simpl.
 
-  pose proof eval_expr_fd_in_payload as E.
-  specialize (E _ _ _ _ fe f st (Logic.eq_refl f)). simpl in E.
-  generalize dependent fe. intros fe. case_eq fe. dependent inversion fe.
+  assert (
+    match svec_ith (projT2 prog_envd) i as _x return s[[ _x ]] -> Prop with
+    | num_d => fun _ => True
+    | str_d => fun _ => True
+    | fd_d  => fun v => fd_in_payload v prog_envd (init_env prog_envd s)
+    end (shvec_ith sdenote_desc (projT2 prog_envd) e i)
+  ).
+  pose proof (shvec_ith_in) as IN.
+  specialize (
+    IN desc sdenote_desc desc_eqdec UIP_refl_desc (projT1 prog_envd) (projT2 prog_envd) e i
+  ).
+  generalize dependent (shvec_ith sdenote_desc (projT2 prog_envd) e i).
+  destruct (svec_ith (projT2 prog_envd) i); tauto.
 
-Print UnOp.
+  revert H.
 
-  refine (fun fe =>
-  match fe in expr _ _t return match _t with fd_d => _ | _ => unit end with
-  | SLit _ => tt
-  | NLit _ => tt
-  | Var i => _
-  | CFd => _
-  | StVar i => _
-  | UnOp d1 d2 _ _ =>
-    match d2 with fd_d => _ | _ => tt end
-  | BinOp _ _ _ _ _ _ => tt
-  end
+  refine (
+    match svec_ith (projT2 prog_envd) i as _x return (
+      _x = fd_d -> forall (v : s[[ _x ]]),
+
+   match _x as __x return (s[[ __x ]] -> Prop) with
+   | num_d => fun _ : s[[num_d]] => True
+   | str_d => fun _ : s[[str_d]] => True
+   | fd_d =>
+       fun v : s[[fd_d]] => fd_in_payload v prog_envd (init_env prog_envd s)
+   end v ->
+   match _x as __d return (sdenote_desc __d -> hprop) with
+   | num_d => fun _ : num => emp
+   | str_d => fun _ : str => emp
+   | fd_d => fun f : fd => open f
+   end v *
+   match _x as _s return (sdenote_desc _s -> hprop) with
+   | num_d => fun _ : num => emp
+   | str_d => fun _ : str => emp
+   | fd_d =>
+       fun f0 : fd =>
+       open devnull * all_open_payload_drop f0 (init_env prog_envd s) *
+       all_open_payload st
+   end v ==>
+   all_open_payload st *
+   (all_open_payload (init_env prog_envd s) * open devnull) *
+   [exists input : unit,
+      {|
+      init_comps := init_comps prog_envd s;
+      init_ktr := [KSend (eval_expr devnull prog_envd st e fd_d fe)
+                     {| tag := t; pay := m |} :: x0];
+      init_env := init_env prog_envd s;
+      init_kst := st |} =
+      init_state_run_cmd devnull prog_envd s (Send prog_envd fe t me) input]
+
+    ) with
+    | num_d => fun bad => match numd_neq_fdd bad with end
+    | str_d => fun bad => match strd_neq_fdd bad with end
+    | fd_d  => fun _ => _
+    end _H (shvec_ith sdenote_desc (projT2 prog_envd) e i)
   ).
 
-
-
-destruct fe.
-
-
-  
-  intuition.
-  destruct fe.
-
-  destruct (fd_eq f devnull).
-  subst. sep''. rewrite e0. sep''.
-  pose proof eval_expr_fd_in_payload as E.
-  specialize (E _ _ _ _ fe f st (Logic.eq_refl f)). simpl in E. intuition.
-  sep''.
-
-  
-
-  sep''.
-
-
-
-  destruct (fd_eq f devnull).
-  subst. rewrite e0. sep''.
-
-  sep''.
+  intros. sep''. apply himp_pure'. exists tt.
+  unfold init_state_run_cmd. unfold m, e in *. destruct s. simpl in *. sep''.
 
   sep''.
   apply himp_pure'.
   exists tt.
-  unfold init_state_run_cmd. unfold m, e in *. destruct s. simpl in *. rewrite e0.
-  sep''.
-  pose proof eval_expr_fd_in_payload as E.
-  specialize (E _ _ _ _ fe f (Logic.eq_refl f)). simpl in E. intuition.
-  sep''.
-  apply himp_pure'. exists tt.
-  unfold init_state_run_cmd. unfold m, e in *. destruct s. simpl in *.
-  sep''.
+  unfold init_state_run_cmd. unfold m, e in *. destruct s. simpl in *. sep''.
+  admit.
+  destruct u; discriminate.
+  destruct b; discriminate.
   apply himp_pure'. exists c0. destruct s. simpl in *. sep''.
+
+TODO. (* replacing a fd is :( *)
+
+  simpl in *.
+
   apply himp_pure'. exists tt. destruct s. sep''.
   (* dirty proof, could be made nicer... *)
 Qed.

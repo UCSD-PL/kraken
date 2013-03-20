@@ -3,6 +3,7 @@ Require Import String.
 Require Import Reflex.
 Require Import ReflexBase.
 Require Import ReflexDenoted.
+Require Import ReflexFin.
 Require Import ReflexVec.
 
 Open Scope string_scope.
@@ -15,12 +16,27 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("Quit",    [ ])
   ].
 
+Notation Input   := (None) (only parsing).
+Notation Display := (Some None) (only parsing).
+Notation Quit    := (Some (Some None)) (only parsing).
+
 Definition KSTD : vdesc := mk_vdesc
   [ fd_d (* curtab *)
   ; fd_d (* screen *)
   ].
 
-Definition IENVD : vdesc := mk_vdesc [].
+Notation curtab := (StVar KSTD _ None) (only parsing).
+Notation screen := (StVar KSTD _ (Some None)) (only parsing).
+
+Definition IENVD : vdesc := mk_vdesc
+  [ fd_d (* curtab *)
+  ; fd_d (* screen *)
+  ; fd_d (* user-input *)
+  ].
+
+Notation v_t := (None) (only parsing).
+Notation v_s := (Some None) (only parsing).
+Notation v_u := (Some (Some None)) (only parsing).
 
 Inductive COMPT : Type := Tab | Screen | UserInput.
 
@@ -32,8 +48,9 @@ Definition COMPS (t : COMPT) : comp :=
   end.
 
 Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
-  [ fun s => Spawn _ _ _ _ Tab
-  ; fun s => Spawn _ _ _ _ Screen
+  [ fun s => Spawn _ _ _ IENVD Tab       v_t (Logic.eq_refl _)
+  ; fun s => Spawn _ _ _ IENVD Screen    v_s (Logic.eq_refl _)
+  ; fun s => Spawn _ _ _ IENVD UserInput v_u (Logic.eq_refl _)
   ].
 
 Definition HANDLERS : handlers PAYD COMPT KSTD :=
@@ -42,36 +59,34 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
     with
 
-(* Input *)
-    | None => fun pl =>
+    | Input => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
          let (input, _) := pl in
          (fun st0 =>
-                                                 (* should be curtab *)
-            [ fun s => Send PAYD COMPT KSTD envd (CFd _) None (SLit _ input, tt)
+            [ fun s => Send PAYD COMPT KSTD envd curtab Input (SLit _ _ input, tt)
             ]
          )
        )
 
-(* Display *)
-    | Some None => fun pl =>
+    | Display => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
          let (url, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd (CFd _) (Some None) (SLit _ url, tt)
+            [ fun s => Send PAYD COMPT KSTD envd screen Display (SLit _ _ url, tt)
             ]
          )
        )
 
-(* Quit *)
-    | Some (Some None) => fun pl =>
+    | Quit => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
          let _ := pl in
          (fun st0 =>
-           []
+            [ fun s => Send PAYD COMPT KSTD envd curtab Quit tt
+            ; fun s => Send PAYD COMPT KSTD envd screen Quit tt
+            ]
          )
        )
 

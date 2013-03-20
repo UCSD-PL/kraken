@@ -15,18 +15,20 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
 
 Definition KSTD : vdesc := mk_vdesc [].
 
-Definition IENVD : vdesc := mk_vdesc [].
+Definition IENVD : vdesc := mk_vdesc
+  [ fd_d 
+  ].
 
 Inductive COMPT : Type := Echo.
 
 Definition COMPS (t : COMPT) : comp :=
   match t with
-  | Echo => mk_COMP "Echo" "test/echo-00/test.py" []
+  | Echo => mk_comp "Echo" "test/echo-00/test.py" []
   end.
 
 Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
-  (fun s => Spawn _ _ _ _ Echo) ::
-  nil.
+  [fun s => Spawn _ _ _ IENVD Echo None (Logic.eq_refl _)
+  ].
 
 Definition HANDLERS : handlers PAYD COMPT KSTD :=
   (fun m =>
@@ -38,7 +40,7 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
          let (s, _) := pl in
          (fun st0 =>
-           (fun st => Send PAYD _ _ _ (CFd _) None (SLit _ s, tt))
+           (fun st => Send PAYD _ _ _ (CFd _ _) None (SLit _ _ s, tt))
            :: nil
          )
        )

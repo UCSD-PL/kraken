@@ -118,6 +118,29 @@ Proof.
   congruence.
 Qed.
 
+Theorem shvec_in_ith
+  (desc : Set) (sdenote_desc : desc -> Set) desc_eqdec :
+  forall (d : desc) (x : sdenote_desc d) (n : nat) (vd : svec desc n) v,
+  shvec_in sdenote_desc desc_eqdec d x vd v ->
+  exists i : fin n, ex (fun (e : d = svec_ith vd i) =>
+    match e in (_ = _dd) return (sdenote_desc _dd -> Prop) with
+    | Logic.eq_refl => fun x' => x' = x
+    end (shvec_ith sdenote_desc vd v i)
+  ).
+Proof.
+  intros. induction n.
+  simpl in *. destruct H.
+  simpl in vd. destruct vd as [vd vd'].
+  simpl in v. destruct v as [v v'].
+  simpl in H. destruct (desc_eqdec d vd).
+  subst. intuition.
+  subst. exists None. simpl. exists (Logic.eq_refl vd). reflexivity.
+  specialize (IHn vd' v' H0). destruct IHn as [i' H'].
+  now exists (Some i').
+  specialize (IHn vd' v' H). destruct IHn as [i' H'].
+  now exists (Some i').
+Qed.
+
 Implicit Arguments shvec_ith_in [desc n].
 
 Section HeterogeneousVector.

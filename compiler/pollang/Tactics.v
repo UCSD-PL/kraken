@@ -28,7 +28,7 @@ Ltac destruct_pay pay :=
 
 Ltac destruct_msg :=
   match goal with
-  | [ m : msg |- _ ]
+  | [ m : msg _ |- _ ]
       => let tag := fresh "tag" in
          let pay := fresh "pay" in
          destruct m as [tag pay]; destruct_fin tag;
@@ -36,18 +36,30 @@ Ltac destruct_msg :=
   end.
 
 (*Destructs num, str, or fd equalities in the context.*)
-Ltac destruct_eq hdlrs H :=
-  unfold hdlrs in H; simpl in H;
-  match type of H with
-  | context[num_eq ?a ?b]
-    => destruct (num_eq a b); simpl in *; destruct_eq hdlrs H
-  | context[str_eq ?a ?b]
-    => destruct (str_eq a b); simpl in *; destruct_eq hdlrs H
-  | context[fd_eq ?a ?b]
-    => destruct (fd_eq a b); simpl in *; destruct_eq hdlrs H
-  | _
-    => idtac
+Ltac destruct_eq H :=
+  repeat match type of H with
+         | context[num_eq ?a ?b]
+           => destruct (num_eq a b); simpl in *
+         | context[str_eq ?a ?b]
+           => destruct (str_eq a b); simpl in *
+         | context[fd_eq ?a ?b]
+           => destruct (fd_eq a b); simpl in *
+         end.
+
+Ltac destruct_input input :=
+  compute in input;
+  match type of input with
+  | unit => idtac
+  | _ => let x := fresh "x" in
+         let input' := fresh "input'" in
+         destruct input as [x input']; destruct_input input'
   end.
+(*repeat match goal with
+       | [ input : init_state_run_prog_return_type _ _ _ _ _ _ _ _ |- _ ]
+         => destruct input
+       | [ input : kstate_run_prog_return_type _ _ _ _ _ _ _ _ |- _ ]
+         => destruct input
+       end.*)
 
 Ltac unpack_inhabited Htr :=
   match type of Htr with
@@ -60,13 +72,20 @@ Ltac unpack :=
   | [ Htr : _ = inhabits ?tr |- _ ]
       => match goal with
           (*Valid exchange.*)
-         | [ H : ?s = _, H' : ?s' = kstate_run_prog ?KST_DESC _ _ _ ?s _ |- _ ]
-           => rewrite H in H'; rewrite H' in Htr
+         | [ _ : Reach _ _ _ _ _ _ ?HDLRS _,
+             H : ?s = _,
+             H' : ?s' = kstate_run_prog _ _ _ _ _ _ ?s _ _,
+             input : kstate_run_prog_return_type _ _ _ _ _ _ _ _ |- _ ]
+           => unfold HDLRS in H'; unfold HDLRS in input;
+              unfold kstate_run_prog in H'; simpl in *;
+              destruct_eq H'; rewrite H in H';
+              rewrite H' in Htr; destruct_input input
           (*Initialization.*)
-         | [ s : init_state _ _ |- _ ]
+         | [ s : init_state _ _ _,
+             input : init_state_run_prog_return_type _ _ _ _ _ _ _ _ |- _ ]
            => match goal with
               | [ H : s = _ |- _ ]
-                => rewrite H in Htr
+                => rewrite H in Htr; destruct_input input
               end
          | _ => idtac
          end; unpack_inhabited Htr
@@ -78,7 +97,7 @@ Ltac clear_useless_hyps :=
            => revert H
          | [ H : _ <> _ |- _ ]
            => revert H
-         | [ H : Reach _ _ _ _ _ |- _ ]
+         | [ H : Reach _ _ _ _ _ _ _ _ |- _ ]
            => revert H
          | [ H : In _ _ |- _ ]
            => revert H
@@ -88,10 +107,10 @@ Ltac clear_useless_hyps :=
 
 Ltac destruct_unpack :=
   match goal with
-  | [ m : msg, H : _ = kstate_run_prog _ _ _ _ _ _,
-      H' : Reach _ _ _ ?HDLRS _ |- _ ]
-      => destruct_msg; destruct_eq HDLRS H; unpack
-  | [ m : msg |- _ ]
+  (*| [ m : msg _, H : _ = kstate_run_prog _ _ _ _ _ _ _ _ _ _,
+      H' : Reach _ _ _ _ _ _ ?HDLRS _ |- _ ]
+      => destruct_msg; unpack*)
+  | [ m : msg _ |- _ ]
       => destruct_msg; unpack
   | _
       => unpack
@@ -99,12 +118,12 @@ Ltac destruct_unpack :=
 
 Ltac subst_states :=
   repeat match goal with 
-         | [ s : kstate _ |- _ ]
+         | [ s : kstate _ _ |- _ ]
              => match goal with
                 | [ _ : s = _ |- _ ]
                     => subst s
                 end
-         | [ s : init_state _ _ |- _ ]
+         | [ s : init_state _ _ _ |- _ ]
              => match goal with
                 | [ _ : s = _ |- _ ]
                     => subst s
@@ -172,7 +191,7 @@ Ltac act_nmatch :=
 
 Ltac msg_fds_are_ok :=
   match goal with
-  | [ H : ~msg_fds_ok _ _ _ |- _ ]
+  | [ H : ~msg_fds_ok _ _ _ _ |- _ ]
       => contradict H; compute; msg_fds_are_ok
   | [ |- forall i : _, _ ]
       => intro i; destruct_fin i; contradiction || auto
@@ -181,9 +200,10 @@ Ltac msg_fds_are_ok :=
 Ltac reach_induction :=
   intros;
   match goal with
-  | [ _ : ktr _ _ = inhabits ?tr, H : Reach _ _ _ _ _ |- _ ]
+  | [ _ : ktr _ _ _ = inhabits ?tr, H : Reach _ _ _ _ _ _ _ _ |- _ ]
       => generalize dependent tr; induction H;
-         simpl in *; intros; destruct_unpack;
+         (*Do not put simpl anywhere in here. It breaks destruct_unpack.*)
+         intros; destruct_unpack;
          try msg_fds_are_ok
          (*msg_fds_are_ok eliminates bad fds case when that's impossible.*)
   end.
@@ -202,8 +222,8 @@ Ltac impossible :=
 
 Ltac use_IH_disables :=
   match goal with
-  | [ IHReach : context[forall tr' : KTrace, _],
-      _ : ktr _ ?s = inhabits ?tr |- _ ]
+  | [ IHReach : context[forall tr' : KTrace _, _],
+      _ : ktr _ _ ?s = inhabits ?tr |- _ ]
       => apply IHReach with (tr':=tr); auto (*TODO: auto may not always work here.*)
   end.
 
@@ -223,14 +243,15 @@ Ltac forall_not_disabler s :=
   (*Should this take s as an argument?*)
   reach_induction;
   match goal with
-  | [ H : _ = initial_init_state _ _, H' : context[ In ?act _ ] |- _ ]
-    => subst_states;
+  | [ H : _ = init_state_run_prog _ _ _ _ _ _ _ _ _,
+          H' : context[ List.In ?act _ ] |- _ ]
+    => simpl in *; subst_states;
        try solve [impossible]; simpl in H'; decompose [or] H';
        try solve [(subst act; tauto)
                  | contradiction]
        (*subst act' works when it is set equal to actual action*)
        (*contradiction works when act' is in nil*)
-  | [ _ : ktr _ ?s' = inhabits _, H' : context[ In ?act _ ] |- _ ]
+  | [ _ : ktr _ _ ?s' = inhabits _, H' : context[ List.In ?act _ ] |- _ ]
     => subst_assignments; subst_states; simpl in *;
        try solve [impossible];
        decompose [or] H';
@@ -244,13 +265,13 @@ Ltac match_disables :=
   | [ |- Disables _ _ _ _ nil ]
       => constructor
   (* Induction hypothesis.*)
-  | [ H : ktr _ ?s = inhabits ?tr,
-      IH : forall tr', ktr _ ?s = inhabits tr' ->
+  | [ H : ktr _ _ ?s = inhabits ?tr,
+      IH : forall tr', ktr _ _ ?s = inhabits tr' ->
                        Disables _ _ ?past ?future tr'
                        |- Disables _ _ ?past ?future ?tr ]
       => auto
   (*Branch on whether the head of the trace matches.*)
-  | [ _ : ktr _ ?s = inhabits _ |- Disables ?nb_msg ?pdv _ ?future (?act::_) ]
+  | [ _ : ktr _ _ ?s = inhabits _ |- Disables ?nb_msg ?pdv _ ?future (?act::_) ]
       => let H := fresh "H" in
          pose proof (decide_act nb_msg pdv future act) as H;
          destruct H;
@@ -282,14 +303,14 @@ Qed.
 Ltac releaser_match :=
   simpl;
   repeat match goal with
-         | [ |- exists past : KAction, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
+         | [ |- exists past : KAction _, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
            => (exists act; compute; tauto) ||
               apply cut_exists
          end.
 
 Ltac use_IH_releases :=
 repeat match goal with
-       | [ IHReach : context[ forall tr : KTrace, _ ] |- _ ]
+       | [ IHReach : context[ forall tr : KTrace _, _ ] |- _ ]
          => apply IHReach; auto
        | _
          => apply cut_exists 
@@ -307,11 +328,11 @@ Ltac exists_past s :=
   (*Should this take s as an argument?*)
   reach_induction;
   match goal with
-  | [ H : _ = initial_init_state _ _ |- _ ]
-    => subst_states;
+  | [ H : _ = init_state_run_prog _ _ _ _ _ _ _ _ _ |- _ ]
+    => simpl in *; subst_states;
        try solve [ impossible
                  | releaser_match ]
-  | [ _ : ktr _ ?s' = inhabits _ |- _ ]
+  | [ _ : ktr _ _ ?s' = inhabits _ |- _ ]
     => subst_assignments; subst_states; try subst
        (*For any equalities generated by destructing the action match*);
        simpl in *;
@@ -328,13 +349,13 @@ Ltac match_releases :=
   | [ |- Release _ _ _ _ nil ]
       => constructor
   (* Induction hypothesis.*)
-  | [ H : ktr _ ?s = inhabits ?tr,
-      IH : forall tr', ktr _ ?s = inhabits tr' ->
+  | [ H : ktr _ _ ?s = inhabits ?tr,
+      IH : forall tr', ktr _ _ ?s = inhabits tr' ->
                        Release _ _ ?past ?future tr'
                        |- Release _ _ ?past ?future ?tr ]
       => auto
   (*Branch on whether the head of the trace matches.*)
-  | [ _ : ktr _ ?s = inhabits _ |- Release ?nb_msg ?pdv _ ?future (?act::_) ]
+  | [ _ : ktr _ _ ?s = inhabits _ |- Release ?nb_msg ?pdv _ ?future (?act::_) ]
       => let H := fresh "H" in
          pose proof (decide_act nb_msg pdv future act) as H;
          destruct H;
@@ -357,8 +378,8 @@ Ltac match_immbefore :=
   | [ |- ImmBefore _ _ _ _ nil ]
       => constructor
   (*Induction hypothesis*)
-  | [ H : ktr _ ?s = inhabits ?tr,
-      IH : forall tr', ktr _ ?s = inhabits tr' ->
+  | [ H : ktr _ _ ?s = inhabits ?tr,
+      IH : forall tr', ktr _ _ ?s = inhabits tr' ->
                        ImmBefore _ _ ?oact_b ?oact_a tr'
                        |- ImmBefore _ _ ?oact_b ?oact_a ?tr ]
       => auto
@@ -384,8 +405,8 @@ Ltac match_immafter :=
   match goal with
   | [ |- ImmAfter _ _ _ _ nil ]
       => constructor
-  | [ H : ktr _ ?s = inhabits ?tr,
-      IH : forall tr', ktr _ ?s = inhabits tr' ->
+  | [ H : ktr _ _ ?s = inhabits ?tr,
+      IH : forall tr', ktr _ _ ?s = inhabits tr' ->
                        ImmAfter _ _ ?oact_a ?oact_b tr'
                        |- ImmAfter _ _ ?oact_a ?oact_b ?tr ]
       => auto

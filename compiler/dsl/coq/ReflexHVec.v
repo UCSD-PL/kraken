@@ -35,30 +35,6 @@ Fixpoint shvec_ith (n : nat) :
     end
   end.
 
-Fixpoint shvec_replace_ith (n : nat) :
-  forall (v_d : svec desc n), shvec n v_d ->
-  forall (i : fin n), s[[ svec_ith v_d i ]] -> shvec n v_d :=
-  match n as _n return
-    forall (v_d : svec desc _n), shvec _n v_d ->
-    forall (i : fin _n), s[[ svec_ith v_d i ]] -> shvec _n v_d
-  with
-  | O => fun _ _ i _ => match i with end
-  | S n' => fun v_d =>
-    match v_d as _v_d return
-      shvec (S n') _v_d -> forall (i : fin (S n')),
-      s[[ @svec_ith _ (S n') _v_d i ]] -> shvec (S n') _v_d
-    with
-    | (t, v_d') => fun v i =>
-      match i as _i return
-        s[[ @svec_ith _ (S n') (t, v_d') _i ]] -> shvec (S n') (t, v_d')
-      with
-      | None => fun ith => (ith, snd v)
-      | Some i' => fun ith =>
-                     (fst v, shvec_replace_ith n' v_d' (snd v) i' ith)
-      end
-    end
-  end.
-
 Variable desc_eqdec : forall (x y : desc), decide (x = y).
 Variable d : desc.
 Variable x : s[[ d ]].
@@ -100,15 +76,29 @@ Proof.
   exact (shvec_in_dec _ _ vv').
 Qed.
 
+Fixpoint shvec_replace_ith (n : nat) : forall (v_d : svec desc n),
+  shvec n v_d -> forall (i : fin n), s[[ svec_ith v_d i ]] -> shvec n v_d :=
+  match n with
+  | O => fun _ _ i => match i with end
+  | S n' => fun v_d =>
+    match v_d with
+    | (t, v_d') => fun v i =>
+      match i with
+      | None    => fun ith => (ith, snd v)
+      | Some i' => fun ith => (fst v, shvec_replace_ith n' v_d' (snd v) i' ith)
+      end
+    end
+  end.
+
 End SHeterogeneousVector.
 
 Implicit Arguments shvec [desc n].
 
 Implicit Arguments shvec_ith [desc n].
 
-Implicit Arguments shvec_replace_ith [desc n].
-
 Implicit Arguments shvec_in [desc n].
+
+Implicit Arguments shvec_replace_ith [desc n].
 
 Theorem shvec_ith_in
   (desc : Set) (sdenote_desc : desc -> Set) desc_eqdec
@@ -126,6 +116,29 @@ Proof.
   simpl. destruct (desc_eqdec d d).
   rewrite (UIP_refl_desc _ e). now left.
   congruence.
+Qed.
+
+Theorem shvec_in_ith
+  (desc : Set) (sdenote_desc : desc -> Set) desc_eqdec :
+  forall (d : desc) (x : sdenote_desc d) (n : nat) (vd : svec desc n) v,
+  shvec_in sdenote_desc desc_eqdec d x vd v ->
+  exists i : fin n, ex (fun (e : d = svec_ith vd i) =>
+    match e in (_ = _dd) return (sdenote_desc _dd -> Prop) with
+    | Logic.eq_refl => fun x' => x' = x
+    end (shvec_ith sdenote_desc vd v i)
+  ).
+Proof.
+  intros. induction n.
+  simpl in *. destruct H.
+  simpl in vd. destruct vd as [vd vd'].
+  simpl in v. destruct v as [v v'].
+  simpl in H. destruct (desc_eqdec d vd).
+  subst. intuition.
+  subst. exists None. simpl. exists (Logic.eq_refl vd). reflexivity.
+  specialize (IHn vd' v' H0). destruct IHn as [i' H'].
+  now exists (Some i').
+  specialize (IHn vd' v' H). destruct IHn as [i' H'].
+  now exists (Some i').
 Qed.
 
 Implicit Arguments shvec_ith_in [desc n].

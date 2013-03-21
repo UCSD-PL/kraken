@@ -5,40 +5,46 @@ Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexVec.
 
+Open Scope string_scope.
+
 Definition NB_MSG : nat := 1.
 
-Definition PAY_DESC : vvdesc NB_MSG :=
-  ( existT _ 1 (str_d, tt)
-  , tt
-  ).
+Definition PAYD : vvdesc NB_MSG := mk_vvdesc
+  [ ("M", [str_d])
+  ].
 
-Definition INIT_ENVD : vdesc := existT _ 0 tt.
+Definition KSTD : vdesc := mk_vdesc [].
 
-Definition KST_DESC_SIZE := 0.
+Definition IENVD : vdesc := mk_vdesc
+  [ fd_d 
+  ].
 
-(*State is (username, authres)*)
-Definition KST_DESC : vdesc' KST_DESC_SIZE := tt.
+Inductive COMPT : Type := Echo.
 
-Definition INIT : @init_prog NB_MSG PAY_DESC _ KST_DESC INIT_ENVD :=
-  nil.
+Definition COMPS (t : COMPT) : comp :=
+  match t with
+  | Echo => mk_comp "Echo" "test/echo-00/test.py" []
+  end.
 
-Definition HANDLERS : handlers (VVD := PAY_DESC) KST_DESC :=
-  (fun m f s =>
-    match tag m as _tm return
-      @sdenote _ SDenoted_vdesc (lkup_tag (VVD := PAY_DESC) _tm) -> _
+Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
+  [fun s => Spawn _ _ _ IENVD Echo None (Logic.eq_refl _)
+  ].
+
+Definition HANDLERS : handlers PAYD COMPT KSTD :=
+  (fun m cfd =>
+    match tag PAYD m as _tm return
+      @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
     with
     | None => fun pl =>
        let envd := existT _ 0 tt in
-       existT _ envd (
-        let (s, _) := pl in
-        Send _ _ _
-          (HEchan _ _)
-          (@MEmsg _ PAY_DESC envd None (SLit _ s, tt))
-        :: nil
-      )
+       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+         let (msg, _) := pl in fun st0 =>
+         [ fun s => Send PAYD _ _ _ (CFd _ _) None (SLit _ _ msg, tt)
+         ]
+       )
     | Some bad => fun _ =>
       match bad with end
-    end (pay m)
+    end (pay PAYD m)
   ).
 
-(*Definition main := mk_main (Build_spec NB_MSG PAY_DESC INIT_ENVD INIT KST_DESC HANDLERS).*)
+Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPS INIT HANDLERS).

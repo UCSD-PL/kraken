@@ -5,55 +5,61 @@ Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexVec.
 Require Import ReflexHVec.
+Require Import ReflexFin.
+
+Open Scope string_scope.
 
 Definition NB_MSG : nat := 2.
 
-Definition PAY_DESC : vvdesc NB_MSG :=
-  ( existT _ 1 (str_d, tt) (*User name payload.*)
-   , ( existT _ 1 (str_d, tt) (*Successful auth response from system payload.*)
-    , tt)
-  ).
-
-Definition INIT_ENVD : vdesc := existT _ 0 tt.
-
-Definition KST_DESC_SIZE := 1.
+Definition PAYD : vvdesc NB_MSG :=
+  mk_vvdesc
+  [ ("Echo", []) (*Message to be echoed if the next message has not been received.*)
+   ; ("Disable", []) (*Disabling message, sets n = 1.*)
+  ].
 
 (*State is (username, authres)*)
-Definition KST_DESC : vdesc' KST_DESC_SIZE := (num_d, tt).
+Definition KSTD : vdesc := mk_vdesc [num_d].
+Definition st_n : fin (projT1 KSTD) := None.
 
-Definition INIT : @init_prog NB_MSG PAY_DESC _ KST_DESC INIT_ENVD :=
-  nil.
+Notation msg_echo := (None) (only parsing).
+Notation msg_disable := (Some None) (only parsing).
 
-Definition HANDLERS : handlers (VVD := PAY_DESC) KST_DESC :=
-  (fun m f st =>
-    match tag m as _tm return
-      @sdenote _ SDenoted_vdesc (lkup_tag (VVD := PAY_DESC) _tm) -> _
+Definition IENVD : vdesc := mk_vdesc [].
+
+Inductive COMPT : Type := Stupid.
+
+Definition COMPS (t : COMPT) : comp :=
+  match t with
+  | Stupid => mk_comp "Echo" "test/echo-00/test.py" []
+  end.
+
+Definition INIT : init_prog PAYD COMPT KSTD IENVD := [].
+
+Definition HANDLERS : handlers PAYD COMPT KSTD :=
+  (fun m cfd =>
+    match tag PAYD m as _tm return
+      @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
     with
-    | None => fun pl =>
-       let (s, _) := pl in
+    | msg_echo => fun pl =>
        let envd := existT _ 0 tt in
-       if num_eq (@shvec_ith _ _ _
-                                (KST_DESC:svec desc KST_DESC_SIZE)
-                                (kst _ st) None)
-                    (num_of_nat 0)
-       then existT _ envd (
-                          let (u, _) := pl in
-                          Send _ _ _
-                               (HEchan _ _)
-                               (@MEmsg _ PAY_DESC envd None (SLit _ u, tt))
-                               :: nil
-                          )
-       else existT _ envd (nil) (*Ignore.*)
-    | Some None => fun _ =>
+       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+           fun st =>
+           if num_eq (@shvec_ith _ _ (projT1 KSTD)
+                                 (projT2 KSTD)
+                                 (kst _ _ st) st_n)
+                     (num_of_nat 0)
+           then [ fun s => Send PAYD _ _ _ (CFd _ _) msg_echo tt ]
+           else [] (*Ignore.*)
+              )
+    | msg_disable => fun pl =>
        let envd := existT _ 0 tt in
-       existT _ envd (
-        STChange KST_DESC _ _
-             None (HEexpr _ _ _ (MEbase _ _ (NLit _ (num_of_nat 1))))
-        :: nil
+       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+           fun st =>
+           [ fun _ => StUpd _ _ KSTD _ st_n numd_neq_fdd (NLit _ _ (num_of_nat 1))]
       )
     | Some (Some bad) => fun _ =>
       match bad with end
-    end (pay m)
+    end (pay PAYD m)
   ).
 
 Require Import Ynot.
@@ -62,14 +68,14 @@ Require Import ActionMatch.
 Require Import Tactics.
 
 Theorem disable : forall st tr,
-  Reach _ _ INIT HANDLERS st -> ktr _ st = inhabits tr ->
-  Disables NB_MSG PAY_DESC
-           (@KORecv NB_MSG PAY_DESC None
-                    (Some (@Build_opt_msg NB_MSG PAY_DESC
-                                          (Some None) (None, tt))))
-           (@KOSend NB_MSG PAY_DESC None
-                    (Some (@Build_opt_msg NB_MSG PAY_DESC
-                                          None (None, tt))))
+  Reach _ _ COMPS _ _ INIT HANDLERS st -> ktr _ _ st = inhabits tr ->
+  Disables NB_MSG PAYD
+           (@KORecv NB_MSG PAYD None
+                    (Some (@Build_opt_msg NB_MSG PAYD
+                                          msg_disable tt)))
+           (@KOSend NB_MSG PAYD None
+                    (Some (@Build_opt_msg NB_MSG PAYD
+                                          msg_echo tt)))
            tr.
 Proof.
   crush.

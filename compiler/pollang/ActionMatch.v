@@ -82,20 +82,20 @@ Definition packedPLMatch
   | existT n pl' => unpackedPLMatch n pl'
   end opt_pay pay.
 
-Definition msgMatch' (opt_pl:opt_msg) (pl:msg) : Prop :=
+Definition msgMatch' (opt_pl:opt_msg) (pl:msg _) : Prop :=
   let opt_tag := (opt_tag opt_pl) in
-  let tag := (tag pl) in
+  let tag := (tag _ pl) in
   match fin_eq_dec tag opt_tag with
   | left H => match H in eq _ _tag return
                 s[[C_opttag (@lkup_tag NB_MSG PLT _tag)]] -> Prop
               with
               | eq_refl => fun opt_pay =>
-                 packedPLMatch tag opt_pay (pay pl)
+                 packedPLMatch tag opt_pay (pay _ pl)
               end (opt_pay opt_pl)
   | right H => False
   end.
 
-Definition msgMatch (opt_pl:option opt_msg) (pl:msg) : Prop :=
+Definition msgMatch (opt_pl:option opt_msg) (pl:msg _) : Prop :=
   match opt_pl with
   | None => True
   | Some opt_pl' => msgMatch' opt_pl' pl

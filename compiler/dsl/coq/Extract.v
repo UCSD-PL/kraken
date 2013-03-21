@@ -1,5 +1,6 @@
 Require Import Ynot.Extract.
 Require Import ReflexEcho.
+Require Import ReflexQuark.
 
 Extraction Blacklist List String.
 
@@ -13,3 +14,4 @@ Extract Constant ReflexIO.send_fd  => "ReflexImpl.send_fd".
 
 Cd "../ml".
 Recursive Extraction Library ReflexEcho.
+Recursive Extraction Library ReflexQuark.

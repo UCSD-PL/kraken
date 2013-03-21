@@ -160,11 +160,11 @@ let select cfds _ =
     (fun cfd -> fd_of_cfd cfd = fd)
     cfds
 
-let recv cfd _ n _ =
+let recv cfd n _ =
   let fd = fd_of_cfd cfd in
   let i = int_of_num n in
   let s = String.make i (Char.chr 0) in
-  let r = 
+  let r =
     Unix.handle_unix_error (fun _ ->
       Unix.recv fd s 0 i []) ()
   in
@@ -176,7 +176,7 @@ let recv cfd _ n _ =
     str_of_string s
   end
 
-let send cfd _ s _ =
+let send cfd s _ =
   let fd = fd_of_cfd cfd in
   let s = string_of_str s in
   let i = String.length s in
@@ -195,7 +195,7 @@ let send cfd _ s _ =
 external recv_fd_native : Unix.file_descr -> Unix.file_descr =
   "recv_fd_native"
 
-let recv_fd cfd _ _ =
+let recv_fd cfd _ =
   let fd = fd_of_cfd cfd in
   let x = recv_fd_native fd in
   log (Printf.sprintf "recv_fd : %d -> %d"
@@ -205,7 +205,7 @@ let recv_fd cfd _ _ =
 external send_fd_native : Unix.file_descr -> Unix.file_descr -> unit =
   "send_fd_native"
 
-let send_fd cfd _ x _ =
+let send_fd cfd x _ =
   let fd = fd_of_cfd cfd in
   let x = fd_of_cfd x in
   send_fd_native fd x;

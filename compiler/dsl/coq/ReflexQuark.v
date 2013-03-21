@@ -4,6 +4,7 @@ Require Import Reflex.
 Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
+Require Import ReflexHVec.
 Require Import ReflexVec.
 
 Open Scope string_scope.
@@ -23,15 +24,17 @@ Notation Quit    := (Some (Some None)) (only parsing).
 Definition KSTD : vdesc := mk_vdesc
   [ fd_d (* curtab *)
   ; fd_d (* screen *)
+  ; fd_d (* user-input *)
   ].
 
-Notation curtab := (StVar KSTD _ None) (only parsing).
-Notation screen := (StVar KSTD _ (Some None)) (only parsing).
+Notation curtab    := (None) (only parsing).
+Notation screen    := (Some None) (only parsing).
+Notation userinput := (Some (Some None)) (only parsing).
 
 Definition IENVD : vdesc := mk_vdesc
   [ fd_d (* curtab *)
   ; fd_d (* screen *)
-  ; fd_d (* user-input *)
+  ; fd_d (* userinput *)
   ].
 
 Notation v_t := (None) (only parsing).
@@ -63,25 +66,35 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
          let (input, _) := pl in fun st0 =>
-         [ fun s => Send PAYD COMPT KSTD envd curtab Input (SLit _ _ input, tt)
-         ]
+         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) userinput)
+         then
+           [ fun s => Send PAYD COMPT KSTD envd (StVar KSTD _ curtab) Input (SLit _ _ input, tt) ]
+         else
+           []
        )
 
     | Display => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
          let (url, _) := pl in fun st0 =>
-         [ fun s => Send PAYD COMPT KSTD envd screen Display (SLit _ _ url, tt)
-         ]
+         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) curtab)
+         then
+           [ fun s => Send PAYD COMPT KSTD envd (StVar KSTD _ screen) Display (SLit _ _ url, tt) ]
+         else
+           []
        )
 
     | Quit => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
          let _ := pl in fun st0 =>
-         [ fun s => Send PAYD COMPT KSTD envd curtab Quit tt
-         ; fun s => Send PAYD COMPT KSTD envd screen Quit tt
-         ]
+         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) userinput)
+         then
+           [ fun s => Send PAYD COMPT KSTD envd (StVar KSTD _ curtab) Quit tt
+           ; fun s => Send PAYD COMPT KSTD envd (StVar KSTD _ screen) Quit tt
+           ]
+         else
+           []
        )
 
     | Some (Some (Some bad)) => fun _ =>

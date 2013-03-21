@@ -31,18 +31,16 @@ Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
   ].
 
 Definition HANDLERS : handlers PAYD COMPT KSTD :=
-  (fun m =>
+  (fun m cfd =>
     match tag PAYD m as _tm return
       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
     with
     | None => fun pl =>
        let envd := existT _ 0 tt in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
-         let (s, _) := pl in
-         (fun st0 =>
-           (fun st => Send PAYD _ _ _ (CFd _ _) None (SLit _ _ s, tt))
-           :: nil
-         )
+       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+         let (msg, _) := pl in fun st0 =>
+         [ fun s => Send PAYD _ _ _ (CFd _ _) None (SLit _ _ msg, tt)
+         ]
        )
     | Some bad => fun _ =>
       match bad with end

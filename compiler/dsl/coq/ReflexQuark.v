@@ -54,40 +54,34 @@ Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
   ].
 
 Definition HANDLERS : handlers PAYD COMPT KSTD :=
-  (fun m =>
+  (fun m cfd =>
     match tag PAYD m as _tm return
       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
     with
 
     | Input => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
-         let (input, _) := pl in
-         (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd curtab Input (SLit _ _ input, tt)
-            ]
-         )
+       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+         let (input, _) := pl in fun st0 =>
+         [ fun s => Send PAYD COMPT KSTD envd curtab Input (SLit _ _ input, tt)
+         ]
        )
 
     | Display => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
-         let (url, _) := pl in
-         (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd screen Display (SLit _ _ url, tt)
-            ]
-         )
+       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+         let (url, _) := pl in fun st0 =>
+         [ fun s => Send PAYD COMPT KSTD envd screen Display (SLit _ _ url, tt)
+         ]
        )
 
     | Quit => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (fun cfd s =>
-         let _ := pl in
-         (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd curtab Quit tt
-            ; fun s => Send PAYD COMPT KSTD envd screen Quit tt
-            ]
-         )
+       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+         let _ := pl in fun st0 =>
+         [ fun s => Send PAYD COMPT KSTD envd curtab Quit tt
+         ; fun s => Send PAYD COMPT KSTD envd screen Quit tt
+         ]
        )
 
     | Some (Some (Some bad)) => fun _ =>

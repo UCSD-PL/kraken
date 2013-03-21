@@ -815,7 +815,7 @@ Definition init_prog := list init_cmd.
 
 Definition hdlr_cmd := kstate -> cmd.
 
-Definition hdlr_prog := msg -> fd -> kstate -> list hdlr_cmd.
+Definition hdlr_prog := kstate -> list hdlr_cmd.
 
 End WITH_PROG_ENV.
 
@@ -986,9 +986,9 @@ Definition kstate_run_prog_return_type s p :=
   hdlr_state_run_prog_return_type (default_hdlr_state s) p.
 
 Definition kstate_run_prog (s : kstate) (p : hdlr_prog)
-  (input : kstate_run_prog_return_type s (p CMSG CFD s))
+  (input : kstate_run_prog_return_type s (p s))
   : kstate :=
-  hdlr_kst (hdlr_state_run_prog (default_hdlr_state s) (p CMSG CFD s) input).
+  hdlr_kst (hdlr_state_run_prog (default_hdlr_state s) (p s) input).
 
 End WITH_ENVD.
 
@@ -1006,7 +1006,8 @@ Definition initial_init_state :=
 
 Section WITH_HANDLER.
 
-Definition handlers := forall (m : msg), sigT (fun (prog_envd : vdesc) => hdlr_prog prog_envd).
+Definition handlers := forall (m : msg) (cfd : fd),
+  sigT (fun (prog_envd : vdesc) => hdlr_prog prog_envd).
 
 Variable HANDLERS : handlers.
 
@@ -1049,7 +1050,7 @@ Inductive Reach : kstate -> Prop :=
         ; kst := kst s
         ; kfd := kfd s
         |} ->
-  s'' = kstate_run_prog f m (projT1 (HANDLERS m)) s' (projT2 (HANDLERS m)) input ->
+  s'' = kstate_run_prog f (projT1 (HANDLERS m f)) s' (projT2 (HANDLERS m f)) input ->
   Reach {| kcs := kcs s''
          ; ktr := ktr s''
          ; kst := kst s''
@@ -1834,7 +1835,7 @@ Definition run_hdlr_prog :
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in
           hdlr_invariant cfd cm s' * traced (expand_ktrace tr)
           * [exists input, s' =
-               hdlr_state_run_prog cfd envd s (p cm cfd (hdlr_kst _ s)) input]).
+               hdlr_state_run_prog cfd envd s (p (hdlr_kst _ s)) input]).
 Proof.
   intros; refine (
     Fix2
@@ -1856,7 +1857,7 @@ Proof.
           <@> [exists input, s' = hdlr_state_run_cmd cfd envd s (c (hdlr_kst _ s)) input];
           {{ Return s'' }}
         end)
-    (p cm cfd (hdlr_kst _ s)) s
+    (p (hdlr_kst _ s)) s
   );
   sep''.
   apply himp_pure'. now exists tt.
@@ -1905,8 +1906,8 @@ Proof.
       let ck := msg_fds_ck s m in
       match ck as ck' return ck = ck' -> _ with
       | left _ => fun _ =>
-        let henv  := projT1 (HANDLERS m) in
-        let hprog := projT2 (HANDLERS m) in
+        let henv  := projT1 (HANDLERS m c) in
+        let hprog := projT2 (HANDLERS m c) in
         let s' := {| hdlr_kst := {| kcs := cs
                                   ; ktr := tr
                                   ; kst := st

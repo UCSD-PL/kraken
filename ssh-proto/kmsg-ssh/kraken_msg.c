@@ -117,10 +117,17 @@ msg *
 mk_LoginReq_msg(pstr * p0) {
   return mk_msg(MTYP_LoginReq, mk_pstr_param(p0, NULL));
 }
+
 msg *
-mk_LoginRes_msg(uint32_t p0) {
-  return mk_msg(MTYP_LoginRes, mk_num_param(p0, NULL));
+mk_LoginResT_msg() {
+  return mk_msg(MTYP_LoginResT, NULL);
 }
+
+msg *
+mk_LoginResF_msg() {
+  return mk_msg(MTYP_LoginResF, NULL);
+}
+
 msg *
 mk_PubkeyReq_msg() {
   return mk_msg(MTYP_PubkeyReq, NULL);
@@ -149,10 +156,17 @@ msg *
 mk_SysLoginReq_msg(pstr * p0) {
   return mk_msg(MTYP_SysLoginReq, mk_pstr_param(p0, NULL));
 }
+
 msg *
-mk_SysLoginRes_msg(pstr * p0, uint32_t p1) {
-  return mk_msg(MTYP_SysLoginRes, mk_pstr_param(p0, mk_num_param(p1, NULL)));
+mk_SysLoginResT_msg(pstr * p0) {
+  return mk_msg(MTYP_SysLoginResT, mk_pstr_param(p0, NULL));
 }
+
+msg *
+mk_SysLoginResF_msg() {
+  return mk_msg(MTYP_SysLoginResF, NULL);
+}
+
 msg *
 mk_SysPubkeyReq_msg() {
   return mk_msg(MTYP_SysPubkeyReq, NULL);
@@ -245,8 +259,10 @@ string_of_mtyp(int mtyp) {
   switch(mtyp) {
     case MTYP_LoginReq:
       return strdup("LoginReq");
-    case MTYP_LoginRes:
-      return strdup("LoginRes");
+    case MTYP_LoginResT:
+      return strdup("LoginResT");
+    case MTYP_LoginResF:
+      return strdup("LoginResF");
     case MTYP_PubkeyReq:
       return strdup("PubkeyReq");
     case MTYP_PubkeyRes:
@@ -261,12 +277,12 @@ string_of_mtyp(int mtyp) {
       return strdup("CreatePtyerRes");
     case MTYP_SysLoginReq:
       return strdup("SysLoginReq");
-    case MTYP_SysLoginRes:
-      return strdup("SysLoginRes");
+    case MTYP_SysLoginResT:
+      return strdup("SysLoginResT");
+    case MTYP_SysLoginResF:
+      return strdup("SysLoginResF");
     case MTYP_SysPubkeyReq:
       return strdup("SysPubkeyReq");
-    case MTYP_SysPubkeyRes:
-      return strdup("SysPubkeyRes");
     case MTYP_SysKeysignReq:
       return strdup("SysKeysignReq");
     case MTYP_SysKeysignRes:
@@ -564,8 +580,12 @@ recv_msg(void) {
       pay = mk_param(PTYP_STR, NULL);
       recv_params(pay);
       break;
-    case MTYP_LoginRes:
-      pay = mk_param(PTYP_NUM, NULL);
+    case MTYP_LoginResT:
+      pay = NULL;
+      recv_params(pay);
+      break;
+    case MTYP_LoginResF:
+      pay = NULL;
       recv_params(pay);
       break;
     case MTYP_PubkeyReq:
@@ -596,8 +616,12 @@ recv_msg(void) {
       pay = mk_param(PTYP_STR, NULL);
       recv_params(pay);
       break;
-    case MTYP_SysLoginRes:
-      pay = mk_param(PTYP_STR, mk_param(PTYP_NUM, NULL));
+    case MTYP_SysLoginResT:
+      pay = mk_param(PTYP_STR, NULL);
+      recv_params(pay);
+      break;
+    case MTYP_SysLoginResF:
+      pay = NULL;
       recv_params(pay);
       break;
     case MTYP_SysPubkeyReq:

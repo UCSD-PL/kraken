@@ -134,8 +134,8 @@ Inductive COMPT : Type := System | Slave.
 
 Definition COMPS (t : COMPT) : comp :=
   match t with
-  | System   => mk_comp "System"   "system"    []
-  | Slave    => mk_comp "Slave"    "slave"     []
+  | System   => mk_comp "System"   "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys"    []
+  | Slave    => mk_comp "Slave"    "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/ssh"     []
   end.
 
 Definition INIT : init_prog PAYD COMPT KSTD IENVD :=

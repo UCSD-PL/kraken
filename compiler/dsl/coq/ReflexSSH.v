@@ -116,19 +116,23 @@ Definition KSTD : vdesc := mk_vdesc
   ; str_d (* authenticated username *)
   ].
 
+Notation v_st_system := (None) (only parsing).
+Notation v_st_slave := (Some None) (only parsing).
+Notation v_st_authenticated := (Some (Some None)) (only parsing).
+Notation v_st_auth_user := (Some (Some (Some None))) (only parsing).
 
-Notation system := (StVar KSTD _ None) (only parsing).
-Notation slave := (StVar KSTD _ (Some None)) (only parsing).
-Notation authenticated := (StVar KSTD _ (Some (Some None))) (only parsing).
-Notation auth_user := (StVar KSTD _ (Some (Some (Some None)))) (only parsing).
+Notation system := (StVar KSTD _ v_st_system) (only parsing).
+Notation slave := (StVar KSTD _ v_st_slave) (only parsing).
+Notation authenticated := (StVar KSTD _ v_st_authenticated) (only parsing).
+Notation auth_user := (StVar KSTD _ v_st_auth_user) (only parsing).
 
 Definition IENVD : vdesc := mk_vdesc
   [ fd_d (* system *)
   ; fd_d (* slave *)
   ].
 
-Notation v_system := (None) (only parsing).
-Notation v_slave := (Some None) (only parsing).
+Notation v_env_system := (None) (only parsing).
+Notation v_env_slave := (Some None) (only parsing).
 
 Inductive COMPT : Type := System | Slave.
 
@@ -139,8 +143,8 @@ Definition COMPS (t : COMPT) : comp :=
   end.
 
 Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
-  [ fun s => Spawn _ _ _ IENVD System   v_system (Logic.eq_refl _)
-  ; fun s => Spawn _ _ _ IENVD Slave    v_slave (Logic.eq_refl _)
+  [ fun s => Spawn _ _ _ IENVD System   v_env_system (Logic.eq_refl _)
+  ; fun s => Spawn _ _ _ IENVD Slave    v_env_slave (Logic.eq_refl _)
   ].
 
 
@@ -195,8 +199,10 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
          (fun st0 =>
             [ 
               
-              fun s => StUpd PAYD COMPT KSTD envd ((Some (Some (Some None)))) (fun x => strd_neq_fdd x) (SLit _ _ user)
+              fun s => StUpd PAYD COMPT KSTD envd v_st_auth_user strd_neq_fdd (SLit _ _ user)
               ; 
+              fun s => StUpd PAYD COMPT KSTD envd v_st_authenticated numd_neq_fdd (NLit _ _ (num_of_nat 1))
+              ;
               fun s => Send PAYD COMPT KSTD envd slave LoginResT tt
             ]
          )
@@ -260,11 +266,14 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
          (fun st0 =>
-           if num_eq (shvec_ith _ (projT2 KSTD:svec desc 4) (kst _ _ st0) (Some (Some None)) ) (num_of_nat 0) then []
-             else 
-               [ 
-                 fun s => Send PAYD COMPT KSTD envd system SCreatePtyerReq (auth_user,tt)
-               ]
+           if num_eq (shvec_ith _ (projT2 KSTD:svec desc 4)
+                                (kst _ _ st0)
+                                v_st_authenticated)
+                     (num_of_nat 0)
+           then []
+           else [ 
+               fun s => Send PAYD COMPT KSTD envd system SCreatePtyerReq (auth_user,tt)
+             ]
          )
        )
 

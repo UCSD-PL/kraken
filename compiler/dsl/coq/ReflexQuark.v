@@ -4,6 +4,7 @@ Require Import Reflex.
 Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
+Require Import ReflexFrontend.
 Require Import ReflexHVec.
 Require Import ReflexVec.
 
@@ -50,10 +51,10 @@ Definition COMPS (t : COMPT) : comp :=
   | UserInput => mk_comp "UserInput" "test/quark/user-input.py" []
   end.
 
-Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
-  [ fun s => Spawn _ _ _ IENVD Tab       v_t (Logic.eq_refl _)
-  ; fun s => Spawn _ _ _ IENVD Screen    v_s (Logic.eq_refl _)
-  ; fun s => Spawn _ _ _ IENVD UserInput v_u (Logic.eq_refl _)
+Definition INIT : init_prog PAYD COMPT KSTD (init_msg PAYD) IENVD :=
+  [ fun s => Spawn _ _ _ _ IENVD Tab       v_t (Logic.eq_refl _)
+  ; fun s => Spawn _ _ _ _ IENVD Screen    v_s (Logic.eq_refl _)
+  ; fun s => Spawn _ _ _ _ IENVD UserInput v_u (Logic.eq_refl _)
   ].
 
 Definition HANDLERS : handlers PAYD COMPT KSTD :=
@@ -64,34 +65,34 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
 
     | Input => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD m d) envd (
          let (input, _) := pl in fun st0 =>
          if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) userinput)
          then
-           [ fun s => Send PAYD COMPT KSTD envd (StVar KSTD _ curtab) Input (SLit _ _ input, tt) ]
+           [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ curtab) Input (SLit _ _ m _ input, tt) ]
          else
            []
        )
 
     | Display => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD m d) envd (
          let (url, _) := pl in fun st0 =>
          if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) curtab)
          then
-           [ fun s => Send PAYD COMPT KSTD envd (StVar KSTD _ screen) Display (SLit _ _ url, tt) ]
+           [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ screen) Display (SLit _ _ m _ url, tt) ]
          else
            []
        )
 
     | Quit => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD m d) envd (
          let _ := pl in fun st0 =>
          if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) userinput)
          then
-           [ fun s => Send PAYD COMPT KSTD envd (StVar KSTD _ curtab) Quit tt
-           ; fun s => Send PAYD COMPT KSTD envd (StVar KSTD _ screen) Quit tt
+           [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ curtab) Quit tt
+           ; fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ screen) Quit tt
            ]
          else
            []

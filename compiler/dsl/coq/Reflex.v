@@ -420,8 +420,13 @@ Variable KSTD : vdesc.
 Notation KSTD_SIZE := (projT1 KSTD).
 Notation KSTD_DESC := (projT2 KSTD).
 
+Context {NB_COMPD:nat}.
+Variable VVD_COMPS : vvdesc NB_COMPD.
+
+Definition component := (fd * sigT(fun tag => s[[vec_ith VVD_COMPS tag]]))%type.
+
 Record kstate : Set := mkst
-  { kcs : list fd
+  { kcs : list component
   ; ktr : [KTrace]
   ; kst : s[[ KSTD ]]
   ; kfd : list fd (* need to keep track of all the open fds... *)
@@ -567,11 +572,14 @@ Definition env_fds_in l (envd : vdesc) (env : s[[ envd ]]) : Prop :=
   | _ => fun _ => True
   end (shvec_ith _ (projT2 envd) env i).
 
+Definition proj_fds (comps:list component) : list fd :=
+  map (fun comp => match comp with (f, _ ) => f end) comps.
+
 Definition msg_fds_ok : Prop :=
   forall i,
   let d := svec_ith (projT2 CPAY) i in
   match d as _d return s[[ _d ]] -> Prop with
-  | fd_d => fun (f : s[[ fd_d ]]) => In f (kcs CKST)
+  | fd_d => fun (f : s[[ fd_d ]]) => In f (proj_fds (kcs CKST))
   | _ => fun _ => True
   end (msg_param_i i).
 
@@ -652,7 +660,8 @@ Definition eval_payload_expr (pd : vdesc) (e : payload_expr pd) : s[[ pd ]] :=
 
 Inductive cmd : Type :=
 | Send  : expr fd_d -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
-| Spawn : COMPT -> forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = fd_d -> cmd
+| Spawn : COMPT -> forall tag, s[[vec_ith VVD_COMPS tag]] ->
+            forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = fd_d -> cmd
 | StUpd : forall i, svec_ith (projT2 KSTD) i <> fd_d -> expr (svec_ith (projT2 KSTD) i) -> cmd
 .
 
@@ -752,8 +761,10 @@ Inductive cmd : Type :=
 
 *)
 
+
+
 Record init_state :=
-{ init_comps : list fd
+{ init_comps : list component
 ; init_ktr   : [KTrace]%type
 ; init_env   : s[[ ENVD ]]
 ; init_kst   : s[[ KSTD ]]
@@ -772,7 +783,7 @@ End WITH_PROG_ENV.
 Definition cmd_input_desc (c : cmd)  :=
   match c with
   | Send _ _ _  => None
-  | Spawn _ _ _ => Some fd_d
+  | Spawn _ _ _ _ _ => Some fd_d
   | StUpd _ _ _ => None
   end.
 
@@ -803,9 +814,9 @@ Definition init_state_run_cmd (s : init_state) (cmd : cmd) : cmd_input cmd -> in
      ; init_kst   := st
      |}
 
-  | Spawn ct i EQ => fun c =>
+  | Spawn ct tag cfg i EQ => fun (c:fd) =>
     let comp := COMPS ct in
-    {| init_comps := c :: cs
+    {| init_comps := (c, existT _ tag cfg) :: cs
      ; init_ktr   := tr ~~~ KExec (comp_cmd comp) (comp_args comp) c :: tr
      ; init_env   := shvec_replace_cast EQ e c
      ; init_kst   := st
@@ -863,10 +874,10 @@ Definition hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd) : cmd_input cmd -> hd
      ; hdlr_env := env
     |}
 
-  | Spawn ct i EQ => fun c =>
+  | Spawn ct tag cfg i EQ => fun c =>
     let comp := COMPS ct in
     {| hdlr_kst :=
-         {| kcs := c :: cs
+         {| kcs := (c, existT _ tag cfg) :: cs
           ; ktr := tr ~~~ KExec (comp_cmd comp) (comp_args comp) c :: tr
           ; kst := st
           ; kfd := fd
@@ -1008,7 +1019,7 @@ Inductive Reach : kstate -> Prop :=
   ktr s = [tr]%inhabited ->
   Reach s ->
   s' = {| kcs := cs
-        ; ktr := [KRecv f m :: KSelect cs f :: tr]
+        ; ktr := [KRecv f m :: KSelect (proj_fds cs) f :: tr]
         ; kst := kst s
         ; kfd := kfd s
         |} ->
@@ -1025,7 +1036,7 @@ Inductive Reach : kstate -> Prop :=
   ktr s = [tr]%inhabited ->
   Reach s ->
   Reach {| kcs := cs
-         ; ktr := [KRecv f m :: KSelect cs f :: tr]
+         ; ktr := [KRecv f m :: KSelect (proj_fds cs) f :: tr]
          ; kst := kst s
          ; kfd := kfd s ++ payload_fds _ (pay m)
          |}
@@ -1036,7 +1047,7 @@ Inductive Reach : kstate -> Prop :=
   Reach s ->
   Reach
     {| kcs := cs
-     ; ktr := [KBogus f bmsg :: KSelect cs f :: tr]
+     ; ktr := [KBogus f bmsg :: KSelect (proj_fds cs) f :: tr]
      ; kst := kst s
      ; kfd := kfd s
      |}
@@ -1045,7 +1056,7 @@ Inductive Reach : kstate -> Prop :=
 Definition kstate_inv s : hprop :=
   tr :~~ ktr s in open devnull
   * traced (expand_ktrace tr) * [Reach s]
-  * all_open (kcs s) * all_open (kfd s)
+  * all_open (proj_fds (kcs s)) * all_open (kfd s)
   .
 
 Ltac isolate t :=
@@ -1194,7 +1205,7 @@ Proof.
 Qed.
 
 Definition init_invariant {envd} (s : init_state envd) :=
-  open devnull * all_open (init_comps _ s)
+  open devnull * all_open (proj_fds (init_comps _ s))
   * all_open_payload (init_env _ s) * all_open_payload (init_kst _ s).
 
 Definition open_payload_frame {CMSG EXPR envd fed} (fe : expr CMSG EXPR fed) (f : s[[ fed ]])
@@ -1274,7 +1285,7 @@ Proof.
       let f := eval_expr devnull _ _ st e _ fe in
       let m := eval_payload_expr devnull _ _ st e _ me in
       send_msg f (Build_msg t m) (tr ~~~ expand_ktrace tr)
-      <@> all_open cs * open_payload_frame fe f devnull e st;;
+      <@> all_open (proj_fds cs) * open_payload_frame fe f devnull e st;;
 
       let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
       {{ Return {| init_comps := cs
@@ -1283,16 +1294,16 @@ Proof.
                  ; init_kst   := st
                  |} }}
 
-    | Spawn ct i EQ =>
+    | Spawn ct tag cfg i EQ =>
       let c_cmd := comp_cmd (COMPS ct) in
       let c_args := comp_args (COMPS ct) in
       c <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
-        <@> open devnull * all_open (init_comps prog_envd s)
+        <@> open devnull * all_open (proj_fds (init_comps prog_envd s))
           * all_open_payload (init_env prog_envd s)
           * all_open_payload (init_kst prog_envd s);
 
       let tr := tr ~~~ KExec c_cmd c_args c :: tr in
-      {{ Return {| init_comps := c :: cs
+      {{ Return {| init_comps := (c, existT _ tag cfg) :: cs
                  ; init_ktr   := tr
                  ; init_env   := shvec_replace_cast _ EQ e c
                  ; init_kst   := st
@@ -1700,9 +1711,9 @@ Definition env_fds_ok envd (hs : hdlr_state envd) :=
 
 Definition hdlr_invariant {envd} (cfd : fd) (cm : msg) (s : hdlr_state envd) :=
   let (kst, env) := s in
-  all_open (kcs kst ++ kfd kst)
+  all_open ((proj_fds (kcs kst)) ++ kfd kst)
   * all_open_payload (pay cm) (* this might become problematic *)
-  * [In cfd (kcs kst)] * [msg_fds_ok kst cm] * [env_fds_ok envd s]
+  * [In cfd (proj_fds (kcs kst))] * [msg_fds_ok kst cm] * [env_fds_ok envd s]
 .
 
 Lemma env_fds_in_app_r : forall envd env a b,
@@ -1738,8 +1749,8 @@ Proof.
     let m := eval_payload_expr cfd _ envd (kst st) env _ me in
     send_msg f (Build_msg t m)
     (tr ~~~ expand_ktrace tr)
-    <@> all_open_drop (cs ++ fds) f * all_open_payload (pay cm)
-      * [In cfd cs] * [msg_fds_ok st cm] * [env_fds_ok envd s];;
+    <@> all_open_drop ((proj_fds cs) ++ fds) f * all_open_payload (pay cm)
+      * [In cfd (proj_fds cs)] * [msg_fds_ok st cm] * [env_fds_ok envd s];;
 
     let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
     {{Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := kst st ; kfd := fds |}
@@ -1747,15 +1758,15 @@ Proof.
               |}
     }}
 
-  | Spawn ct i EQ =>
+  | Spawn ct tag cfg i EQ =>
     let c_cmd := comp_cmd (COMPS ct) in
     let c_args := comp_args (COMPS ct) in
     c <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
-      <@> all_open (cs ++ fds) * all_open_payload (pay cm)
-        * [In cfd cs] * [msg_fds_ok st cm] * [env_fds_ok envd s];
+      <@> all_open ((proj_fds cs) ++ fds) * all_open_payload (pay cm)
+        * [In cfd (proj_fds cs)] * [msg_fds_ok st cm] * [env_fds_ok envd s];
 
     let tr := tr ~~~ KExec c_cmd c_args c :: tr in
-    {{ Return {| hdlr_kst := {| kcs := c :: cs
+    {{ Return {| hdlr_kst := {| kcs := (c, existT _ tag cfg) :: cs
                               ; ktr := tr
                               ; kst := kst st
                               ; kfd := fds |}
@@ -1892,14 +1903,14 @@ Proof.
     let tr := ktr s in
     let st := kst s in
     let fd := kfd s in
-    c <- select cs
+    c <- select (proj_fds cs)
     (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [Reach s] * open devnull * all_open cs * all_open fd);
+    <@> (tr ~~ [Reach s] * open devnull * all_open (proj_fds cs) * all_open fd);
 
-    let tr := tr ~~~ KSelect cs c :: tr in
+    let tr := tr ~~~ KSelect (proj_fds cs) c :: tr in
     mm <- recv_msg c
     (tr ~~~ expand_ktrace tr)
-    <@> (tr ~~ [In c cs] * [Reach s] * open devnull * all_open_drop cs c * all_open fd);
+    <@> (tr ~~ [In c (proj_fds cs)] * [Reach s] * open devnull * all_open_drop (proj_fds cs) c * all_open fd);
 
     match mm with
     | inl m =>
@@ -1937,22 +1948,22 @@ Proof.
   ); unfold hdlr_invariant in *; sep''.
 
   isolate (
-    open c * all_open_drop cs c * all_open fd
-    ==> all_open (cs ++ fd)
+    open c * all_open_drop (proj_fds cs) c * all_open fd
+    ==> all_open ((proj_fds cs) ++ fd)
   ).
 
-  apply himp_trans with (Q := all_open cs * all_open fd); sep''.
-  apply himp_trans with (Q := all_open cs * all_open ((*devnull ::*) fd)).
+  apply himp_trans with (Q := all_open (proj_fds cs) * all_open fd); sep''.
+  apply himp_trans with (Q := all_open (proj_fds cs) * all_open ((*devnull ::*) fd)).
   sep''. (*apply devnull_open.*) apply all_open_concat.
   apply himp_pure'. unfold env_fds_ok. simpl. admit. (*apply in_devnull_default_payload.*)
 
   destruct s'' as [kst'' ?]; simpl in *; sep''.
   isolate (
-    all_open (kcs kst'' ++ kfd kst'') * all_open_payload (pay m)
-    ==> all_open (kcs kst'') * all_open (kfd kst'' ++ payload_fds _ (pay m))
+    all_open ((proj_fds (kcs kst'')) ++ kfd kst'') * all_open_payload (pay m)
+    ==> all_open (proj_fds (kcs kst'')) * all_open (kfd kst'' ++ payload_fds _ (pay m))
   ).
   apply himp_trans with
-  (Q := all_open (kcs kst'') * all_open (kfd kst'') * all_open_payload (pay m)); sep''.
+  (Q := all_open (proj_fds (kcs kst'')) * all_open (kfd kst'') * all_open_payload (pay m)); sep''.
   apply all_open_unconcat.
   apply himp_trans with
   (Q := all_open (kfd kst'') * all_open (payload_fds _ (pay m))); sep''.
@@ -2005,3 +2016,71 @@ Qed.
 End WITH_HANDLER.
 
 End WITH_PAYLOAD_DESC_VEC.
+
+Definition shvec_match_vvdesc {NB_VD:nat}
+  (VVD:vvdesc NB_VD) (tag:fin NB_VD) (tag':fin NB_VD) (sdenote_desc':desc->Set)
+  (elt_match:forall (d:desc), s[[d]] -> sdenote_desc' d -> bool)
+  (v:shvec sdenote_desc (projT2 (lkup_tag VVD tag)))
+  (v':shvec sdenote_desc' (projT2 (lkup_tag VVD tag'))) : bool :=
+  match fin_eq_dec tag tag' with
+  | left H => match H in _ = _tag return
+                shvec sdenote_desc' (projT2 (lkup_tag VVD _tag)) -> bool
+              with
+              | Logic.eq_refl => fun v' =>
+                 shvec_match (projT2 (lkup_tag VVD tag))
+                              sdenote_desc sdenote_desc'
+                              elt_match v v'
+              end v'
+  | right H => false
+  end.
+
+Definition sdenote_desc_cfg_pat (d:desc) :=
+  option (sdenote_desc d).
+
+Definition elt_match
+  (d:desc) (elt:s[[d]]) (elt':sdenote_desc_cfg_pat d) : bool :=
+  match elt' with
+  | None   => true
+  | Some x => match d as _d return
+              s[[_d]] -> s[[_d]] -> bool
+              with
+              | num_d => fun elt x =>
+                           if num_eq x elt then true else false
+              | str_d => fun elt x =>
+                           if str_eq x elt then true else false
+              | fd_d  => fun elt x =>
+                           if fd_eq x elt then true else false
+              end elt x
+  end.
+
+Definition match_comp {NB_CFGD:nat}
+  (f:fd) (CFGD:vvdesc NB_CFGD) tag
+  (cfg_pat:shvec sdenote_desc_cfg_pat (projT2 (lkup_tag CFGD tag)))
+  (c:component CFGD) :=
+  match c with
+  | (f',cfg) =>
+    if fd_eq f f'
+    then shvec_match_vvdesc CFGD _ _ _ elt_match (projT2 cfg) cfg_pat
+    else false
+  end.
+
+Definition find_comp {NB_CFGD:nat}
+  (f:fd) (CFGD:vvdesc NB_CFGD) tag
+  (cfg_pat:shvec sdenote_desc_cfg_pat (projT2 (lkup_tag CFGD tag)))
+  (comps:list (component CFGD)) :=
+  find (match_comp f CFGD tag cfg_pat) comps.
+
+Definition filter_comps {NB_CFGD:nat}
+  (f:fd) (CFGD:vvdesc NB_CFGD) tag
+  (cfg_pat:shvec sdenote_desc_cfg_pat (projT2 (lkup_tag CFGD tag)))
+  (comps:list (component CFGD)) :=
+  filter (match_comp f CFGD tag cfg_pat) comps.
+
+Definition exists_comp {NB_CFGD:nat}
+  (f:fd) (CFGD:vvdesc NB_CFGD) tag
+  (cfg_pat:shvec sdenote_desc_cfg_pat (projT2 (lkup_tag CFGD tag)))
+  (comps:list (component CFGD)) :=
+  match find_comp f CFGD tag cfg_pat comps with
+  | None   => false
+  | Some _ => true
+  end.

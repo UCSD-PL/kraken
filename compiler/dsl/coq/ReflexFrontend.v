@@ -10,12 +10,14 @@ Record spec :=
 ; KSTD     : vdesc
 ; COMPT    : Type
 ; COMPS    : COMPT -> comp
-; INIT     : init_prog PAYD COMPT KSTD (init_msg PAYD) IENVD
-; HANDLERS : handlers PAYD COMPT KSTD
+; NB_COMPD : nat
+; CFGD     : vvdesc NB_COMPD
+; INIT     : init_prog PAYD COMPT KSTD CFGD (init_msg PAYD) IENVD
+; HANDLERS : handlers PAYD COMPT KSTD CFGD
 }.
 
 Definition mk_main (s : spec) :=
-  @main _ (PAYD s) (COMPT s) (COMPS s) (KSTD s) (IENVD s) (INIT s) (HANDLERS s).
+  @main _ (PAYD s) (COMPT s) (COMPS s) (KSTD s) _ (CFGD s) (IENVD s) (INIT s) (HANDLERS s).
 
 Fixpoint mk_vdesc' l : vdesc' (List.length l) :=
   match l with

@@ -51,13 +51,17 @@ Definition COMPS (t : COMPT) : comp :=
   | UserInput => mk_comp "UserInput" "test/quark/user-input.py" []
   end.
 
-Definition INIT : init_prog PAYD COMPT KSTD (init_msg PAYD) IENVD :=
-  [ fun s => Spawn _ _ _ _ IENVD Tab       v_t (Logic.eq_refl _)
-  ; fun s => Spawn _ _ _ _ IENVD Screen    v_s (Logic.eq_refl _)
-  ; fun s => Spawn _ _ _ _ IENVD UserInput v_u (Logic.eq_refl _)
+Definition NB_CFGD := 1.
+
+Definition CFGD := mk_vvdesc [("",[])].
+
+Definition INIT : init_prog PAYD COMPT KSTD CFGD (init_msg PAYD) IENVD :=
+  [ fun s => Spawn _ _ _ CFGD _ IENVD Tab       None tt v_t (Logic.eq_refl _)
+  ; fun s => Spawn _ _ _ CFGD _ IENVD Screen    None tt v_s (Logic.eq_refl _)
+  ; fun s => Spawn _ _ _ CFGD _ IENVD UserInput None tt v_u (Logic.eq_refl _)
   ].
 
-Definition HANDLERS : handlers PAYD COMPT KSTD :=
+Definition HANDLERS : handlers PAYD COMPT KSTD CFGD :=
   (fun m cfd =>
     match tag PAYD m as _tm return
       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
@@ -65,34 +69,43 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
 
     | Input => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD m d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD CFGD m d) envd (
          let (input, _) := pl in fun st0 =>
-         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) userinput)
+         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _
+                                 (projT2 KSTD) (kst _ _ _ st0) userinput)
          then
-           [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ curtab) Input (SLit _ _ m _ input, tt) ]
+           [ fun s => Send PAYD COMPT KSTD CFGD _ envd
+                           (StVar _ KSTD m _ curtab) Input
+                           (SLit _ _ m _  input, tt) ]
          else
            []
        )
 
     | Display => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD m d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD CFGD m d) envd (
          let (url, _) := pl in fun st0 =>
-         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) curtab)
+         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _
+                                 (projT2 KSTD) (kst _ _ _ st0) curtab)
          then
-           [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ screen) Display (SLit _ _ m _ url, tt) ]
+           [ fun s => Send PAYD COMPT KSTD CFGD _ envd
+                           (StVar _ KSTD m _ screen) Display
+                           (SLit _ _ m _ url, tt) ]
          else
            []
        )
 
     | Quit => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD m d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD CFGD m d) envd (
          let _ := pl in fun st0 =>
-         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ st0) userinput)
+         if fd_eq cfd (shvec_ith (n := projT1 KSTD) _
+                                 (projT2 KSTD) (kst _ _ _ st0) userinput)
          then
-           [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ curtab) Quit tt
-           ; fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ screen) Quit tt
+           [ fun s => Send PAYD COMPT KSTD CFGD _ envd
+                           (StVar _ KSTD m _ curtab) Quit tt
+           ; fun s => Send PAYD COMPT KSTD CFGD _ envd
+                           (StVar _ KSTD m _ screen) Quit tt
            ]
          else
            []
@@ -103,4 +116,4 @@ Definition HANDLERS : handlers PAYD COMPT KSTD :=
     end (pay PAYD m)
   ).
 
-Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPS INIT HANDLERS).
+Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPS NB_CFGD CFGD INIT HANDLERS).

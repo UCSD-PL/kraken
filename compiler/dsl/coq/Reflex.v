@@ -2054,33 +2054,36 @@ Definition elt_match
   end.
 
 Definition match_comp {NB_CFGD:nat}
-  (f:fd) (CFGD:vvdesc NB_CFGD) tag
+  (optf:option fd) (CFGD:vvdesc NB_CFGD) tag
   (cfg_pat:shvec sdenote_desc_cfg_pat (projT2 (lkup_tag CFGD tag)))
   (c:component CFGD) :=
   match c with
   | (f',cfg) =>
-    if fd_eq f f'
+    if match optf with
+       | None => true
+       | Some f => if fd_eq f f' then true else false
+       end
     then shvec_match_vvdesc CFGD _ _ _ elt_match (projT2 cfg) cfg_pat
     else false
   end.
 
 Definition find_comp {NB_CFGD:nat}
-  (f:fd) (CFGD:vvdesc NB_CFGD) tag
+  (optf:option fd) (CFGD:vvdesc NB_CFGD) tag
   (cfg_pat:shvec sdenote_desc_cfg_pat (projT2 (lkup_tag CFGD tag)))
   (comps:list (component CFGD)) :=
-  find (match_comp f CFGD tag cfg_pat) comps.
+  find (match_comp optf CFGD tag cfg_pat) comps.
 
 Definition filter_comps {NB_CFGD:nat}
-  (f:fd) (CFGD:vvdesc NB_CFGD) tag
+  (CFGD:vvdesc NB_CFGD) tag
   (cfg_pat:shvec sdenote_desc_cfg_pat (projT2 (lkup_tag CFGD tag)))
   (comps:list (component CFGD)) :=
-  filter (match_comp f CFGD tag cfg_pat) comps.
+  filter (match_comp None CFGD tag cfg_pat) comps.
 
 Definition exists_comp {NB_CFGD:nat}
-  (f:fd) (CFGD:vvdesc NB_CFGD) tag
+  (optf:option fd) (CFGD:vvdesc NB_CFGD) tag
   (cfg_pat:shvec sdenote_desc_cfg_pat (projT2 (lkup_tag CFGD tag)))
   (comps:list (component CFGD)) :=
-  match find_comp f CFGD tag cfg_pat comps with
+  match find_comp optf CFGD tag cfg_pat comps with
   | None   => false
   | Some _ => true
   end.

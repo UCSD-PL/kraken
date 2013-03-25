@@ -4,8 +4,10 @@ Require Import Reflex.
 Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
+Require Import ReflexFrontend.
 Require Import ReflexVec.
 Require Import ReflexHVec.
+
 
 Open Scope string_scope.
 
@@ -51,8 +53,7 @@ Open Scope string_scope.
 Definition NB_MSG : nat := 18.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
-  [ 
-    (* slave <- monitor *)
+  [
     ("LoginReq",   [str_d]);
     ("LoginResT",   []);
     ("LoginResF",   []);
@@ -116,23 +117,18 @@ Definition KSTD : vdesc := mk_vdesc
   ; str_d (* authenticated username *)
   ].
 
-Notation v_st_system := (None) (only parsing).
-Notation v_st_slave := (Some None) (only parsing).
-Notation v_st_authenticated := (Some (Some None)) (only parsing).
-Notation v_st_auth_user := (Some (Some (Some None))) (only parsing).
-
-Notation system := (StVar KSTD _ v_st_system) (only parsing).
-Notation slave := (StVar KSTD _ v_st_slave) (only parsing).
-Notation authenticated := (StVar KSTD _ v_st_authenticated) (only parsing).
-Notation auth_user := (StVar KSTD _ v_st_auth_user) (only parsing).
+Notation system := (None) (only parsing).
+Notation slave := (Some None) (only parsing).
+Notation authenticated := (Some (Some None)) (only parsing).
+Notation auth_user := (Some (Some (Some None))) (only parsing).
 
 Definition IENVD : vdesc := mk_vdesc
   [ fd_d (* system *)
   ; fd_d (* slave *)
   ].
 
-Notation v_env_system := (None) (only parsing).
-Notation v_env_slave := (Some None) (only parsing).
+Notation env_system := (None) (only parsing).
+Notation env_slave := (Some None) (only parsing).
 
 Inductive COMPT : Type := System | Slave.
 
@@ -142,203 +138,180 @@ Definition COMPS (t : COMPT) : comp :=
   | Slave    => mk_comp "Slave"    "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/ssh"     []
   end.
 
-Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
-  [ fun s => Spawn _ _ _ IENVD System   v_env_system (Logic.eq_refl _)
-  ; fun s => Spawn _ _ _ IENVD Slave    v_env_slave (Logic.eq_refl _)
+
+Definition INIT : init_prog PAYD COMPT KSTD (init_msg PAYD) IENVD :=
+  [
+    fun s => Spawn _ _ _ _ IENVD System None (Logic.eq_refl _);
+    fun s => Spawn _ _ _ _ IENVD Slave None (Logic.eq_refl _)
   ].
 
 
-
-Check @Send.
-(*
-Send
-     : forall (NB_MSG : nat) (VVD : vvdesc NB_MSG) 
-         (COMPT : Type) (KSTD ENVD : vdesc),
-       expr KSTD ENVD fd_d ->
-       forall t : fin NB_MSG,
-       payload_expr KSTD ENVD (lkup_tag VVD t) -> cmd VVD COMPT KSTD ENVD
-*)
-
-Check @StUpd.
-
-
-Check strd_neq_fdd.
-
-Check SLit.
-
-
-
-
-Check KSTD.
-
-Print kst.
-
-Print shvec_ith.
-
 Definition HANDLERS : handlers PAYD COMPT KSTD :=
-  (fun m cfd =>
+  fun (m:msg PAYD) cfd =>
+    match m as _m return forall (EQ : _m = m), _ with
+      (*
     match tag PAYD m as _tm return
       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
     with
+    *)
       (* login *)
-
-    | LoginReq => fun pl =>
+    | Build_msg LoginReq pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          let (loginstr, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd system SLoginReq (SLit _ _ loginstr, tt)
+            [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ system) SLoginReq (SLit _ _ m _ loginstr, tt)
             ]
          )
        )
 
-    | SLoginResT => fun pl =>
+    | Build_msg SLoginResT pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          let (user, _) := pl in           
          (fun st0 =>
             [ 
               
-              fun s => StUpd PAYD COMPT KSTD envd v_st_auth_user strd_neq_fdd (SLit _ _ user)
+              fun s => StUpd PAYD COMPT KSTD _ envd auth_user strd_neq_fdd (SLit _ _ m _ user)
               ; 
-              fun s => StUpd PAYD COMPT KSTD envd v_st_authenticated numd_neq_fdd (NLit _ _ (num_of_nat 1))
+              fun s => StUpd PAYD COMPT KSTD _ envd authenticated numd_neq_fdd (NLit _ _ m _ (num_of_nat 1))
               ;
-              fun s => Send PAYD COMPT KSTD envd slave LoginResT tt
+              fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ slave) LoginResT tt
             ]
          )
        )
 
-    | SLoginResF => fun pl =>
+    | Build_msg SLoginResF pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd slave LoginResF tt
+            [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ slave) LoginResF tt
             ]
          )
        )
 
        (* pub key request *)
 
-    | PubkeyReq => fun pl =>
+    | Build_msg PubkeyReq pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd system SPubkeyReq tt
+            [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ system) SPubkeyReq tt
             ]
          )
        )
 
-    | SPubkeyRes => fun pl =>
+    | Build_msg SPubkeyRes pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          let (pubkey, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd system SPubkeyRes (SLit _ _ pubkey, tt)
+            [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ system) SPubkeyRes (SLit _ _ m _ pubkey, tt)
             ]
          )
        )
        
        (* key sign *)
 
-    | KeysignReq => fun pl =>
+    | Build_msg KeysignReq pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          let (keystr, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd system SKeysignReq (SLit _ _ keystr, tt)
+            [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ system) SKeysignReq (SLit _ _ m _ keystr, tt)
             ]
          )
        )
 
-    | SKeysignRes => fun pl =>
+    | Build_msg SKeysignRes pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          let (signedkey, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD COMPT KSTD envd system KeysignRes (SLit _ _ signedkey, tt)
+            [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ system) KeysignRes (SLit _ _ m _ signedkey, tt)
             ]
          )
        )
 
        (* create pseudo terminal *)
 
-    | CreatePtyerReq => fun pl =>
+    | Build_msg CreatePtyerReq pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 =>
            if num_eq (shvec_ith _ (projT2 KSTD:svec desc 4)
                                 (kst _ _ st0)
-                                v_st_authenticated)
-                     (num_of_nat 0)
+                                authenticated)
+                                (num_of_nat 0)
            then []
            else [ 
-               fun s => Send PAYD COMPT KSTD envd system SCreatePtyerReq (auth_user,tt)
+               fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ system) SCreatePtyerReq ((StVar _ KSTD m _ auth_user),tt)
              ]
          )
        )
 
-    | SCreatePtyerRes => fun pl =>
+    | Build_msg SCreatePtyerRes pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD m d) envd (
          match pl with 
            | (fd0, (fd1, _)) =>
              (fun st0 =>
-               [ fun s => Send PAYD COMPT KSTD envd system CreatePtyerRes (CFd _ _, (CFd _ _, tt))
+               [ fun s => Send PAYD COMPT KSTD _ envd (StVar _ KSTD m _ system) CreatePtyerRes (mvar EQ (Some None), (mvar EQ None, tt))
                ]
              )
          end
        )
        
-
        (* not meant to be received by the kernel *)
-    | LoginResT => fun pl =>
+    | Build_msg LoginResT pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | LoginResF => fun pl =>
+    | Build_msg LoginResF pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | PubkeyRes => fun pl =>
+    | Build_msg PubkeyRes pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | KeysignRes => fun pl =>
+    | Build_msg KeysignRes pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | CreatePtyerRes => fun pl =>
+    | Build_msg CreatePtyerRes pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | SLoginReq => fun pl =>
+    | Build_msg SLoginReq pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | SPubkeyReq => fun pl =>
+    | Build_msg SPubkeyReq pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | SKeysignReq => fun pl =>
+    | Build_msg SKeysignReq pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | SCreatePtyerReq => fun pl =>
+    | Build_msg SCreatePtyerReq pl => fun EQ =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT KSTD _ d) envd (
          (fun st0 => [])
        )
-    | (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))))))))))) => fun _ =>
+    | Build_msg (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))))))))))) pl => fun EQ =>
       match bad with end
-    end (pay PAYD m)
-  ).
+    end  (Logic.eq_refl m).
+
 
 Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPS INIT HANDLERS).
+

@@ -32,6 +32,7 @@ Definition INIT : init_prog PAYD COMPT KSTD (init_msg PAYD) IENVD :=
   [fun s => Spawn _ _ _ _ IENVD Echo None (Logic.eq_refl _)
   ].
 
+
 Definition HANDLERS : handlers PAYD COMPT KSTD :=
   fun (m : msg PAYD) cfd =>
     match m as _m return forall (EQ : _m = m), _ with

@@ -5,7 +5,7 @@ Require Import ActionMatch.
 Require Import Tactics.
 
 Theorem recv_before : forall st tr m,
-  Reach _ _ COMPS _ _ INIT HANDLERS st -> ktr _ _ st = inhabits tr ->
+  Reach _ _ COMPS _ _ _ INIT HANDLERS st -> ktr _ _ _ _ st = inhabits tr ->
   ImmBefore PAYD
             (KORecv PAYD None
                      (Some (Build_opt_msg PAYD
@@ -19,7 +19,7 @@ Proof.
 Qed.
 
 Theorem send_after : forall st tr m,
-  Reach _ _ COMPS _ _ INIT HANDLERS st -> ktr _ _ st = inhabits tr ->
+  Reach _ _ COMPS _ _ _ INIT HANDLERS st -> ktr _ _ _ _ st = inhabits tr ->
   ImmAfter PAYD
             (KOSend PAYD None
                      (Some (Build_opt_msg PAYD

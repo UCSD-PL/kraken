@@ -3,6 +3,8 @@ Require Import String.
 Require Import Reflex.
 Require Import ReflexBase.
 Require Import ReflexDenoted.
+Require Import ReflexFin.
+Require Import ReflexFrontend.
 Require Import ReflexVec.
 
 Open Scope string_scope.
@@ -13,6 +15,8 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [ ("M", [str_d])
   ].
 
+Notation M := (None) (only parsing).
+
 Definition KSTD : vdesc := mk_vdesc [].
 
 Definition IENVD : vdesc := mk_vdesc
@@ -21,30 +25,31 @@ Definition IENVD : vdesc := mk_vdesc
 
 Inductive COMPT : Type := Echo.
 
-Definition COMPS (t : COMPT) : comp :=
+Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
+Proof. decide equality. Defined.
+
+Definition COMPS (t : COMPT) : compd :=
   match t with
-  | Echo => mk_comp "Echo" "test/echo-00/test.py" []
+  | Echo => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
   end.
 
-Definition INIT : init_prog PAYD COMPT KSTD IENVD :=
-  [fun s => Spawn _ _ _ IENVD Echo None (Logic.eq_refl _)
+Definition IMSG : msg PAYD := @Build_msg _ PAYD M (str_of_string "", tt).
+
+Definition INIT : init_prog PAYD COMPT COMPS KSTD IMSG IENVD :=
+  [fun s => Spawn _ _ COMPS _ _ IENVD Echo tt None (Logic.eq_refl _)
   ].
 
-Definition HANDLERS : handlers PAYD COMPT KSTD :=
-  (fun m cfd =>
-    match tag PAYD m as _tm return
-      @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
-    with
-    | None => fun pl =>
-       let envd := existT _ 0 tt in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
-         let (msg, _) := pl in fun st0 =>
-         [ fun s => Send PAYD _ _ _ (CFd _ _) None (SLit _ _ msg, tt)
-         ]
-       )
-    | Some bad => fun _ =>
+Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
+  fun (m : msg PAYD) cfd =>
+    match m as _m return forall (EQ : _m = m), _ with
+    | Build_msg None p => fun EQ =>
+      let envd := existT _ 0 tt in
+      existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+        let (msg, _) := p in fun st0 =>
+        [ fun s => Send _ _ _ _ _ _ (CFd PAYD _ _ _) None (mvar EQ None, tt) ]
+      )
+    | Build_msg (Some bad) _ =>
       match bad with end
-    end (pay PAYD m)
-  ).
+    end (Logic.eq_refl m).
 
-Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPS INIT HANDLERS).
+Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPTDEC COMPS IMSG INIT HANDLERS).

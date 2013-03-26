@@ -6,6 +6,7 @@ Require Import ReflexDenoted.
 Require Import ReflexVec.
 Require Import ReflexHVec.
 Require Import ReflexFin.
+Require Import ReflexFrontend.
 
 Open Scope string_scope.
 
@@ -26,49 +27,58 @@ Notation msg_echo := (None) (only parsing).
 Notation msg_enable := (Some None) (only parsing).
 Notation msg_nothing := (Some (Some None)) (only parsing).
 
-Definition IENVD : vdesc := mk_vdesc [].
+Definition IENVD : vdesc := mk_vdesc [fd_d].
 
 Inductive COMPT : Type := Stupid.
 
-Definition COMPS (t : COMPT) : comp :=
+Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
+Proof. decide equality. Defined.
+
+Definition COMPS (t : COMPT) : compd :=
   match t with
-  | Stupid => mk_comp "Echo" "test/echo-00/test.py" []
+  | Stupid => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
   end.
 
-Definition INIT : init_prog PAYD COMPT KSTD IENVD := [].
+Definition IMSG : msg PAYD := @Build_msg _ PAYD None tt.
 
-Definition HANDLERS : handlers PAYD COMPT KSTD :=
+Definition INIT : init_prog PAYD COMPT COMPS KSTD IMSG IENVD :=
+  [fun s => Spawn _ _ COMPS _ _ IENVD Stupid tt None (Logic.eq_refl _)
+  ].
+
+Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   (fun m cfd =>
     match tag PAYD m as _tm return
       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
     with
     | msg_echo => fun pl =>
        let envd := existT _ 0 tt in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
            fun st =>
            if num_eq (@shvec_ith _ _ (projT1 KSTD)
                                  (projT2 KSTD)
-                                 (kst _ _ st) st_n)
+                                 (kst _ _ _ _ st) st_n)
                      (num_of_nat 0)
            then [] (*Ignore.*)
-           else [ fun s => Send PAYD _ _ _ (CFd _ _) msg_echo tt ]
+           else [ fun s => Send _ _ _ _ _ _ (CFd PAYD _ _ _) msg_echo tt ]
               )
     | msg_enable => fun pl =>
        let envd := existT _ 0 tt in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
            fun st =>
            let n := (@shvec_ith _ _ (projT1 KSTD)
                                  (projT2 KSTD)
-                                 (kst _ _ st) st_n) in
-           [ fun _ => StUpd _ _ KSTD _ st_n numd_neq_fdd
-                            (BinOp KSTD _ _ _ _ Add
-                                   (NLit _ _ n) (NLit _ _ (num_of_nat 1)))]
+                                 (kst _ _ _ _ st) st_n) in
+           [ fun _ => StUpd _ _ _ KSTD _ _ st_n numd_neq_fdd
+                            (BinOp _ KSTD _ _ _ _ _ Add
+                                   (NLit _ _ _ _ n)
+                                   (NLit _ _ _ _ (num_of_nat 1)))]
       )
     | msg_nothing => fun pl =>
        let envd := existT _ 0 tt in
-       existT (fun d => hdlr_prog PAYD COMPT KSTD d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
            fun st =>
-           [ fun _ => StUpd _ _ KSTD _ st_n numd_neq_fdd (NLit _ _ (num_of_nat 0))]
+           [ fun _ => StUpd _ _ _ KSTD _ _ st_n numd_neq_fdd
+                            (NLit _ _ _ _ (num_of_nat 0))]
       )
     | Some (Some (Some bad)) => fun _ =>
       match bad with end
@@ -82,7 +92,7 @@ Require Import Tactics.
 Require Import List.
 
 Theorem enable : forall st tr,
-  Reach _ _ COMPS _ _ INIT HANDLERS st -> ktr _ _ st = inhabits tr ->
+  Reach _ _ COMPS _ _ _ INIT HANDLERS st -> ktr _ _ _ _ st = inhabits tr ->
   Release PAYD
            (KORecv PAYD None
                     (Some (Build_opt_msg PAYD

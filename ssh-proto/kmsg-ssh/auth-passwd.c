@@ -204,14 +204,22 @@ int check_login_via_monitor(const char* username, const char* password) {
 
   send_free(mk_LoginReq_msg(&obuf));
   sm = recv_msg();
-  
-  if(sm->mtyp != MTYP_LoginRes || sm->payload->ptyp != PTYP_NUM) {
+
+  if(sm->mtyp == MTYP_LoginResT) {
+    return 1;
+  } else {
+    return 0;
+  }
+
+  /*
+  if(sm->mtyp != MTYP_LoginResT || sm->payload->ptyp != PTYP_NUM) {
     error("check_login_via_monitor:malformed msg is received\n");
     free_msg(sm);
     return 0;
   } else {
     return !!sm->payload->pval.num;
   }
+  */
 }
 
 // DON:I: needs root privilege 

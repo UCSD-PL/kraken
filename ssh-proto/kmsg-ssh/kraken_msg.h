@@ -49,21 +49,23 @@ typedef struct param {
 
 typedef enum msg_t {
   MTYP_LoginReq = 1,
-  MTYP_LoginRes = 2,
-  MTYP_PubkeyReq = 3,
-  MTYP_PubkeyRes = 4,
-  MTYP_KeysignReq = 5,
-  MTYP_KeysignRes = 6,
-  MTYP_CreatePtyerReq = 7,
-  MTYP_CreatePtyerRes = 8,
-  MTYP_SysLoginReq = 9,
-  MTYP_SysLoginRes = 10,
-  MTYP_SysPubkeyReq = 11,
-  MTYP_SysPubkeyRes = 12,
-  MTYP_SysKeysignReq = 13,
-  MTYP_SysKeysignRes = 14,
-  MTYP_SysCreatePtyerReq = 15,
-  MTYP_SysCreatePtyerRes = 16,
+  MTYP_LoginResT = 2,
+  MTYP_LoginResF = 3,
+  MTYP_PubkeyReq = 4,
+  MTYP_PubkeyRes = 5,
+  MTYP_KeysignReq = 6,
+  MTYP_KeysignRes = 7,
+  MTYP_CreatePtyerReq = 8,
+  MTYP_CreatePtyerRes = 9,
+  MTYP_SysLoginReq = 10,
+  MTYP_SysLoginResT = 11,
+  MTYP_SysLoginResF = 12,
+  MTYP_SysPubkeyReq = 13,
+  MTYP_SysPubkeyRes = 14,
+  MTYP_SysKeysignReq = 15,
+  MTYP_SysKeysignRes = 16,
+  MTYP_SysCreatePtyerReq = 17,
+  MTYP_SysCreatePtyerRes = 18,
 } msg_t;
 
 typedef struct msg {
@@ -80,7 +82,8 @@ pstr * pstrdup(pstr *s);
 // allocate various kinds of msgs
 
 msg * mk_LoginReq_msg(pstr * p0);
-msg * mk_LoginRes_msg(uint32_t p0);
+msg * mk_LoginResT_msg();
+msg * mk_LoginResF_msg();
 msg * mk_PubkeyReq_msg();
 msg * mk_PubkeyRes_msg(pstr * p0);
 msg * mk_KeysignReq_msg(pstr * p0);
@@ -88,7 +91,8 @@ msg * mk_KeysignRes_msg(pstr * p0);
 msg * mk_CreatePtyerReq_msg();
 msg * mk_CreatePtyerRes_msg(int p0, int p1);
 msg * mk_SysLoginReq_msg(pstr * p0);
-msg * mk_SysLoginRes_msg(pstr * p0, uint32_t p1);
+msg * mk_SysLoginResT_msg(pstr * p0);
+msg * mk_SysLoginResF_msg();
 msg * mk_SysPubkeyReq_msg();
 msg * mk_SysPubkeyRes_msg(pstr * p0);
 msg * mk_SysKeysignReq_msg(pstr * p0);

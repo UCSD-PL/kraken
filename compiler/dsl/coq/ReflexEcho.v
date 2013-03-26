@@ -15,7 +15,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [ ("M", [str_d])
   ].
 
-Notation "'M'" := (None) (only parsing).
+Notation M := (None) (only parsing).
 
 Definition KSTD : vdesc := mk_vdesc [].
 

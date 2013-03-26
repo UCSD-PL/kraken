@@ -14,6 +14,6 @@ Extract Constant ReflexIO.recv_fd  => "ReflexImpl.recv_fd".
 Extract Constant ReflexIO.send_fd  => "ReflexImpl.send_fd".
 
 Cd "../ml".
-Recursive Extraction Library ReflexSSH.
 Recursive Extraction Library ReflexEcho.
 Recursive Extraction Library ReflexQuark.
+Recursive Extraction Library ReflexSSH.

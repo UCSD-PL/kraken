@@ -8,14 +8,16 @@ Record spec :=
 ; PAYD     : vvdesc NB_MSG
 ; IENVD    : vdesc
 ; KSTD     : vdesc
-; COMPT    : Type
-; COMPS    : COMPT -> comp
-; INIT     : init_prog PAYD COMPT KSTD (init_msg PAYD) IENVD
-; HANDLERS : handlers PAYD COMPT KSTD
+; COMPT    : Set
+; COMPTDEC : forall (x y : COMPT), decide (x = y)
+; COMPS    : COMPT -> compd
+; IMSG     : msg PAYD
+; INIT     : init_prog PAYD COMPT COMPS KSTD IMSG IENVD
+; HANDLERS : handlers PAYD COMPT COMPS KSTD
 }.
 
 Definition mk_main (s : spec) :=
-  @main _ (PAYD s) (COMPT s) (COMPS s) (KSTD s) (IENVD s) (INIT s) (HANDLERS s).
+  @main _ (PAYD s) (COMPT s) (COMPTDEC s) (COMPS s) (KSTD s) (IENVD s) (IMSG s) (INIT s) (HANDLERS s).
 
 Fixpoint mk_vdesc' l : vdesc' (List.length l) :=
   match l with
@@ -31,10 +33,11 @@ Fixpoint mk_vvdesc (l : list (string * list desc)) : vvdesc (List.length l) :=
   | (_, x) :: xs => (mk_vdesc x, mk_vvdesc xs)
   end.
 
-Definition mk_comp name cmd args :=
-  {| comp_name := str_of_string name
-   ; comp_cmd  := str_of_string cmd
-   ; comp_args := List.map str_of_string args
+Definition mk_compd name cmd args conf :=
+  {| compd_name := str_of_string name
+   ; compd_cmd  := str_of_string cmd
+   ; compd_args := List.map str_of_string args
+   ; compd_conf := conf
    |}.
 
 Notation " [ ] " := nil.

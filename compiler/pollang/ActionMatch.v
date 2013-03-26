@@ -5,204 +5,147 @@ Require Import ReflexFin.
 Require Import ReflexVec.
 Require Import ReflexHVec.
 
-Inductive OptTag : Type :=
-C_opttag : vdesc -> OptTag.
+Section KOAction.
+
+Context {NB_MSG : nat}.
+Variable PAYD : vvdesc NB_MSG.
 
 Definition soptdenote_desc (d : desc) : Set :=
   option (sdenote_desc d).
 
-Definition soptdenote_vdesc' n (pt : vdesc' n) : Set :=
-  shvec soptdenote_desc pt.
-
-Instance SOptDenoted_payload_desc : SDenoted OptTag :=
-{ sdenote := fun opttag => match opttag with
-                           | C_opttag pd =>
-                             soptdenote_vdesc' (projT1 pd) (projT2 pd)
-                           end
-}.
-
-Section KOAction.
-
-Context {NB_MSG:nat}.
-Context {PLT:vvdesc NB_MSG}.
-
 Record opt_msg : Set :=
   { opt_tag : fin NB_MSG
-  ; opt_pay : s[[ C_opttag (@lkup_tag NB_MSG PLT opt_tag) ]]
+  ; opt_pay : shvec soptdenote_desc (projT2 (lkup_tag PAYD opt_tag))
   }.
 
-(*Definition KTrace := KTrace NB_MSG PLT.*)
-(*Definition KAction := KAction NB_MSG PLT.*)
-
 Inductive KOAction : Set :=
-| KOExec   : option str -> option (list str) -> option fd -> KOAction
-| KOCall   : option str -> option (list str) -> option fd -> KOAction
-| KOSelect : option (list fd) -> option fd -> KOAction
+| KOExec   : option str -> option (list (option str)) -> option fd -> KOAction
+| KOCall   : option str -> option (list (option str)) -> option fd -> KOAction
+| KOSelect : option (list (option fd)) -> option fd -> KOAction
 | KOSend   : option fd -> option opt_msg -> KOAction
 | KORecv   : option fd -> option opt_msg -> KOAction
 | KOBogus  : option fd -> option num -> KOAction.
 
-Definition argMatch {T:Type} (opt:option T) (arg:T) : Prop :=
+Definition eltMatch (d:desc) (opt:option s[[d]]) (arg:s[[d]]) : Prop :=
   match opt with
   | None   => True
   | Some t => t = arg
   end.
 
-Fixpoint unpackedPLMatch n (pd:vdesc' n)
-                           (opt_pl:soptdenote_vdesc' n pd)
-                           (pl:sdenote_vdesc' n pd) : Prop :=
-  match n as _n
-  return forall (pd' : vdesc' _n),
-         soptdenote_vdesc' _n pd' ->
-         sdenote_vdesc' _n pd' ->
-         Prop
-  with
-  | O => fun _ _ _ => True
-  | S n' => fun pd opt_pl pl =>
-    match pd as _pd return
-      soptdenote_vdesc' (S n') _pd ->
-      sdenote_vdesc' (S n') _pd ->
-      Prop
-    with
-    | (t, pd') => fun opt_pl pl =>
-      match opt_pl, pl with
-      | (aopt, vopt), (a, v) =>
-        argMatch aopt a /\ unpackedPLMatch n' pd' vopt v
-      end
-    end opt_pl pl
-  end pd opt_pl pl.
-
-Definition packedPLMatch
-  (tag:fin NB_MSG)
-  (opt_pay:s[[C_opttag (@lkup_tag NB_MSG PLT tag)]])
-  (pay:s[[@lkup_tag NB_MSG PLT tag]]) : Prop :=
-  match @lkup_tag NB_MSG PLT tag as _l return
-        s[[C_opttag _l ]] -> s[[ _l ]] -> Prop
-  with
-  | existT n pl' => unpackedPLMatch n pl'
-  end opt_pay pay.
-
-Definition msgMatch' (opt_pl:opt_msg) (pl:msg _) : Prop :=
-  let opt_tag := (opt_tag opt_pl) in
-  let tag := (tag _ pl) in
+Definition msgMatch' (optm:opt_msg) (m:msg PAYD) : Prop :=
+  let opt_tag := (opt_tag optm) in
+  let tag := (tag _ m) in
   match fin_eq_dec tag opt_tag with
   | left H => match H in eq _ _tag return
-                s[[C_opttag (@lkup_tag NB_MSG PLT _tag)]] -> Prop
+                shvec soptdenote_desc (projT2 (lkup_tag PAYD _tag)) -> Prop
               with
               | eq_refl => fun opt_pay =>
-                 packedPLMatch tag opt_pay (pay _ pl)
-              end (opt_pay opt_pl)
+                 shvec_match_prop (projT2 (lkup_tag PAYD tag))
+                                  soptdenote_desc sdenote_desc
+                                  eltMatch opt_pay (pay _ m)
+              end (opt_pay optm)
   | right H => False
   end.
 
-Definition msgMatch (opt_pl:option opt_msg) (pl:msg _) : Prop :=
-  match opt_pl with
+Definition msgMatch (opt_optm:option opt_msg) (m:msg _) : Prop :=
+  match opt_optm with
   | None => True
-  | Some opt_pl' => msgMatch' opt_pl' pl
+  | Some optm => msgMatch' optm m
   end.
 
-Definition AMatch (oact:KOAction) (act:@KAction NB_MSG PLT) : Prop :=
+Fixpoint listMatch' (d:desc)
+           (lopt:list (option s[[d]])) (l:list s[[d]]) : Prop :=
+  match lopt, l with
+  | nil, nil          => True
+  | opt::lopt', e::l' => eltMatch d opt e /\ listMatch' d lopt' l'
+  | _, _              => False
+  end.
+
+Definition listMatch (d:desc)
+  (lopt:option (list (option s[[d]]))) (l:list s[[d]]) :=
+  match lopt with
+  | None => True
+  | Some lopt' => listMatch' d lopt' l
+  end.
+
+Definition AMatch (oact:KOAction) (act:KAction PAYD) : Prop :=
 match oact, act with
-| KOExec s ls f, KExec s' ls' f' => argMatch s s'
-                                      /\ argMatch ls ls'
-                                      /\ argMatch f f'
-| KOCall s ls f, KCall s' ls' f' => argMatch s s'
-                                      /\ argMatch ls ls'
-                                      /\ argMatch f f'
-| KOSelect lfd f, KSelect lfd' f' => argMatch lfd lfd'
-                                       /\ argMatch f f'
-| KOSend f omsg, KSend f' amsg => argMatch f f'
-                                   /\ msgMatch omsg amsg
-| KORecv f omsg, KRecv f' amsg => argMatch f f'
-                                   /\ msgMatch omsg amsg
+| KOExec s ls f, KExec s' ls' f' => eltMatch str_d s s' /\
+                                    listMatch str_d ls ls'  /\
+                                    eltMatch fd_d f f'
+| KOCall s ls f, KCall s' ls' f' => eltMatch str_d s s' /\
+                                    listMatch str_d ls ls' /\
+                                    eltMatch fd_d f f'
+| KOSelect lfd f, KSelect lfd' f' => listMatch fd_d lfd lfd' /\
+                                     eltMatch fd_d f f'
+| KOSend f omsg, KSend f' amsg => eltMatch fd_d f f' /\
+                                  msgMatch omsg amsg
+| KORecv f omsg, KRecv f' amsg => eltMatch fd_d f f' /\
+                                  msgMatch omsg amsg
 (**I don't know if this is the right thing to do for KBogus matching.
    It just checks if the message tags and fds are the same**)
-| KOBogus f optbtag, KBogus f' bmsg => argMatch f f'
-                                         /\ argMatch optbtag (btag bmsg)
+| KOBogus f optbtag, KBogus f' bmsg => eltMatch fd_d f f' /\
+                                       eltMatch num_d optbtag (btag bmsg)
 | _, _ => False
 end.
 
 End KOAction.
 
+Lemma decide_and : forall P Q, decide P ->
+                               decide Q ->
+                               decide (P /\ Q).
+Proof.
+  tauto.
+Qed.
 
-Ltac decide_act :=
+Definition decide_elt_match : forall d oelt elt,
+                                decide (eltMatch d oelt elt).
+Proof.
+  destruct oelt;
+  [ destruct d; [apply num_eq | apply str_eq | apply fd_eq]
+  | auto].
+Qed.
+
+Definition decide_list_match : forall d lopt l,
+                                 decide (listMatch d lopt l).
+Proof.
+  intros d lopt l.
+  destruct lopt as [lopt' | ]; simpl; auto.
+    generalize dependent l; induction lopt'; destruct l; simpl; auto.
+      apply decide_and; [apply decide_elt_match | apply IHlopt'].
+Qed.
+
+Definition decide_msg_match : forall {NB_MSG} (PAYD:vvdesc NB_MSG) opt_optm m,
+                                decide (msgMatch PAYD opt_optm m).
+Proof.
+  intros NB_MSG PAYD opt_optm m.
+  destruct opt_optm as [optm | ];
+  [destruct optm as [otag opay]; simpl
+  | auto ].
+    unfold msgMatch'; simpl;
+    match goal with
+    |- context[fin_eq_dec ?x ?y ]
+      => destruct (fin_eq_dec x y) as [eq | ]; [destruct eq | auto]
+    end.
+    destruct m as [tag pay]; simpl in *.
+    destruct (lkup_tag PAYD tag) as [n vd].
+    induction n; auto.
+      simpl in *.
+      destruct vd as [d vd'].
+      destruct opay as [oelt orest].
+      destruct pay as [elt rest].
+      apply decide_and; [apply decide_elt_match | auto].
+Qed.
+
+Definition decide_act : forall {NB_MSG} (PAYD:vvdesc NB_MSG) oact act,
+                          decide (AMatch PAYD oact act).
+Proof.
+  intros NB_MSG PAYD oact act.
+  destruct oact; destruct act; simpl; auto; (*Takes care of decide (False)*)
+  repeat apply decide_and;
   match goal with
-  | [ H : decide (?a0) |- decide (?a0 /\ ?a1 /\ ?a2) ]
-      => destruct H; cut (decide (a1 /\ a2)); try tauto
-  | [ H : decide (?a0) |- decide (?a0 /\ ?a1) ]
-      => destruct H; cut (decide (a1)); try tauto
-  | [ H : decide (?a) |- decide (?a) ]
-      => auto
-  | [ |- context[argMatch ?o ?s] ]
-      => let H := fresh "H" in assert (decide (argMatch o s)) as H by
-         (destruct o; simpl; (repeat decide equality) || auto)
+  | [ |- decide (eltMatch _ _ _) ] => apply decide_elt_match
+  | [ |- decide (listMatch _ _ _) ] => apply decide_list_match
+  | [ |- decide (msgMatch _ _ _) ] => apply decide_msg_match
   end.
-
-Ltac reduceMsgMatch :=
-  match goal with
-  | [ |- context[fin_eq_dec ?f1 ?f2] ]
-    => destruct (fin_eq_dec f1 f2)
-  | [ Heq : _ = ?fin |- context[match ?Heq with | eq_refl => _ end] ]
-    => destruct Heq
-  end.
-
-Definition decide_payload : forall NB_MSG PDV tag opl pl,
-                              decide (@packedPLMatch NB_MSG PDV tag opl pl).
-Proof.
-  intros.
-  unfold packedPLMatch.
-  destruct (@lkup_tag NB_MSG PDV tag).
-  induction x.
-    auto.
-
-    simpl in *.
-    destruct v.
-    simpl in *.
-    destruct opl.
-    destruct pl.
-    simpl in *.
-    destruct s.
-    destruct d; simpl in *;
-    assert (decide (s = s1)) by repeat decide equality;
-    decide_act; auto.
-    simpl.
-    cut (decide (unpackedPLMatch x v s0 s2)).
-    tauto.
-    auto.
-Defined.
-
-Definition decide_msg : forall NB_MSG PDV omsg msg,
-                          decide (@msgMatch NB_MSG PDV omsg msg).
-Proof.
-  intros.
-  destruct omsg.
-    destruct msg.
-    destruct o.
-    simpl.
-    unfold msgMatch'.
-    reduceMsgMatch.
-    simpl in *.
-    reduceMsgMatch.
-    apply decide_payload.
-    auto.
-    auto.
-Defined.
-
-Definition decide_act : forall NB_MSG PDV oact act,
-                          decide (@AMatch NB_MSG PDV oact act).  
-Proof.
-  intros. destruct act; destruct oact; simpl in *; auto.
-    repeat decide_act.
-
-    repeat decide_act.
-
-    repeat decide_act.
-
-    repeat decide_act;
-    apply decide_msg.
-
-    repeat decide_act;
-    apply decide_msg.
-
-    repeat decide_act.
-Defined.
+Qed.

@@ -54,12 +54,6 @@ Ltac destruct_input input :=
          let input' := fresh "input'" in
          destruct input as [x input']; destruct_input input'
   end.
-(*repeat match goal with
-       | [ input : init_state_run_prog_return_type _ _ _ _ _ _ _ _ |- _ ]
-         => destruct input
-       | [ input : kstate_run_prog_return_type _ _ _ _ _ _ _ _ |- _ ]
-         => destruct input
-       end.*)
 
 Ltac unpack_inhabited Htr :=
   match type of Htr with
@@ -107,9 +101,6 @@ Ltac clear_useless_hyps :=
 
 Ltac destruct_unpack :=
   match goal with
-  (*| [ m : msg _, H : _ = kstate_run_prog _ _ _ _ _ _ _ _ _ _,
-      H' : Reach _ _ _ _ _ _ ?HDLRS _ |- _ ]
-      => destruct_msg; unpack*)
   | [ m : msg _ |- _ ]
       => destruct_msg; unpack
   | _
@@ -164,10 +155,10 @@ Ltac destruct_neg_conjuncts H :=
 
 Ltac destruct_action_matches :=
   repeat match goal with
-         | [ H : AMatch ?future ?act |- _ ]
+         | [ H : AMatch _ ?future ?act |- _ ]
            => compute in H (*maybe produces a conjunction of Props*);
               decompose [and] H
-         | [ H : ~AMatch ?future ?act |- _ ]
+         | [ H : ~AMatch _ ?future ?act |- _ ]
            => compute in H
               (*maybe produces a negated conjunction of decidable Props*);
               destruct_neg_conjuncts H
@@ -175,17 +166,17 @@ Ltac destruct_action_matches :=
 
 Ltac act_match :=
   match goal with
-  | [ |- @AMatch ?nb_msg ?pdv ?oact ?act ]
+  | [ |- AMatch ?pdv ?oact ?act ]
       => let H := fresh "H" in
-         pose proof (decide_act nb_msg pdv oact act) as H;
+         pose proof (decide_act pdv oact act) as H;
          destruct H; [ assumption | contradiction ]
   end.
 
 Ltac act_nmatch :=
   match goal with
-  | [ |- ~@AMatch ?nb_msg ?pdv ?oact ?act ]
+  | [ |- ~AMatch ?pdv ?oact ?act ]
       => let H := fresh "H" in
-         pose proof (decide_act nb_msg pdv oact act) as H;
+         pose proof (decide_act pdv oact act) as H;
          destruct H; [ contradiction | assumption ]
   end.
 
@@ -262,18 +253,18 @@ Ltac forall_not_disabler s :=
 
 Ltac match_disables :=
   match goal with
-  | [ |- Disables _ _ _ _ nil ]
+  | [ |- Disables _ _ _ nil ]
       => constructor
   (* Induction hypothesis.*)
   | [ H : ktr _ _ ?s = inhabits ?tr,
       IH : forall tr', ktr _ _ ?s = inhabits tr' ->
-                       Disables _ _ ?past ?future tr'
-                       |- Disables _ _ ?past ?future ?tr ]
+                       Disables _ ?past ?future tr'
+                       |- Disables _ ?past ?future ?tr ]
       => auto
   (*Branch on whether the head of the trace matches.*)
-  | [ _ : ktr _ _ ?s = inhabits _ |- Disables ?nb_msg ?pdv _ ?future (?act::_) ]
+  | [ _ : ktr _ _ ?s = inhabits _ |- Disables ?pdv _ ?future (?act::_) ]
       => let H := fresh "H" in
-         pose proof (decide_act nb_msg pdv future act) as H;
+         pose proof (decide_act pdv future act) as H;
          destruct H;
          [ contradiction ||
            (apply D_disablee; [ match_disables | forall_not_disabler s])
@@ -346,18 +337,18 @@ Ltac exists_past s :=
 
 Ltac match_releases :=
   match goal with
-  | [ |- Release _ _ _ _ nil ]
+  | [ |- Release _ _ _ nil ]
       => constructor
   (* Induction hypothesis.*)
   | [ H : ktr _ _ ?s = inhabits ?tr,
       IH : forall tr', ktr _ _ ?s = inhabits tr' ->
-                       Release _ _ ?past ?future tr'
-                       |- Release _ _ ?past ?future ?tr ]
+                       Release _ ?past ?future tr'
+                       |- Release _ ?past ?future ?tr ]
       => auto
   (*Branch on whether the head of the trace matches.*)
-  | [ _ : ktr _ _ ?s = inhabits _ |- Release ?nb_msg ?pdv _ ?future (?act::_) ]
+  | [ _ : ktr _ _ ?s = inhabits _ |- Release ?pdv _ ?future (?act::_) ]
       => let H := fresh "H" in
-         pose proof (decide_act nb_msg pdv future act) as H;
+         pose proof (decide_act pdv future act) as H;
          destruct H;
          [ contradiction ||
            (apply R_future; [ match_releases | exists_past s ])
@@ -375,17 +366,17 @@ Ltac match_releases :=
 
 Ltac match_immbefore := 
   match goal with
-  | [ |- ImmBefore _ _ _ _ nil ]
+  | [ |- ImmBefore _ _ _ nil ]
       => constructor
   (*Induction hypothesis*)
   | [ H : ktr _ _ ?s = inhabits ?tr,
       IH : forall tr', ktr _ _ ?s = inhabits tr' ->
-                       ImmBefore _ _ ?oact_b ?oact_a tr'
-                       |- ImmBefore _ _ ?oact_b ?oact_a ?tr ]
+                       ImmBefore _ ?oact_b ?oact_a tr'
+                       |- ImmBefore _ ?oact_b ?oact_a ?tr ]
       => auto
-  | [ |- ImmBefore ?nb_msg ?pdv _ ?oact_a (?act::_) ]
+  | [ |- ImmBefore ?pdv _ ?oact_a (?act::_) ]
      => let H := fresh "H" in
-        pose proof (decide_act nb_msg pdv oact_a act) as H;
+        pose proof (decide_act pdv oact_a act) as H;
         destruct H;
         [ contradiction ||
           (apply IB_A; [ match_immbefore | act_match ])
@@ -403,16 +394,16 @@ Ltac match_immbefore :=
 
 Ltac match_immafter := 
   match goal with
-  | [ |- ImmAfter _ _ _ _ nil ]
+  | [ |- ImmAfter _ _ _ nil ]
       => constructor
   | [ H : ktr _ _ ?s = inhabits ?tr,
       IH : forall tr', ktr _ _ ?s = inhabits tr' ->
-                       ImmAfter _ _ ?oact_a ?oact_b tr'
-                       |- ImmAfter _ _ ?oact_a ?oact_b ?tr ]
+                       ImmAfter _ ?oact_a ?oact_b tr'
+                       |- ImmAfter _ ?oact_a ?oact_b ?tr ]
       => auto
-  | [ |- ImmAfter ?nb_msg ?pdv _ ?oact_b (_::?act::_) ]
+  | [ |- ImmAfter ?pdv _ ?oact_b (_::?act::_) ]
       => let H := fresh "H" in
-         pose proof (decide_act nb_msg pdv oact_b act) as H;
+         pose proof (decide_act pdv oact_b act) as H;
          destruct H;
          [ contradiction ||
            (apply IA_B; [ match_immafter | act_match ] )
@@ -422,7 +413,7 @@ Ltac match_immafter :=
            solves the goal immediately.
            In other cases, there are variables in the message payloads,
            so both branches are possible.*)
-  | [ |- ImmAfter _ _ _ _ (?act::_) ]
+  | [ |- ImmAfter _ _ _ (?act::_) ]
       (*If theres only one concrete action at the head of the trace,
         it better not a before action because there's nothing after.*)
       => apply IA_nB; [ match_immafter | act_nmatch ]
@@ -435,12 +426,12 @@ Ltac match_immafter :=
 Ltac crush :=
   reach_induction;
   match goal with
-  | [ |- ImmBefore _ _ _ _ _ ]
+  | [ |- ImmBefore _ _ _ _ ]
      => match_immbefore
-  | [ |- ImmAfter _ _ _ _ _ ]
+  | [ |- ImmAfter _ _ _ _ ]
      => match_immafter
-  | [ |- Disables _ _ _ _ _ ]
+  | [ |- Disables _ _ _ _ ]
      => match_disables
-  | [ |- Release _ _ _ _ _ ]
+  | [ |- Release _ _ _ _ ]
      => match_releases
   end.

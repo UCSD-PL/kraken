@@ -83,12 +83,12 @@ Require Import List.
 
 Theorem enable : forall st tr,
   Reach _ _ COMPS _ _ INIT HANDLERS st -> ktr _ _ st = inhabits tr ->
-  Release NB_MSG PAYD
-           (@KORecv NB_MSG PAYD None
-                    (Some (@Build_opt_msg NB_MSG PAYD
+  Release PAYD
+           (KORecv PAYD None
+                    (Some (Build_opt_msg PAYD
                                           (Some None) tt)))
-           (@KOSend NB_MSG PAYD None
-                    (Some (@Build_opt_msg NB_MSG PAYD
+           (KOSend PAYD None
+                    (Some (Build_opt_msg PAYD
                                           None tt)))
            tr.
 Proof.

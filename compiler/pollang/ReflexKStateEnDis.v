@@ -84,12 +84,12 @@ Require Import List.
 
 Theorem enable : forall st tr,
   Reach _ _ COMPS _ _ INIT HANDLERS st -> ktr _ _ st = inhabits tr ->
-  Release NB_MSG PAYD
-           (@KORecv NB_MSG PAYD None
-                    (Some (@Build_opt_msg NB_MSG PAYD
+  Release PAYD
+           (KORecv PAYD None
+                    (Some (Build_opt_msg PAYD
                                           msg_enable tt)))
-           (@KOSend NB_MSG PAYD None
-                    (Some (@Build_opt_msg NB_MSG PAYD
+           (KOSend PAYD None
+                    (Some (Build_opt_msg PAYD
                                           msg_echo tt)))
            tr.
 Proof.
@@ -98,12 +98,12 @@ Qed.
 
 Theorem disable : forall st tr,
   Reach _ _ COMPS _ _ INIT HANDLERS st -> ktr _ _ st = inhabits tr ->
-  Disables NB_MSG PAYD
-           (@KORecv NB_MSG PAYD None
-                    (Some (@Build_opt_msg NB_MSG PAYD
+  Disables PAYD
+           (KORecv PAYD None
+                    (Some (Build_opt_msg PAYD
                                           msg_disable tt)))
-           (@KOSend NB_MSG PAYD None
-                    (Some (@Build_opt_msg NB_MSG PAYD
+           (KOSend PAYD None
+                    (Some (Build_opt_msg PAYD
                                           msg_echo tt)))
            tr.
 Proof.

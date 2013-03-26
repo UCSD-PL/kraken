@@ -2,6 +2,8 @@ include Makefile.config
 
 INCLUDES := -R $(YNOT) Ynot -I . -I $(REFLEX)
 FILES    := $(filter-out Extract.v,$(wildcard *.v))
+STIME = date '+%s' > $@_time
+ETIME = read st < $@_time ; echo $$((`date '+%s'`-$$st))
 
 all:
 	$(MAKE) depend
@@ -13,7 +15,9 @@ depend: $(FILES)
 coq: $(FILES:.v=.vo)
 
 %.vo: %.v
+	$(STIME)
 	$(COQC) $(INCLUDES) $*.v
+	$(ETIME)
 
 clean:
 	rm -f *.vo *.glob

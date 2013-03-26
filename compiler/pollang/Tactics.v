@@ -38,13 +38,17 @@ Ltac destruct_msg :=
 (*Destructs num, str, or fd equalities in the context.*)
 Ltac destruct_eq H :=
   repeat match type of H with
+         | context[if ?x then _ else _ ]
+           => destruct x
+         end.
+ (* repeat match type of H with
          | context[num_eq ?a ?b]
            => destruct (num_eq a b); simpl in *
          | context[str_eq ?a ?b]
            => destruct (str_eq a b); simpl in *
          | context[fd_eq ?a ?b]
            => destruct (fd_eq a b); simpl in *
-         end.
+         end.*)
 
 Ltac destruct_input input :=
   compute in input;
@@ -70,9 +74,8 @@ Ltac unpack :=
              H : ?s = _,
              H' : ?s' = kstate_run_prog _ _ _ _ _ _ _ ?s _ _,
              input : kstate_run_prog_return_type _ _ _ _ _ _ _ _ _ |- _ ]
-           => unfold HDLRS in H'; unfold HDLRS in input;
-              unfold kstate_run_prog in H'; simpl in *;
-              destruct_eq H'; rewrite H in H';
+           => unfold kstate_run_prog in H'; simpl in *;
+              destruct_eq H'; rewrite H in H'; simpl in H';
               rewrite H' in Htr; destruct_input input
           (*Initialization.*)
          | [ s : init_state _ _ _ _ _,
@@ -195,7 +198,7 @@ Ltac reach_induction :=
       => generalize dependent tr; induction H;
          (*Do not put simpl anywhere in here. It breaks destruct_unpack.*)
          intros; destruct_unpack;
-         try msg_fds_are_ok
+         try solve [msg_fds_are_ok]
          (*msg_fds_are_ok eliminates bad fds case when that's impossible.*)
   end.
 

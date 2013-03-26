@@ -143,17 +143,18 @@ Proof. decide equality. Defined.
 Definition COMPS (t : COMPT) : compd :=
   match t with
   | System => mk_compd
-                "System" "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys" []
-                (mk_vdesc [str_d])
+                "System" "/home/don/kraken/new-ssh/kraken/ssh-proto/kmsg-ssh/sshd_sys" []
+                (mk_vdesc [str_d]) 
   | Slave  => mk_compd
-                "Slave"  "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/ssh"      []
+                "Slave"  "/home/don/kraken/new-ssh/kraken/ssh-proto/kmsg-ssh/sshd"      []
                 (mk_vdesc [])
   end.
 
 Definition IMSG : msg PAYD := @Build_msg _ PAYD LoginReq (str_of_string "", tt).
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IMSG IENVD :=
-  [ fun s => Spawn _ _ COMPS _ _ IENVD System (str_of_string "System", tt)
+  [ 
+    fun s => Spawn _ _ COMPS _ _ IENVD System (str_of_string "System", tt)
                    v_env_system (Logic.eq_refl _)
   ; fun s => Spawn _ _ COMPS _ _ IENVD Slave tt
                    v_env_slave (Logic.eq_refl _)

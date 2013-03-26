@@ -47,6 +47,7 @@ typedef struct param {
   struct param *next;
 } param;
 
+/*
 typedef enum msg_t {
   MTYP_LoginReq = 1,
   MTYP_LoginResT = 2,
@@ -66,6 +67,28 @@ typedef enum msg_t {
   MTYP_SysKeysignRes = 16,
   MTYP_SysCreatePtyerReq = 17,
   MTYP_SysCreatePtyerRes = 18,
+} msg_t;
+*/
+
+typedef enum msg_t {
+  MTYP_LoginReq = 0,
+  MTYP_LoginResT = 1,
+  MTYP_LoginResF = 2,
+  MTYP_PubkeyReq = 3,
+  MTYP_PubkeyRes = 4,
+  MTYP_KeysignReq = 5,
+  MTYP_KeysignRes = 6,
+  MTYP_CreatePtyerReq = 7,
+  MTYP_CreatePtyerRes = 8,
+  MTYP_SysLoginReq = 9,
+  MTYP_SysLoginResT = 10,
+  MTYP_SysLoginResF = 11,
+  MTYP_SysPubkeyReq = 12,
+  MTYP_SysPubkeyRes = 13,
+  MTYP_SysKeysignReq = 14,
+  MTYP_SysKeysignRes = 15,
+  MTYP_SysCreatePtyerReq = 16,
+  MTYP_SysCreatePtyerRes = 17,
 } msg_t;
 
 typedef struct msg {

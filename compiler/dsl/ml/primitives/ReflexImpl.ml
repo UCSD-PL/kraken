@@ -169,7 +169,7 @@ let recv cfd n _ =
       Unix.recv fd s 0 i []) ()
   in
   if r <> i then
-    failwith "recv - wrong # of bytes"
+    failwith (Printf.sprintf "recv - wrong # of bytes - expected:%d, received:%d" i r)
   else begin
     log (Printf.sprintf "recv : %d %d -> \"%s\""
           (int_of_fd fd) i (String.escaped s));

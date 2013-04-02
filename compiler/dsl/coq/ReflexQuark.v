@@ -58,10 +58,10 @@ Definition default_domain := str_of_string "google.com".
 
 Definition IMSG : msg PAYD := @Build_msg _ PAYD Quit tt.
 
-Definition INIT : init_prog PAYD COMPT COMPS KSTD IMSG IENVD :=
-  [ fun s => Spawn _ _ COMPS _ _ IENVD Tab       (default_domain, tt) None (Logic.eq_refl _)
-  ; fun s => Spawn _ _ COMPS _ _ IENVD Screen    tt                   None (Logic.eq_refl _)
-  ; fun s => Spawn _ _ COMPS _ _ IENVD UserInput tt                   None (Logic.eq_refl _)
+Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
+  [ fun s => Spawn _ _ COMPS _ IENVD _ Tab       (default_domain, tt) None (Logic.eq_refl _)
+  ; fun s => Spawn _ _ COMPS _ IENVD _ Screen    tt                   None (Logic.eq_refl _)
+  ; fun s => Spawn _ _ COMPS _ IENVD _ UserInput tt                   None (Logic.eq_refl _)
   ].
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -77,9 +77,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          if fd_eq cfd (shvec_ith (n := projT1 KSTD) _
                                  (projT2 KSTD) (kst _ _ _ _ st0) userinput)
          then
-           [ fun s => Send PAYD COMPT COMPS KSTD _ envd
-                           (StVar _ KSTD m _ curtab) Input
-                           (SLit _ _ m _  input, tt) ]
+           [ fun s => Send PAYD COMPT COMPS KSTD envd _
+                           (Term _ (StVar _ KSTD m _ curtab)) Input
+                           (Term _ (Base _ _ _ _ (SLit _ input)), tt) ]
          else
            []
        )
@@ -91,9 +91,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          if fd_eq cfd (shvec_ith (n := projT1 KSTD) _
                                  (projT2 KSTD) (kst _ _ _ _ st0) curtab)
          then
-           [ fun s => Send PAYD COMPT COMPS KSTD _ envd
-                           (StVar _ KSTD m _ screen) Display
-                           (SLit _ _ m _ url, tt) ]
+           [ fun s => Send PAYD COMPT COMPS KSTD envd _
+                           (Term _ (StVar _ KSTD m _ screen)) Display
+                           (Term _ (Base _ _ _ _ (SLit _ url)), tt) ]
          else
            []
        )
@@ -106,10 +106,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               cfd
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
          then
-           [ fun s => Send PAYD COMPT COMPS KSTD _ envd
-                           (StVar _ KSTD m _ curtab) Quit tt
-           ; fun s => Send PAYD COMPT COMPS KSTD _ envd
-                           (StVar _ KSTD m _ screen) Quit tt
+           [ fun s => Send PAYD COMPT COMPS KSTD envd _
+                           (Term _ (StVar _ KSTD m _ curtab)) Quit tt
+           ; fun s => Send PAYD COMPT COMPS KSTD envd _
+                           (Term _ (StVar _ KSTD m _ screen)) Quit tt
            ]
          else
            []
@@ -120,4 +120,5 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     end (pay PAYD m)
   ).
 
-Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPTDEC COMPS IMSG INIT HANDLERS).
+Definition main :=
+  mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPTDEC COMPS IMSG INIT HANDLERS).

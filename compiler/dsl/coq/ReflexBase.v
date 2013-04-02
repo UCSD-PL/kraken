@@ -1,12 +1,12 @@
-Require Import List.
 Require Import Ascii.
-Require Import String.
+Require Import Int.
+Require Import List.
+Require Import MSetAVL.
+Require Import MSetInterface.
 Require Import NPeano.
-Require Import Ynot.
-
-Open Scope char_scope.
-Open Scope hprop_scope.
-Open Scope stsepi_scope.
+Require Import Omega.
+Require Import Orders.
+Require Import String.
 
 Notation decide P := ({ P } + { ~ P }).
 
@@ -87,3 +87,30 @@ Qed.
 
 (* prevent sep tactic from unfolding *)
 Global Opaque nat_of_num num_of_nat.
+
+Module OrderedFd : OrderedType with Definition t := fd.
+
+  Definition t := fd.
+
+  Definition eq := @eq fd.
+
+  Parameter eq_equiv : Equivalence eq.
+
+  Parameter lt : t -> t -> Prop.
+
+  Parameter lt_strorder : StrictOrder lt.
+
+  Parameter lt_compat : Morphisms.Proper (eq ==> eq ==> iff) lt.
+
+  Parameter compare : t -> t -> comparison.
+
+  Parameter compare_spec :
+    forall x y : t, CompSpec eq lt x y (compare x y).
+
+  Parameter eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
+
+End OrderedFd.
+
+Module RawFdSet : RawSets OrderedFd := MSetAVL.MakeRaw(Int.Z_as_Int)(OrderedFd).
+
+Module FdSet : Sets with Module E := OrderedFd := Raw2Sets(OrderedFd)(RawFdSet).

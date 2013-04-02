@@ -20,7 +20,7 @@ Notation M := (None) (only parsing).
 Definition KSTD : vdesc := mk_vdesc [].
 
 Definition IENVD : vdesc := mk_vdesc
-  [ fd_d 
+  [ fd_d
   ].
 
 Inductive COMPT : Type := Echo.
@@ -35,8 +35,8 @@ Definition COMPS (t : COMPT) : compd :=
 
 Definition IMSG : msg PAYD := @Build_msg _ PAYD M (str_of_string "", tt).
 
-Definition INIT : init_prog PAYD COMPT COMPS KSTD IMSG IENVD :=
-  [fun s => Spawn _ _ COMPS _ _ IENVD Echo tt None (Logic.eq_refl _)
+Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
+  [fun s => Spawn _ _ COMPS _ IENVD _ Echo tt None (Logic.eq_refl _)
   ].
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -46,10 +46,15 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       let envd := existT _ 0 tt in
       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
         let (msg, _) := p in fun st0 =>
-        [ fun s => Send _ _ _ _ _ _ (CFd PAYD _ _ _) None (mvar EQ None, tt) ]
+        [ fun s => Send PAYD COMPT COMPS KSTD envd _
+                        (Term _ (CFd PAYD _ _ _))
+                        None
+                        (mvar EQ None, tt)
+        ]
       )
     | Build_msg (Some bad) _ =>
       match bad with end
     end (Logic.eq_refl m).
 
-Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPTDEC COMPS IMSG INIT HANDLERS).
+Definition main :=
+  mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPTDEC COMPS IMSG INIT HANDLERS).

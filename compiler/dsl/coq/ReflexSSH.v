@@ -49,6 +49,8 @@ Open Scope string_scope.
  4) MON replies back to SLV with the two file descriptors
 *)
 
+Module SystemFeatures <: SystemFeaturesInterface.
+
 Definition NB_MSG : nat := 18.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
@@ -82,60 +84,9 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
     ("SCreatePtyerRes",   [fd_d; fd_d])
   ].
 
-Notation LoginReq :=       (None) (only parsing).
-Notation LoginResT :=      (Some None) (only parsing).
-Notation LoginResF :=      (Some (Some None)) (only parsing).
+Inductive COMPT' : Type := System | Slave.
 
-Notation PubkeyReq :=      (Some (Some (Some None))) (only parsing).
-Notation PubkeyRes :=      (Some (Some (Some (Some None)))) (only parsing).
-
-Notation KeysignReq :=     (Some (Some (Some (Some (Some None))))) (only parsing).
-Notation KeysignRes :=     (Some (Some (Some (Some (Some (Some None)))))) (only parsing).
-
-Notation CreatePtyerReq := (Some (Some (Some (Some (Some (Some (Some None))))))) (only parsing).
-Notation CreatePtyerRes := (Some (Some (Some (Some (Some (Some (Some (Some None)))))))) (only parsing).
-
-    (* monitor <-> system *)
-Notation SLoginReq :=      (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))) (only parsing).
-Notation SLoginResT :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))) (only parsing).
-Notation SLoginResF :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))) (only parsing).
-
-Notation SPubkeyReq :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))) (only parsing).
-Notation SPubkeyRes :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))) (only parsing).
-
-Notation SKeysignReq :=    (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))) (only parsing).
-Notation SKeysignRes :=    (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))) (only parsing).
-
-Notation SCreatePtyerReq := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))))) (only parsing).
-Notation SCreatePtyerRes := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))))) (only parsing).
-
-
-Definition KSTD : vdesc := mk_vdesc
-  [ fd_d (* system *)
-  ; fd_d (* slave *)
-  ; num_d (* authenticated *)
-  ; str_d (* authenticated username *)
-  ].
-
-Notation v_st_system := (None) (only parsing).
-Notation v_st_slave := (Some None) (only parsing).
-Notation v_st_authenticated := (Some (Some None)) (only parsing).
-Notation v_st_auth_user := (Some (Some (Some None))) (only parsing).
-
-Notation system := (StVar _ KSTD _ _ v_st_system) (only parsing).
-Notation slave := (StVar _ KSTD _ _ v_st_slave) (only parsing).
-Notation authenticated := (StVar _ KSTD _ _ v_st_authenticated) (only parsing).
-Notation auth_user := (StVar _ KSTD _ _ v_st_auth_user) (only parsing).
-
-Definition IENVD : vdesc := mk_vdesc
-  [ fd_d (* system *)
-  ; fd_d (* slave *)
-  ].
-
-Notation v_env_system := (None) (only parsing).
-Notation v_env_slave := (Some None) (only parsing).
-
-Inductive COMPT : Type := System | Slave.
+Definition COMPT := COMPT'.
 
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
 Proof. decide equality. Defined.
@@ -150,13 +101,60 @@ Definition COMPS (t : COMPT) : compd :=
                 (mk_vdesc [])
   end.
 
-Definition IMSG : msg PAYD := @Build_msg _ PAYD LoginReq (str_of_string "", tt).
+Notation LoginReq  := (None) (only parsing).
+Notation LoginResT := (Some None) (only parsing).
+Notation LoginResF := (Some (Some None)) (only parsing).
+Notation PubkeyReq :=      (Some (Some (Some None))) (only parsing).
+Notation PubkeyRes :=      (Some (Some (Some (Some None)))) (only parsing).
+Notation KeysignReq :=     (Some (Some (Some (Some (Some None))))) (only parsing).
+Notation KeysignRes :=     (Some (Some (Some (Some (Some (Some None)))))) (only parsing).
+Notation CreatePtyerReq := (Some (Some (Some (Some (Some (Some (Some None))))))) (only parsing).
+Notation CreatePtyerRes := (Some (Some (Some (Some (Some (Some (Some (Some None)))))))) (only parsing).
+Notation SLoginReq :=      (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))) (only parsing).
+Notation SLoginResT :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))) (only parsing).
+Notation SLoginResF :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))) (only parsing).
+Notation SPubkeyReq :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))) (only parsing).
+Notation SPubkeyRes :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))) (only parsing).
+Notation SKeysignReq :=    (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))) (only parsing).
+Notation SKeysignRes :=    (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))) (only parsing).
+Notation SCreatePtyerReq := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))))) (only parsing).
+Notation SCreatePtyerRes := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))))) (only parsing).
+
+Definition IENVD : vdesc := mk_vdesc
+  [ fd_d (* system *)
+  ; fd_d (* slave *)
+  ].
+
+Notation v_env_system := (None) (only parsing).
+Notation v_env_slave := (Some None) (only parsing).
+
+Definition KSTD : vdesc := mk_vdesc
+  [ fd_d (* system *)
+  ; fd_d (* slave *)
+  ; num_d (* authenticated *)
+  ; str_d (* authenticated username *)
+  ].
+
+Notation v_st_system := (None) (only parsing).
+Notation v_st_slave := (Some None) (only parsing).
+Notation v_st_authenticated := (Some (Some None)) (only parsing).
+Notation v_st_auth_user := (Some (Some (Some None))) (only parsing).
+
+End SystemFeatures.
+
+Import SystemFeatures.
+
+Module Language := MkLanguage(SystemFeatures).
+
+Import Language.
+
+Module Spec : SpecInterface.
+
+Module FEATURES := SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  [ fun s => Spawn _ _ COMPS _ IENVD _ System (str_of_string "System", tt)
-                   v_env_system (Logic.eq_refl _)
-  ; fun s => Spawn _ _ COMPS _ IENVD _ Slave tt
-                   v_env_slave (Logic.eq_refl _)
+  [ fun s => spawn IENVD _ System (str_of_string "System", tt) v_env_system (Logic.eq_refl _)
+  ; fun s => spawn IENVD _ Slave  tt                           v_env_slave  (Logic.eq_refl _)
   ].
 
 Definition system_pat := (Some (str_of_string "System"), tt).
@@ -164,21 +162,17 @@ Definition system_pat := (Some (str_of_string "System"), tt).
 Definition exists_comp := exists_comp COMPT COMPTDEC COMPS.
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  (fun m cfd =>
+  (fun m f =>
     match tag PAYD m as _tm return
       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
     with
-      (* login *)
 
     | LoginReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (loginstr, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD _ _ _ _ _
-                            (Term _ system)
-                            SLoginReq
-                            (Term _ (Base _ _ _ _ (SLit _ loginstr)), tt)
+            [ fun s => send envd _ (stvar v_st_system) SLoginReq (slit loginstr, tt)
             ]
          )
        )
@@ -188,20 +182,13 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (user, _) := pl in
          (fun st0 =>
-            if exists_comp (Build_comp_pat COMPT COMPS System (Some cfd) system_pat) (kcs _ _ _ _ st0)
+            if exists_comp
+                 (Build_comp_pat COMPT COMPS System (Some f) system_pat)
+                 (kcs _ _ _ _ st0)
             then
-            [ fun s => StUpd PAYD _ COMPS KSTD _ _
-                             v_st_auth_user
-                             strd_neq_fdd
-                             (Term _ (Base _ _ _ _ (SLit _ user)))
-            ; fun s => StUpd PAYD _ _ KSTD _ _
-                             v_st_authenticated
-                             numd_neq_fdd
-                             (Term _ (Base _ _ _ _ (NLit _ (num_of_nat 1))))
-            ; fun s => Send PAYD _ _ _ _ _
-                            (Term _ slave)
-                            LoginResT
-                            tt
+            [ fun s => stupd envd _ v_st_auth_user     strd_neq_fdd (slit user)
+            ; fun s => stupd envd _ v_st_authenticated numd_neq_fdd (nlit (num_of_nat 1))
+            ; fun s => send  envd _ (stvar v_st_slave) LoginResT tt
             ]
             else []
          )
@@ -211,24 +198,16 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 =>
-            [ fun s => Send PAYD _ _ _ _ _
-                            (Term _ slave)
-                            LoginResF
-                            tt
+            [ fun s => send envd _ (stvar v_st_slave) LoginResF tt
             ]
          )
        )
-
-       (* pub key request *)
 
     | PubkeyReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 =>
-            [ fun s => Send PAYD _ _ _ _ _
-                            (Term _ system)
-                            SPubkeyReq
-                            tt
+            [ fun s => send envd _ (stvar v_st_system) SPubkeyReq tt
             ]
          )
        )
@@ -238,25 +217,17 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (pubkey, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD _ _ _ _ _
-                            (Term _ system)
-                            SPubkeyRes
-                            (Term _ (Base _ _ _ _ (SLit _ pubkey)), tt)
+            [ fun s => send envd _ (stvar v_st_system) SPubkeyRes (slit pubkey, tt)
             ]
          )
        )
-
-       (* key sign *)
 
     | KeysignReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (keystr, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD _ _ _ _ _
-                            (Term _ system)
-                            SKeysignReq
-                            (Term _ (Base _ _ _ _ (SLit _ keystr)), tt)
+            [ fun s => send envd _ (stvar v_st_system) SKeysignReq (slit keystr, tt)
             ]
          )
        )
@@ -266,15 +237,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (signedkey, _) := pl in
          (fun st0 =>
-            [ fun s => Send PAYD _ _ _ _ _
-                            (Term _ system)
-                            KeysignRes
-                            (Term _ (Base _ _ _ _ (SLit _ signedkey)), tt)
+            [ fun s => send envd _ (stvar v_st_system) KeysignRes (slit signedkey, tt)
             ]
          )
        )
-
-       (* create pseudo terminal *)
 
     | CreatePtyerReq => fun pl =>
        let envd := mk_vdesc [] in
@@ -284,10 +250,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                 (shvec_ith _ (projT2 KSTD:svec desc 4) (kst _ _ _ _ st0) v_st_authenticated)
                 (num_of_nat 0)
            then []
-           else [ fun s => Send PAYD _ _ _ _ _
-                                (Term _ system)
-                                SCreatePtyerReq
-                                (Term _ auth_user, tt)
+           else [ fun s => send envd _ (stvar v_st_system) SCreatePtyerReq (stvar v_st_auth_user, tt)
                 ]
          )
        )
@@ -298,14 +261,11 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          match pl with
          | (fd0, (fd1, _)) =>
            (fun st0 =>
-              [ fun s => Send PAYD _ _ _ _ _
-                              (Term _ system) CreatePtyerRes
-                              (Term _ (CFd PAYD _ _ _), (Term _ (CFd PAYD _ _ _), tt))
+              [ fun s => send envd _ (stvar v_st_system) CreatePtyerRes (cfd, (cfd, tt))
               ]
            )
          end
        )
-
 
        (* not meant to be received by the kernel *)
     | LoginResT => fun pl =>
@@ -358,5 +318,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     end (pay PAYD m)
   ).
 
-Definition main :=
-  mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPTDEC COMPS IMSG INIT HANDLERS).
+End Spec.
+
+Module Main := MkMain(Spec).
+Import Main.

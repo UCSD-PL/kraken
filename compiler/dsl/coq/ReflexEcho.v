@@ -9,6 +9,8 @@ Require Import ReflexVec.
 
 Open Scope string_scope.
 
+Module SystemFeatures <: SystemFeaturesInterface.
+
 Definition NB_MSG : nat := 1.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
@@ -17,13 +19,8 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
 
 Notation M := (None) (only parsing).
 
-Definition KSTD : vdesc := mk_vdesc [].
-
-Definition IENVD : vdesc := mk_vdesc
-  [ fd_d
-  ].
-
-Inductive COMPT : Type := Echo.
+Inductive COMPT' : Type := Echo.
+Definition COMPT := COMPT'.
 
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
 Proof. decide equality. Defined.
@@ -33,28 +30,43 @@ Definition COMPS (t : COMPT) : compd :=
   | Echo => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
   end.
 
-Definition IMSG : msg PAYD := @Build_msg _ PAYD M (str_of_string "", tt).
+Definition KSTD : vdesc := mk_vdesc [].
+
+Definition IENVD : vdesc := mk_vdesc
+  [ fd_d
+  ].
+
+End SystemFeatures.
+
+Import SystemFeatures.
+
+Module Language := MkLanguage(SystemFeatures).
+
+Import Language.
+
+Module Spec : SpecInterface.
+
+Module FEATURES := SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  [fun s => Spawn _ _ COMPS _ IENVD _ Echo tt None (Logic.eq_refl _)
+  [fun s => spawn IENVD _ Echo tt None (Logic.eq_refl _)
   ].
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  fun (m : msg PAYD) cfd =>
+  fun m f =>
     match m as _m return forall (EQ : _m = m), _ with
     | Build_msg None p => fun EQ =>
       let envd := existT _ 0 tt in
       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
         let (msg, _) := p in fun st0 =>
-        [ fun s => Send PAYD COMPT COMPS KSTD envd _
-                        (Term _ (CFd PAYD _ _ _))
-                        None
-                        (mvar EQ None, tt)
+        [ fun s => send envd _ cfd None (mvar EQ None, tt)
         ]
       )
     | Build_msg (Some bad) _ =>
       match bad with end
     end (Logic.eq_refl m).
 
-Definition main :=
-  mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPTDEC COMPS IMSG INIT HANDLERS).
+End Spec.
+
+Module Main := MkMain(Spec).
+Import Main.

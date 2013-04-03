@@ -1072,7 +1072,6 @@ Inductive Reach : kstate -> Prop :=
          |}
 | Reach_valid :
   forall s f m tr s' input,
-(*  msg_fds_ok s m ->*)
   let cs := kcs s in
   ktr s = [tr]%inhabited ->
   Reach s ->
@@ -1082,18 +1081,6 @@ Inductive Reach : kstate -> Prop :=
         ; kfd := FdSet.union (payload_fds_set _ (pay m)) (kfd s)
         |} ->
   Reach (kstate_run_prog f m (projT1 (HANDLERS m f)) s' (projT2 (HANDLERS m f)) input)
-| Reach_bad_fds :
-  forall s f m tr,
-  let cs := kcs s in
-  ~ msg_fds_ok s m ->
-  ktr s = [tr]%inhabited ->
-  Reach s ->
-  Reach {| kcs := cs
-         ; ktr := [KRecv f m :: KSelect (proj_fds cs) f :: tr]
-         ; kst := kst s
-         ; kfd := FdSet.union (kfd s)
-                              (payload_fds_set _ (pay m))
-         |}
 | Reach_bogus :
   forall s s' f bmsg tr,
   let cs := kcs s in
@@ -1882,8 +1869,6 @@ Qed.
 
 Axiom in_devnull_default_payload: forall henv l,
   env_fds_in (devnull :: l) henv (default_payload henv).
-
-Print kstate_inv.
 
 Definition kbody:
   forall s,

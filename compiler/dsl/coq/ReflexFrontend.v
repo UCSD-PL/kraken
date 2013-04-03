@@ -2,22 +2,40 @@ Require Import String.
 
 Require Import Reflex.
 Require Import ReflexBase.
+Require Import ReflexFin.
 
-Record spec :=
-{ NB_MSG   : nat
-; PAYD     : vvdesc NB_MSG
-; IENVD    : vdesc
-; KSTD     : vdesc
-; COMPT    : Set
-; COMPTDEC : forall (x y : COMPT), decide (x = y)
-; COMPS    : COMPT -> compd
-; IMSG     : msg PAYD
-; INIT     : init_prog PAYD COMPT COMPS KSTD IENVD
-; HANDLERS : handlers PAYD COMPT COMPS KSTD
-}.
+Module Type SystemFeaturesInterface.
+  Parameter NB_MSG   : nat.
+  Parameter PAYD     : vvdesc NB_MSG.
+  Parameter COMPT    : Set.
+  Parameter COMPTDEC : forall (x y : COMPT), decide (x = y).
+  Parameter COMPS    : COMPT -> compd.
+  Parameter IENVD    : vdesc.
+  Parameter KSTD     : vdesc.
+End SystemFeaturesInterface.
 
-Definition mk_main (s : spec) :=
-  @main _ (PAYD s) (COMPT s) (COMPTDEC s) (COMPS s) (KSTD s) (IENVD s) (INIT s) (HANDLERS s).
+Module MkLanguage (Import SF : SystemFeaturesInterface).
+  Definition send  := Send  PAYD COMPT COMPS KSTD.
+  Definition spawn := Spawn PAYD COMPT COMPS KSTD.
+  Definition stupd := StUpd PAYD COMPT COMPS KSTD.
+  Definition stvar {envd m} v := Term (hdlr_term PAYD KSTD m envd) (StVar _ _ _ _ v).
+  Definition slit  {envd m} v := Term (hdlr_term PAYD KSTD m envd) (Base _ _ _ _ (SLit _ v)).
+  Definition nlit  {envd m} v := Term (hdlr_term PAYD KSTD m envd) (Base _ _ _ _ (NLit _ v)).
+  Definition cfd   {envd m} := Term (hdlr_term PAYD KSTD m envd) (CFd _ _ _ _).
+  Definition i_slit v := Term (base_term IENVD) (SLit _ v).
+  Definition i_nlit v := Term (base_term IENVD) (NLit _ v).
+End MkLanguage.
+
+Module Type SpecInterface.
+  Declare Module Export FEATURES : SystemFeaturesInterface.
+  Parameter INIT : init_prog PAYD COMPT COMPS KSTD IENVD.
+  Parameter HANDLERS : handlers PAYD COMPT COMPS KSTD.
+End SpecInterface.
+
+Module MkMain (Import S : SpecInterface).
+  Definition main :=
+    @main _ PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS.
+End MkMain.
 
 Fixpoint mk_vdesc' l : vdesc' (List.length l) :=
   match l with

@@ -2,7 +2,7 @@ ReflexFin.vo ReflexFin.glob: ReflexFin.v ReflexBase.vo
 ReflexHList.vo ReflexHList.glob: ReflexHList.v
 Reflex.vo Reflex.glob: Reflex.v /home/vrobert/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo ReflexDenoted.vo ReflexFin.vo ReflexIO.vo ReflexTactics.vo ReflexVec.vo ReflexHVec.vo
 ReflexQuark.vo ReflexQuark.glob: ReflexQuark.v Reflex.vo ReflexBase.vo ReflexDenoted.vo ReflexFin.vo ReflexFrontend.vo ReflexHVec.vo ReflexVec.vo
-ReflexFrontend.vo ReflexFrontend.glob: ReflexFrontend.v Reflex.vo ReflexBase.vo
+ReflexFrontend.vo ReflexFrontend.glob: ReflexFrontend.v Reflex.vo ReflexBase.vo ReflexFin.vo
 ReflexHVec.vo ReflexHVec.glob: ReflexHVec.v ReflexBase.vo ReflexDenoted.vo ReflexFin.vo ReflexVec.vo
 ReflexTactics.vo ReflexTactics.glob: ReflexTactics.v /home/vrobert/kraken/compiler/ynot/src/coq/Ynot.vo
 DepList.vo DepList.glob: DepList.v

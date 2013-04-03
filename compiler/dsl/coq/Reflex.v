@@ -747,7 +747,7 @@ Inductive cmd : Type :=
 | Spawn :
     forall (t : COMPT), s[[ comp_conf_desc t ]] ->
     forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = fd_d -> cmd
-| StUpd : forall i, svec_ith (projT2 KSTD) i <> fd_d -> expr (svec_ith (projT2 KSTD) i) -> cmd
+| StUpd : forall i, expr (svec_ith (projT2 KSTD) i) -> cmd
 .
 
 Record init_state :=
@@ -774,7 +774,7 @@ Definition cmd_input_desc {t} (c : cmd t)  :=
   match c with
   | Send _ _ _  => None
   | Spawn _ _ _ _ => Some fd_d
-  | StUpd _ _ _ => None
+  | StUpd _ _ => None
   end.
 
 Definition sdenote_option {T : Type} (sdenote_content : T -> Set) (o : option T) : Set :=
@@ -827,7 +827,7 @@ Definition init_state_run_cmd (s : init_state) (cmd : cmd base_term)
      ; init_fds   := FdSet.add c fds
      |}
 
-  | StUpd i _ ve => fun _ =>
+  | StUpd i ve => fun _ =>
     let v := eval_base_expr e ve in
     {| init_comps := cs
      ; init_ktr   := tr
@@ -892,7 +892,7 @@ Definition hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd hdlr_term)
      ; hdlr_env := shvec_replace_cast EQ env c
      |}
 
-  | StUpd i _ ve => fun _ =>
+  | StUpd i ve => fun _ =>
     let v := eval_hdlr_expr env st ve in
     {| hdlr_kst :=
          {| kcs := cs
@@ -1381,7 +1381,7 @@ Proof.
                  ; init_fds   := FdSet.add c fds
                  |} }}
 
-    | StUpd i _ ve =>
+    | StUpd i ve =>
       let v := eval_base_expr _ e ve in
       {{ Return {| init_comps := cs
                  ; init_ktr   := tr
@@ -1631,7 +1631,7 @@ Proof.
                |}
     }}
 
-  | StUpd i _ ve =>
+  | StUpd i ve =>
     let v := eval_hdlr_expr cfd cm envd env st ve in
     {{ Return {| hdlr_kst := {| kcs := cs
                               ; ktr := tr
@@ -1644,16 +1644,6 @@ Proof.
 
   end
   ); sep''; try subst v; sep'; simpl in *.
-
-
-
-
-
-
-
-
-
-
 
   unfold f.
   refine (
@@ -1905,39 +1895,6 @@ Proof.
       let tr := tr ~~~ KBogus c m :: tr in
       {{ Return {|kcs := cs; ktr := tr; kst := st; kfd := fds |} }}
     end
-
-(*
-    match mm with
-    | inl m =>
-      let tr := tr ~~~ KRecv c m :: tr in
-      let ck := msg_fds_ck s m in
-      match ck as ck' return ck = ck' -> _ with
-      | left _ => fun _ =>
-        let henv  := projT1 (HANDLERS m c) in
-        let hprog := projT2 (HANDLERS m c) in
-        let s' := {| hdlr_kst := {| kcs := cs
-                                  ; ktr := tr
-                                  ; kst := st
-                                  ; kfd := FdSet.union (payload_fds_set _ (pay m)) fds |}
-                   ; hdlr_env := default_payload henv
-                   |}
-        in
-        s'' <- run_hdlr_prog c m henv s' hprog
-        <@> [Reach s];
-        {{ Return (hdlr_kst _ s'') }}
-      | right _ => fun _ =>
-        {{ Return {| kcs := cs
-                   ; ktr := tr
-                   ; kst := st
-                   ; kfd := fds
-                   |}
-        }}
-      end (refl_equal ck)
-    | inr m =>
-      let tr := tr ~~~ KBogus c m :: tr in
-      {{ Return {|kcs := cs; ktr := tr; kst := st; kfd := fds |} }}
-    end
-*)
 
   ); sep''; try subst v; sep'; simpl in *.
 

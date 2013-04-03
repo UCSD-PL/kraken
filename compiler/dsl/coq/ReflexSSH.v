@@ -186,8 +186,8 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                  (Build_comp_pat COMPT COMPS System (Some f) system_pat)
                  (kcs _ _ _ _ st0)
             then
-            [ fun s => stupd envd _ v_st_auth_user     strd_neq_fdd (slit user)
-            ; fun s => stupd envd _ v_st_authenticated numd_neq_fdd (nlit (num_of_nat 1))
+            [ fun s => stupd envd _ v_st_auth_user     (slit user)
+            ; fun s => stupd envd _ v_st_authenticated (nlit (num_of_nat 1))
             ; fun s => send  envd _ (stvar v_st_slave) LoginResT tt
             ]
             else []

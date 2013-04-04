@@ -58,7 +58,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     match m as _m return forall (EQ : _m = m), _ with
     | Build_msg None p => fun EQ =>
       let envd := existT _ 0 tt in
-      existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+      existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
         let (msg, _) := p in fun st0 =>
         [ fun s => send envd _ cfd None (mvar EQ None, tt)
         ]

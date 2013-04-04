@@ -18,10 +18,14 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition send  := Send  PAYD COMPT COMPS KSTD.
   Definition spawn := Spawn PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
-  Definition stvar {envd m} v := Term (hdlr_term PAYD KSTD m envd) (StVar _ _ _ _ v).
-  Definition slit  {envd m} v := Term (hdlr_term PAYD KSTD m envd) (Base _ _ _ _ (SLit _ v)).
-  Definition nlit  {envd m} v := Term (hdlr_term PAYD KSTD m envd) (Base _ _ _ _ (NLit _ v)).
-  Definition cfd   {envd m} := Term (hdlr_term PAYD KSTD m envd) (CFd _ _ _ _).
+  Definition stvar {cc envd m} v :=
+    Term (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (StVar _ _ _ _ _ _ _ v).
+  Definition slit {cc envd m} v :=
+    Term (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (SLit _ v)).
+  Definition nlit {cc envd m} v :=
+    Term (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (NLit _ v)).
+  Definition cfd {cc envd m} :=
+    Term (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (CFd _ _ _ _ _ _ _).
   Definition i_slit v := Term (base_term IENVD) (SLit _ v).
   Definition i_nlit v := Term (base_term IENVD) (NLit _ v).
 End MkLanguage.
@@ -62,14 +66,17 @@ Notation " [ ] " := nil.
 Notation " [ x ] " := (cons x nil).
 Notation " [ x ; .. ; y ] " := (cons x .. (cons y nil) ..).
 
-Definition cast_m_expr {NB_MSG} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {t p d}
-  (EQ : Build_msg PAYD t p = m) (e : expr (hdlr_term PAYD KSTD (Build_msg PAYD t p) envd) d)
-  : expr (hdlr_term PAYD KSTD m envd) d
+Definition cast_m_expr
+  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p d}
+  (EQ : Build_msg PAYD t p = m)
+  (e : expr (hdlr_term PAYD COMPT COMPS KSTD cc (Build_msg PAYD t p) envd) d)
+  : expr (hdlr_term PAYD COMPT COMPS KSTD cc m envd) d
   :=
-  match EQ in _ = _m return expr (hdlr_term _  _ _m _) _ with
+  match EQ in _ = _m return expr (hdlr_term _ _ _ _ _ _m _) _ with
   | Logic.eq_refl => e
   end.
 
-Definition mvar {NB_MSG} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {t p}
+Definition mvar
+  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p}
   (EQ : Build_msg PAYD t p = m) i :=
-  cast_m_expr EQ (Term _ (MVar PAYD KSTD (Build_msg PAYD t p) envd i)).
+  cast_m_expr EQ (Term _ (MVar PAYD COMPT COMPS KSTD cc (Build_msg PAYD t p) envd i)).

@@ -83,7 +83,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | Input => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD m d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd (
          let (input, _) := pl in fun st0 =>
          if fd_eq
               cf
@@ -97,7 +97,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | Display => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD m d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd (
          let (url, _) := pl in fun st0 =>
          if fd_eq
               cf
@@ -111,7 +111,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | Quit => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD m d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd (
          let _ := pl in fun st0 =>
          if fd_eq
               cf

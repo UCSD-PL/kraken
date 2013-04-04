@@ -170,7 +170,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | LoginReq => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (loginstr, _) := pl in
          (fun st0 =>
             [ fun s => send envd _ (stvar v_st_system) SLoginReq (slit loginstr, tt)
@@ -180,7 +180,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | SLoginResT => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (user, _) := pl in
          (fun st0 =>
             if exists_comp
@@ -197,7 +197,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | SLoginResF => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 =>
             [ fun s => send envd _ (stvar v_st_slave) LoginResF tt
             ]
@@ -206,7 +206,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | PubkeyReq => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 =>
             [ fun s => send envd _ (stvar v_st_system) SPubkeyReq tt
             ]
@@ -215,7 +215,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | SPubkeyRes => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (pubkey, _) := pl in
          (fun st0 =>
             [ fun s => send envd _ (stvar v_st_system) SPubkeyRes (slit pubkey, tt)
@@ -225,7 +225,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | KeysignReq => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (keystr, _) := pl in
          (fun st0 =>
             [ fun s => send envd _ (stvar v_st_system) SKeysignReq (slit keystr, tt)
@@ -235,7 +235,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | SKeysignRes => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (signedkey, _) := pl in
          (fun st0 =>
             [ fun s => send envd _ (stvar v_st_system) KeysignRes (slit signedkey, tt)
@@ -245,7 +245,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | CreatePtyerReq => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 =>
            if num_eq
                 (shvec_ith _ (projT2 KSTD:svec desc 4) (kst _ _ _ _ st0) v_st_authenticated)
@@ -258,7 +258,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
      | SCreatePtyerRes => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          match pl with
          | (fd0, (fd1, _)) =>
            (fun st0 =>
@@ -271,47 +271,47 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
      (* not meant to be received by the kernel *)
      | LoginResT => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | LoginResF => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | PubkeyRes => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | KeysignRes => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | CreatePtyerRes => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | SLoginReq => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | SPubkeyReq => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | SKeysignReq => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | SCreatePtyerReq => fun pl =>
        let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
+       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 => [])
        )
      | (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))))))))))) => fun _ =>

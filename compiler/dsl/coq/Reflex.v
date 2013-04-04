@@ -573,6 +573,7 @@ Variable CC : comp.
 Variable CMSG : msg.
 
 Definition CPAY : vdesc := lkup_tag (tag CMSG).
+Definition CCONFD := comp_conf_desc (comp_type CC).
 
 Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ svec_ith (projT2 CPAY) i ]] :=
   shvec_ith _ (projT2 CPAY) (pay CMSG) i.
@@ -695,6 +696,7 @@ Inductive base_term : desc -> Set :=
 Inductive hdlr_term : desc -> Set :=
 | Base  : forall {d}, base_term d -> hdlr_term d
 | CFd   : hdlr_term fd_d
+| CConf : forall (i : fin (projT1 CCONFD)), hdlr_term (svec_ith (projT2 CCONFD) i)
 | MVar  : forall (i : fin (projT1 CPAY)), hdlr_term (svec_ith (projT2 CPAY) i)
 | StVar : forall (i : fin KSTD_SIZE), hdlr_term (svec_ith KSTD_DESC i)
 .
@@ -736,6 +738,7 @@ Definition eval_hdlr_term {d} (t : hdlr_term d) : s[[ d ]] :=
   match t with
   | Base _ bt => eval_base_term bt
   | CFd       => comp_fd CC
+  | CConf i   => shvec_ith _ (projT2 CCONFD) (comp_conf CC) i
   | MVar i    => shvec_ith _ (projT2 CPAY) (pay CMSG) i
   | StVar i   => shvec_ith _ (projT2 KSTD) KST i
   end.
@@ -1009,17 +1012,19 @@ Lemma eval_hdlr_expr_fd :
   env_fds_in l _ env ->
   env_fds_in l _ st ->
   env_fds_in l _ (pay CMSG) ->
+  env_fds_in l _ (comp_conf CC) ->
   eval_hdlr_expr env st e = v ->
   match d as _d return (s[[ _d ]] -> Prop) with
   | fd_d => fun f => In f l
   | _ => fun _ => True
   end v.
 Proof.
-  induction e; try tauto; intros IN OKE OKS OKM E; simpl in *.
+  induction e; try tauto; intros IN OKE OKS OKM OKC E; simpl in *.
   destruct t; try tauto; simpl in *.
   destruct b; try tauto.
   subst. exact (OKE i).
   now subst.
+  subst. exact (OKC i).
   subst. exact (OKM i).
   subst. exact (OKS i).
   now destruct u.
@@ -1045,7 +1050,7 @@ Definition initial_init_state :=
 Section WITH_HANDLER.
 
 Definition handlers := forall (m : msg) (cc : comp),
-  sigT (fun (prog_envd : vdesc) => hdlr_prog m prog_envd).
+  sigT (fun (prog_envd : vdesc) => hdlr_prog cc m prog_envd).
 
 Variable HANDLERS : handlers.
 
@@ -1175,13 +1180,19 @@ Definition open_payload_frame_base {ENVD d}
     end f
   end f.
 
-Definition open_payload_frame_hdlr {CMSG ENVD d}
-  (cc : comp) (s : FdSet.t) (ht : hdlr_term CMSG ENVD d) (f : s[[ d ]])
+Definition open_payload_frame_hdlr {CC CMSG ENVD d}
+  (s : FdSet.t) (ht : hdlr_term CC CMSG ENVD d) (f : s[[ d ]])
   : hprop
   :=
-  match ht in hdlr_term _ _ _d return s[[ _d ]] -> hprop with
+  match ht in hdlr_term _ _ _ _d return s[[ _d ]] -> hprop with
   | Base _ bt => fun f => open_payload_frame_base s bt f
-  | CFd => fun _ => all_open_set_drop (comp_fd cc) s
+  | CFd => fun _ => all_open_set_drop (comp_fd CC) s
+  | CConf i => fun f =>
+    match svec_ith (projT2 (CCONFD CC)) i as _s return s[[ _s ]] -> hprop with
+    | num_d => fun _ => emp
+    | str_d => fun _ => emp
+    | fd_d  => fun f => all_open_set_drop f s
+    end f
   | MVar i => fun f =>
     match svec_ith (projT2 (lkup_tag (tag CMSG))) i as _s return s[[ _s ]] -> hprop with
     | num_d => fun _ => emp
@@ -1195,30 +1206,6 @@ Definition open_payload_frame_hdlr {CMSG ENVD d}
     | fd_d  => fun f => all_open_set_drop f s
     end f
   end f.
-
-(*
-Definition open_payload_frame_hdlr {CMSG ENVD d}
-  (cfd : fd) (env : s[[ ENVD ]]) (st : s[[ KSTD ]])
-  (ht : hdlr_term CMSG ENVD d) (f : s[[ d ]])
-  : hprop
-  :=
-  match ht in hdlr_term _ _ _d return s[[ _d ]] -> hprop with
-  | Base _ bt => fun f => open_payload_frame_base env bt f
-  | CFd => fun _ => all_open_payload env * all_open_payload st
-  | MVar i => fun f =>
-    match svec_ith (projT2 (lkup_tag (tag CMSG))) i as _s return s[[ _s ]] -> hprop with
-    | num_d => fun _ => emp
-    | str_d => fun _ => emp
-    | fd_d  => fun f => open cfd * all_open_payload env * all_open_payload_drop f st
-    end f
-  | StVar i => fun f =>
-    match svec_ith KSTD_DESC i as _s return s[[ _s ]] -> hprop with
-    | num_d => fun _ => emp
-    | str_d => fun _ => emp
-    | fd_d  => fun f => open cfd * all_open_payload env * all_open_payload_drop f st
-    end f
-  end f.
-*)
 
 Definition open_payload_frame_expr {term : desc -> Set} {d}
   (opft : term d -> s[[d]] -> hprop) (e : expr term d) (f : s[[d]])
@@ -1243,16 +1230,16 @@ Definition open_payload_frame_base_expr {ENVD d}
   * [pl_fds_subset e fds]
 .
 
-Definition open_payload_frame_hdlr_expr' {CMSG ENVD d} (cc : comp) (s : FdSet.t)
-  : expr (hdlr_term CMSG ENVD) d -> s[[d]] -> hprop
-  := open_payload_frame_expr (open_payload_frame_hdlr cc s).
+Definition open_payload_frame_hdlr_expr' {CC CMSG ENVD d} (s : FdSet.t)
+  : expr (hdlr_term CC CMSG ENVD) d -> s[[d]] -> hprop
+  := open_payload_frame_expr (open_payload_frame_hdlr s).
 
-Definition open_payload_frame_hdlr_expr {CMSG ENVD d}
-  (e : s[[ENVD]]) cs cm (cc : comp) (fds : FdSet.t) (exp : expr (hdlr_term CMSG ENVD) d)
+Definition open_payload_frame_hdlr_expr {CC CMSG ENVD d}
+  (e : s[[ENVD]]) cs cm (fds : FdSet.t) (exp : expr (hdlr_term CC CMSG ENVD) d)
   (res : s[[d]]) : hprop
   :=
-  open_payload_frame_hdlr_expr' cc fds exp res
-  * [FdSet.In (comp_fd cc) fds]
+  open_payload_frame_hdlr_expr' fds exp res
+  * [FdSet.In (comp_fd CC) fds]
   * [all_fds_in cs fds]
   * [pl_fds_subset e fds]
   * [pl_fds_subset (pay cm) fds]
@@ -1622,7 +1609,7 @@ Qed.
 
 Definition run_hdlr_cmd :
   forall (cc : comp) (cm : msg) (envd : vdesc) (s : hdlr_state envd)
-         (c : cmd envd (hdlr_term cm envd)),
+         (c : cmd envd (hdlr_term cc cm envd)),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
           hdlr_invariant cc cm s * traced (expand_ktrace tr))
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in
@@ -1637,7 +1624,7 @@ Proof.
     let m := eval_hdlr_payload_expr cc cm envd st env _ me in
     send_msg f (Build_msg t m)
     (tr ~~~ expand_ktrace tr)
-    <@> open_payload_frame_hdlr_expr env cs cm cc fds fe f;;
+    <@> open_payload_frame_hdlr_expr env cs cm fds fe f;;
 
     let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
     {{Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := st ; kfd := fds |}
@@ -1681,7 +1668,7 @@ Proof.
     _d = fd_d ->
     all_open_set fds ==>
     open_if_fd _d _f
-    * open_payload_frame_hdlr_expr' cc fds _fe _f
+    * open_payload_frame_hdlr_expr' fds _fe _f
   with
   | Term _ t => _
   | UnOp _ _ op e => _
@@ -1706,6 +1693,22 @@ Proof.
   end EQ (shvec_ith sdenote_desc (projT2 envd) env i)
   ); simpl in *.
   admit. (* easy *)
+  admit. (* easy *)
+  refine (
+  match svec_ith (projT2 (CCONFD cc)) i as _s return
+    _s = fd_d -> forall (v : s[[_s]]),
+    all_open_set fds ==>
+    open_if_fd _s v *
+    match _s as __s return sdenote_desc __s -> hprop with
+    | fd_d => fun f => all_open_set_drop f fds
+    | _ => fun _ => emp
+    end v
+  with
+  | fd_d => fun _ f'' => _
+  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
+  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
+  end EQ (shvec_ith sdenote_desc (projT2 (CCONFD cc)) (comp_conf cc) i)
+  ); simpl in *.
   admit. (* easy *)
   refine (
   match svec_ith (projT2 (CPAY cm)) i as _s return
@@ -1755,7 +1758,7 @@ Proof.
     let _f := eval_hdlr_expr cc cm envd env st _fe in
     _d = fd_d ->
     open_if_fd _d _f
-    * open_payload_frame_hdlr_expr' cc fds _fe _f
+    * open_payload_frame_hdlr_expr' fds _fe _f
     ==> all_open_set fds
   with
   | Term _ t => _
@@ -1782,6 +1785,22 @@ Proof.
   ); simpl in *.
   admit. (* easy *)
   admit. (* easy *)
+  refine (
+  match svec_ith (projT2 (CCONFD cc)) i as _s return
+    _s = fd_d -> forall (v : s[[_s]]),
+    open_if_fd _s v *
+    match _s as __s return sdenote_desc __s -> hprop with
+    | fd_d => fun f => all_open_set_drop f fds
+    | _ => fun _ => emp
+    end v
+    ==> all_open_set fds
+  with
+  | fd_d => fun _ f'' => _
+  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
+  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
+  end EQ (shvec_ith sdenote_desc (projT2 (CCONFD cc)) (comp_conf cc) i)
+  ); simpl in *.
+  admit.
   refine (
   match svec_ith (projT2 (CPAY cm)) i as _s return
     _s = fd_d -> forall (v : s[[_s]]),
@@ -1838,7 +1857,7 @@ Proof.
 Qed.
 
 Definition run_hdlr_prog :
-  forall (cc : comp) (cm : msg) (envd : vdesc) (s : hdlr_state envd) (p : hdlr_prog cm envd),
+  forall (cc : comp) (cm : msg) (envd : vdesc) (s : hdlr_state envd) (p : hdlr_prog cc cm envd),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
           hdlr_invariant cc cm s * traced (expand_ktrace tr))
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in

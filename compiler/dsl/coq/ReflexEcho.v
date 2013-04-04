@@ -53,7 +53,8 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   ].
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  fun m f =>
+  fun m cc =>
+     let (_, cf, _) := cc in
     match m as _m return forall (EQ : _m = m), _ with
     | Build_msg None p => fun EQ =>
       let envd := existT _ 0 tt in

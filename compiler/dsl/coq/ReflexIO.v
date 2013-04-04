@@ -9,6 +9,8 @@ Open Scope hprop_scope.
 Open Scope stsepi_scope.
 
 Require Import ReflexBase.
+Require Import ReflexDenoted.
+Require Import ReflexVec.
 
 Ltac sep' := sep fail idtac.
 
@@ -38,12 +40,19 @@ Axiom call :
   STsep (tr ~~ traced tr)
         (fun f : fd => tr ~~ open f * traced (Call prog args f :: tr)).
 
+Fixpoint in_fd (f : fd) (l : list fd) {struct l} : Set :=
+  match l with
+  | nil => False
+  | x :: r => if fd_eq x f then True else in_fd f r
+  end.
+
 (* TODO add non-empty precondition *)
 (* TODO add open w/ recv perms precondition *)
 Axiom select :
   forall (fs : list fd) (tr : [Trace]),
   STsep (tr ~~ traced tr)
-        (fun f : fd => tr ~~ traced (Select fs f :: tr) * [In f fs]).
+        (fun r : sigT (fun f : fd => in_fd f fs) =>
+           tr ~~ traced (Select fs (projT1 r) :: tr) * [In (projT1 r) fs]).
 
 Axiom recv :
   forall (f : fd) (n : num) (tr : [Trace]),

@@ -75,17 +75,18 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   ].
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  (fun m f =>
-    match tag PAYD m as _tm return
-      @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
-    with
+  (fun m cc =>
+     let (_, cf, _) := cc in
+     match tag PAYD m as _tm return
+       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
+     with
 
-    | Input => fun pl =>
+     | Input => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD m d) envd (
          let (input, _) := pl in fun st0 =>
          if fd_eq
-              f
+              cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
          then
            [ fun s => send envd _ (stvar curtab) Input (slit input, tt)
@@ -94,12 +95,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
            []
        )
 
-    | Display => fun pl =>
+     | Display => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD m d) envd (
          let (url, _) := pl in fun st0 =>
          if fd_eq
-              f
+              cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) curtab)
          then
            [ fun s => send envd _ (stvar screen) Display (slit url, tt)
@@ -108,12 +109,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
            []
        )
 
-    | Quit => fun pl =>
+     | Quit => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD m d) envd (
          let _ := pl in fun st0 =>
          if fd_eq
-              f
+              cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
          then
            [ fun s => send envd _ (stvar curtab) Quit tt
@@ -123,8 +124,8 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
            []
        )
 
-    | Some (Some (Some bad)) => fun _ =>
-      match bad with end
+     | Some (Some (Some bad)) => fun _ =>
+       match bad with end
     end (pay PAYD m)
   ).
 

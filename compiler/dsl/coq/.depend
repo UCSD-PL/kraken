@@ -9,6 +9,6 @@ DepList.vo DepList.glob: DepList.v
 ReflexSSH.vo ReflexSSH.glob: ReflexSSH.v Reflex.vo ReflexBase.vo ReflexDenoted.vo ReflexFin.vo ReflexVec.vo ReflexHVec.vo ReflexFrontend.vo
 ReflexBase.vo ReflexBase.glob: ReflexBase.v
 ReflexVec.vo ReflexVec.glob: ReflexVec.v ReflexFin.vo
-ReflexIO.vo ReflexIO.glob: ReflexIO.v /home/vrobert/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo
+ReflexIO.vo ReflexIO.glob: ReflexIO.v /home/vrobert/kraken/compiler/ynot/src/coq/Ynot.vo ReflexBase.vo ReflexDenoted.vo ReflexVec.vo
 ReflexDenoted.vo ReflexDenoted.glob: ReflexDenoted.v
 ReflexEcho.vo ReflexEcho.glob: ReflexEcho.v Reflex.vo ReflexBase.vo ReflexDenoted.vo ReflexFin.vo ReflexFrontend.vo ReflexVec.vo

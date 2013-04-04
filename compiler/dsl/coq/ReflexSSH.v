@@ -162,12 +162,13 @@ Definition system_pat := (Some (str_of_string "System"), tt).
 Definition exists_comp := exists_comp COMPT COMPTDEC COMPS.
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  (fun m f =>
-    match tag PAYD m as _tm return
-      @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
-    with
+  (fun m cc =>
+     let (_, cf, _) := cc in
+     match tag PAYD m as _tm return
+       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
+     with
 
-    | LoginReq => fun pl =>
+     | LoginReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (loginstr, _) := pl in
@@ -177,13 +178,13 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        )
 
-    | SLoginResT => fun pl =>
+     | SLoginResT => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (user, _) := pl in
          (fun st0 =>
             if exists_comp
-                 (Build_comp_pat COMPT COMPS System (Some f) system_pat)
+                 (Build_comp_pat COMPT COMPS System (Some cf) system_pat)
                  (kcs _ _ _ _ st0)
             then
             [ fun s => stupd envd _ v_st_auth_user     (slit user)
@@ -194,7 +195,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        )
 
-    | SLoginResF => fun pl =>
+     | SLoginResF => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 =>
@@ -203,7 +204,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        )
 
-    | PubkeyReq => fun pl =>
+     | PubkeyReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 =>
@@ -212,7 +213,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        )
 
-    | SPubkeyRes => fun pl =>
+     | SPubkeyRes => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (pubkey, _) := pl in
@@ -222,7 +223,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        )
 
-    | KeysignReq => fun pl =>
+     | KeysignReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (keystr, _) := pl in
@@ -232,7 +233,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        )
 
-    | SKeysignRes => fun pl =>
+     | SKeysignRes => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          let (signedkey, _) := pl in
@@ -242,7 +243,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        )
 
-    | CreatePtyerReq => fun pl =>
+     | CreatePtyerReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 =>
@@ -255,7 +256,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        )
 
-    | SCreatePtyerRes => fun pl =>
+     | SCreatePtyerRes => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          match pl with
@@ -267,53 +268,53 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          end
        )
 
-       (* not meant to be received by the kernel *)
-    | LoginResT => fun pl =>
+     (* not meant to be received by the kernel *)
+     | LoginResT => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | LoginResF => fun pl =>
+     | LoginResF => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | PubkeyRes => fun pl =>
+     | PubkeyRes => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | KeysignRes => fun pl =>
+     | KeysignRes => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | CreatePtyerRes => fun pl =>
+     | CreatePtyerRes => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | SLoginReq => fun pl =>
+     | SLoginReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | SPubkeyReq => fun pl =>
+     | SPubkeyReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | SKeysignReq => fun pl =>
+     | SKeysignReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | SCreatePtyerReq => fun pl =>
+     | SCreatePtyerReq => fun pl =>
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD _ d) envd (
          (fun st0 => [])
        )
-    | (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))))))))))) => fun _ =>
+     | (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))))))))))) => fun _ =>
       match bad with end
     end (pay PAYD m)
   ).

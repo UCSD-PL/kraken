@@ -395,13 +395,51 @@ Proof.
   rewrite app_assoc; sep'.
 Qed.
 
+Definition comp_conf_desc compt := compd_conf (COMPS compt).
+
+Record comp : Set :=
+{ comp_type : COMPT
+; comp_fd   : fd
+; comp_conf : s[[ comp_conf_desc comp_type ]]
+}.
+
+Definition proj_fds : list comp -> list fd :=
+  map (fun comp => comp_fd comp).
+
+Fixpoint retrieve_comp_from_fd (cs : list comp) (f : fd) (p : in_fd f (proj_fds cs)) {struct cs}
+  : (sigT (fun c : comp => comp_fd c = f /\ In c cs)).
+Proof.
+  induction cs.
+  destruct p.
+  simpl in p. destruct (fd_eq (comp_fd a) f).
+  exists a. intuition.
+  destruct (IHcs p) as [x I].
+  exists x. intuition.
+Defined.
+
+Definition select_comp (cs : list comp) (tr : [Trace]) :
+  STsep (tr ~~ traced tr)
+        (fun c : comp => tr ~~ traced (Select (proj_fds cs) (comp_fd c) :: tr) * [In c cs]).
+Proof.
+  refine (
+    s <- select (proj_fds cs) tr;
+    let (c, I) := retrieve_comp_from_fd cs (projT1 s) (projT2 s) in
+    {{ Return {| comp_type := comp_type c
+               ; comp_fd   := projT1 s
+               ; comp_conf := comp_conf c
+               |}
+     }}
+  ); sep'.
+  discharge_pure. destruct c. simpl in *. now rewrite H0 in H1.
+Qed.
+
 Inductive KAction : Set :=
 | KExec   : str -> list str -> fd -> KAction
 | KCall   : str -> list str -> fd -> KAction
-| KSelect : list fd -> fd -> KAction
+| KSelect : list comp -> comp -> KAction
 | KSend   : fd -> msg -> KAction
-| KRecv   : fd -> msg -> KAction
-| KBogus  : fd -> bogus_msg -> KAction
+| KRecv   : comp -> msg -> KAction
+| KBogus  : comp -> bogus_msg -> KAction
 .
 
 Definition KTrace : Set :=
@@ -411,10 +449,10 @@ Definition expand_kaction (ka : KAction) : Trace :=
   match ka with
   | KExec cmd args f => Exec cmd args f :: nil
   | KCall cmd args pipe => Call cmd args pipe :: nil
-  | KSelect cs f => Select cs f :: nil
+  | KSelect cs c => Select (proj_fds cs) (comp_fd c) :: nil
   | KSend f m => trace_send_msg f m
-  | KRecv f m => trace_recv_msg f m
-  | KBogus f bm => trace_recv_bogus_msg f bm
+  | KRecv c m => trace_recv_msg (comp_fd c) m
+  | KBogus c bm => trace_recv_bogus_msg (comp_fd c) bm
   end.
 
 Fixpoint expand_ktrace (kt : KTrace) : Trace :=
@@ -426,14 +464,6 @@ Fixpoint expand_ktrace (kt : KTrace) : Trace :=
 Variable KSTD : vdesc.
 Notation KSTD_SIZE := (projT1 KSTD).
 Notation KSTD_DESC := (projT2 KSTD).
-
-Definition comp_conf_desc compt := compd_conf (COMPS compt).
-
-Record comp : Set :=
-{ comp_type : COMPT
-; comp_fd   : fd
-; comp_conf : s[[ comp_conf_desc comp_type ]]
-}.
 
 Definition sdenote_desc_cfg_pat (d:desc) : Set := option (sdenote_desc d).
 
@@ -539,7 +569,7 @@ Implicit Arguments eval_binop.
 Section WITHIN_HANDLER.
 
 Variable CKST : kstate.
-Variable CFD : fd.
+Variable CC : comp.
 Variable CMSG : msg.
 
 Definition CPAY : vdesc := lkup_tag (tag CMSG).
@@ -632,9 +662,7 @@ Definition env_fds_in l (envd : vdesc) (env : s[[ envd ]]) : Prop :=
   | _ => fun _ => True
   end (shvec_ith _ (projT2 envd) env i).
 
-Definition proj_fds : list comp -> list fd :=
-  map (fun comp => comp_fd comp).
-
+(*
 Definition msg_fds_ok : Prop :=
   forall i,
   let d := svec_ith (projT2 CPAY) i in
@@ -650,6 +678,7 @@ Proof.
   now left. now left.
   intros s. destruct CKST as [comps ktr]. simpl in *. apply in_dec. exact fd_eq.
 Qed.
+*)
 
 Section WITH_ENVD.
 
@@ -706,7 +735,7 @@ Definition eval_base_term {d} (t : base_term d) : s[[ d ]] :=
 Definition eval_hdlr_term {d} (t : hdlr_term d) : s[[ d ]] :=
   match t with
   | Base _ bt => eval_base_term bt
-  | CFd       => CFD
+  | CFd       => comp_fd CC
   | MVar i    => shvec_ith _ (projT2 CPAY) (pay CMSG) i
   | StVar i   => shvec_ith _ (projT2 KSTD) KST i
   end.
@@ -976,7 +1005,7 @@ Qed.
 
 Lemma eval_hdlr_expr_fd :
   forall (l : list fd) d (env : s[[ENVD]]) (st : s[[KSTD]]) (v : s[[d]]) e,
-  In CFD l ->
+  In (comp_fd CC) l ->
   env_fds_in l _ env ->
   env_fds_in l _ st ->
   env_fds_in l _ (pay CMSG) ->
@@ -1015,7 +1044,7 @@ Definition initial_init_state :=
 
 Section WITH_HANDLER.
 
-Definition handlers := forall (m : msg) (cfd : fd),
+Definition handlers := forall (m : msg) (cc : comp),
   sigT (fun (prog_envd : vdesc) => hdlr_prog m prog_envd).
 
 Variable HANDLERS : handlers.
@@ -1071,16 +1100,16 @@ Inductive Reach : kstate -> Prop :=
                     (payload_fds_set _ (init_env _ s))
          |}
 | Reach_valid :
-  forall s f m tr s' input,
+  forall s c m tr s' input,
   let cs := kcs s in
   ktr s = [tr]%inhabited ->
   Reach s ->
   s' = {| kcs := cs
-        ; ktr := [KRecv f m :: KSelect (proj_fds cs) f :: tr]
+        ; ktr := [KRecv c m :: KSelect cs c :: tr]
         ; kst := kst s
         ; kfd := FdSet.union (payload_fds_set _ (pay m)) (kfd s)
         |} ->
-  Reach (kstate_run_prog f m (projT1 (HANDLERS m f)) s' (projT2 (HANDLERS m f)) input)
+  Reach (kstate_run_prog c m (projT1 (HANDLERS m c)) s' (projT2 (HANDLERS m c)) input)
 | Reach_bogus :
   forall s s' f bmsg tr,
   let cs := kcs s in
@@ -1088,7 +1117,7 @@ Inductive Reach : kstate -> Prop :=
   Reach s ->
   (* introducing s' makes it easier to eapply Reach_bogus *)
   s' = {| kcs := cs
-        ; ktr := [KBogus f bmsg :: KSelect (proj_fds cs) f :: tr]
+        ; ktr := [KBogus f bmsg :: KSelect cs f :: tr]
         ; kst := kst s
         ; kfd := kfd s
         |} ->
@@ -1111,11 +1140,11 @@ Definition init_invariant {envd} (s : init_state envd) :=
   * [pl_fds_subset (init_env _ s) fds]
 .
 
-Definition hdlr_invariant {envd} (cfd : fd) (cm : msg) (s : hdlr_state envd) :=
+Definition hdlr_invariant {envd} (cc : comp) (cm : msg) (s : hdlr_state envd) :=
   let (kst, env) := s in
   let fds := kfd kst in
   all_open_set fds
-  * [FdSet.In cfd fds]
+  * [FdSet.In (comp_fd cc) fds]
   * [all_fds_in (kcs kst) fds]
   * [pl_fds_subset env fds]
   * [pl_fds_subset (pay cm) fds]
@@ -1147,12 +1176,12 @@ Definition open_payload_frame_base {ENVD d}
   end f.
 
 Definition open_payload_frame_hdlr {CMSG ENVD d}
-  (cfd : fd) (s : FdSet.t) (ht : hdlr_term CMSG ENVD d) (f : s[[ d ]])
+  (cc : comp) (s : FdSet.t) (ht : hdlr_term CMSG ENVD d) (f : s[[ d ]])
   : hprop
   :=
   match ht in hdlr_term _ _ _d return s[[ _d ]] -> hprop with
   | Base _ bt => fun f => open_payload_frame_base s bt f
-  | CFd => fun _ => all_open_set_drop cfd s
+  | CFd => fun _ => all_open_set_drop (comp_fd cc) s
   | MVar i => fun f =>
     match svec_ith (projT2 (lkup_tag (tag CMSG))) i as _s return s[[ _s ]] -> hprop with
     | num_d => fun _ => emp
@@ -1214,16 +1243,16 @@ Definition open_payload_frame_base_expr {ENVD d}
   * [pl_fds_subset e fds]
 .
 
-Definition open_payload_frame_hdlr_expr' {CMSG ENVD d} (cfd : fd) (s : FdSet.t)
+Definition open_payload_frame_hdlr_expr' {CMSG ENVD d} (cc : comp) (s : FdSet.t)
   : expr (hdlr_term CMSG ENVD) d -> s[[d]] -> hprop
-  := open_payload_frame_expr (open_payload_frame_hdlr cfd s).
+  := open_payload_frame_expr (open_payload_frame_hdlr cc s).
 
 Definition open_payload_frame_hdlr_expr {CMSG ENVD d}
-  (e : s[[ENVD]]) cs cm (cfd : fd) (fds : FdSet.t) (exp : expr (hdlr_term CMSG ENVD) d)
+  (e : s[[ENVD]]) cs cm (cc : comp) (fds : FdSet.t) (exp : expr (hdlr_term CMSG ENVD) d)
   (res : s[[d]]) : hprop
   :=
-  open_payload_frame_hdlr_expr' cfd fds exp res
-  * [FdSet.In cfd fds]
+  open_payload_frame_hdlr_expr' cc fds exp res
+  * [FdSet.In (comp_fd cc) fds]
   * [all_fds_in cs fds]
   * [pl_fds_subset e fds]
   * [pl_fds_subset (pay cm) fds]
@@ -1592,23 +1621,23 @@ Proof.
 Qed.
 
 Definition run_hdlr_cmd :
-  forall (cfd : fd) (cm : msg) (envd : vdesc) (s : hdlr_state envd)
+  forall (cc : comp) (cm : msg) (envd : vdesc) (s : hdlr_state envd)
          (c : cmd envd (hdlr_term cm envd)),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
-          hdlr_invariant cfd cm s * traced (expand_ktrace tr))
+          hdlr_invariant cc cm s * traced (expand_ktrace tr))
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in
-          hdlr_invariant cfd cm s' * traced (expand_ktrace tr)
-          * [exists input, s' = hdlr_state_run_cmd cfd cm envd s c input]).
+          hdlr_invariant cc cm s' * traced (expand_ktrace tr)
+          * [exists input, s' = hdlr_state_run_cmd cc cm envd s c input]).
 Proof.
   intros; destruct s as [ [ cs tr st fds ] env]_eqn; refine (
   match c with
 
   | Send fe t me =>
-    let f := eval_hdlr_expr cfd cm envd env st fe in
-    let m := eval_hdlr_payload_expr cfd cm envd st env _ me in
+    let f := eval_hdlr_expr cc cm envd env st fe in
+    let m := eval_hdlr_payload_expr cc cm envd st env _ me in
     send_msg f (Build_msg t m)
     (tr ~~~ expand_ktrace tr)
-    <@> open_payload_frame_hdlr_expr env cs cm cfd fds fe f;;
+    <@> open_payload_frame_hdlr_expr env cs cm cc fds fe f;;
 
     let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
     {{Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := st ; kfd := fds |}
@@ -1620,7 +1649,7 @@ Proof.
     let c_cmd := compd_cmd (COMPS ct) in
     let c_args := compd_args (COMPS ct) in
     c <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
-    <@> hdlr_invariant cfd cm s;
+    <@> hdlr_invariant cc cm s;
 
     let tr := tr ~~~ KExec c_cmd c_args c :: tr in
     {{ Return {| hdlr_kst := {| kcs := {| comp_type := ct; comp_fd := c; comp_conf := cfg |} :: cs
@@ -1632,7 +1661,7 @@ Proof.
     }}
 
   | StUpd i ve =>
-    let v := eval_hdlr_expr cfd cm envd env st ve in
+    let v := eval_hdlr_expr cc cm envd env st ve in
     {{ Return {| hdlr_kst := {| kcs := cs
                               ; ktr := tr
                               ; kst := shvec_replace_ith _ _ st i v
@@ -1648,11 +1677,11 @@ Proof.
   unfold f.
   refine (
   match fe as _fe in expr _ _d return
-    let _f := eval_hdlr_expr cfd cm envd env st _fe in
+    let _f := eval_hdlr_expr cc cm envd env st _fe in
     _d = fd_d ->
     all_open_set fds ==>
     open_if_fd _d _f
-    * open_payload_frame_hdlr_expr' cfd fds _fe _f
+    * open_payload_frame_hdlr_expr' cc fds _fe _f
   with
   | Term _ t => _
   | UnOp _ _ op e => _
@@ -1723,10 +1752,10 @@ Proof.
   unfold f.
   refine (
   match fe as _fe in expr _ _d return
-    let _f := eval_hdlr_expr cfd cm envd env st _fe in
+    let _f := eval_hdlr_expr cc cm envd env st _fe in
     _d = fd_d ->
     open_if_fd _d _f
-    * open_payload_frame_hdlr_expr' cfd fds _fe _f
+    * open_payload_frame_hdlr_expr' cc fds _fe _f
     ==> all_open_set fds
   with
   | Term _ t => _
@@ -1809,32 +1838,32 @@ Proof.
 Qed.
 
 Definition run_hdlr_prog :
-  forall (cfd : fd) (cm : msg) (envd : vdesc) (s : hdlr_state envd) (p : hdlr_prog cm envd),
+  forall (cc : comp) (cm : msg) (envd : vdesc) (s : hdlr_state envd) (p : hdlr_prog cm envd),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
-          hdlr_invariant cfd cm s * traced (expand_ktrace tr))
+          hdlr_invariant cc cm s * traced (expand_ktrace tr))
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in
-          hdlr_invariant cfd cm s' * traced (expand_ktrace tr)
+          hdlr_invariant cc cm s' * traced (expand_ktrace tr)
           * [exists input, s' =
-               hdlr_state_run_prog cfd _ envd s (p (hdlr_kst _ s)) input]).
+               hdlr_state_run_prog cc _ envd s (p (hdlr_kst _ s)) input]).
 Proof.
   intros; refine (
     Fix2
       (fun p (s : hdlr_state envd) =>
         tr :~~ ktr (hdlr_kst _ s) in
-          hdlr_invariant cfd cm s * traced (expand_ktrace tr))
+          hdlr_invariant cc cm s * traced (expand_ktrace tr))
       (fun p s (s' : hdlr_state envd) =>
         tr :~~ ktr (hdlr_kst _ s') in
-          hdlr_invariant cfd cm s' * traced (expand_ktrace tr)
+          hdlr_invariant cc cm s' * traced (expand_ktrace tr)
                                             (* TODO: this works but seems wrong *)
-          * [exists input, s' = hdlr_state_run_prog cfd _ envd s p input])
+          * [exists input, s' = hdlr_state_run_prog cc _ envd s p input])
       (fun self p s =>
         match p with
         | nil =>
           {{ Return s }}
         | c::cs =>
-          s' <- run_hdlr_cmd cfd cm envd s (c (hdlr_kst _ s));
+          s' <- run_hdlr_cmd cc cm envd s (c (hdlr_kst _ s));
           s'' <- self cs s'
-          <@> [exists input, s' = hdlr_state_run_cmd cfd _ envd s (c (hdlr_kst _ s)) input];
+          <@> [exists input, s' = hdlr_state_run_cmd cc _ envd s (c (hdlr_kst _ s)) input];
           {{ Return s'' }}
         end)
     (p (hdlr_kst _ s)) s
@@ -1844,8 +1873,8 @@ Proof.
   destruct H1 as [i1 I1]. destruct H2 as [i2 I2]. subst s'.
   exists (existT
             (fun x : cmd_input envd (c (hdlr_kst envd s0)) =>
-               hdlr_state_run_prog_return_type cfd _ envd
-                 (hdlr_state_run_cmd cfd _ envd s0 (c (hdlr_kst envd s0)) x) cs)
+               hdlr_state_run_prog_return_type cc _ envd
+                 (hdlr_state_run_cmd cc _ envd s0 (c (hdlr_kst envd s0)) x) cs)
             i2 i1). exact I1.
 Qed.
 
@@ -1866,15 +1895,15 @@ Definition kbody:
         (fun s' => kstate_inv s').
 Proof.
   intro s; destruct s as [cs tr st fds]_eqn; refine (
-    c <- select (proj_fds cs)
+    c <- select_comp cs
     (tr ~~~ expand_ktrace tr)
     <@> all_open_set fds * [Reach s] * [all_fds_in cs fds] * [pl_fds_subset st fds];
 
-    let tr := tr ~~~ KSelect (proj_fds cs) c :: tr in
-    mm <- recv_msg c
+    let tr := tr ~~~ KSelect cs c :: tr in
+    mm <- recv_msg (comp_fd c)
     (tr ~~~ expand_ktrace tr)
-    <@> all_open_set_drop c fds * [FdSet.In c fds] * [Reach s] * [all_fds_in cs fds]
-      * [pl_fds_subset st fds];
+    <@> all_open_set_drop (comp_fd c) fds * [FdSet.In (comp_fd c) fds] * [Reach s]
+    * [all_fds_in cs fds] * [pl_fds_subset st fds];
 
     match mm with
     | inl m =>
@@ -1899,7 +1928,7 @@ Proof.
   ); sep''; try subst v; sep'; simpl in *.
 
   isolate (
-    traced (Select (proj_fds cs) c :: expand_ktrace x0) ==>
+    traced (Select (proj_fds cs) (comp_fd c) :: expand_ktrace x0) ==>
     traced (expand_ktrace x)
   ).
   admit.
@@ -1909,7 +1938,7 @@ Proof.
 
   (*unfold s'. simpl.*)
   isolate (
-    traced (trace_recv_msg c m ++ expand_ktrace x0) ==>
+    traced (trace_recv_msg (comp_fd c) m ++ expand_ktrace x0) ==>
     traced (expand_ktrace x3)
   ).
   admit.
@@ -1935,7 +1964,7 @@ Proof.
   admit.
 
   isolate (
-    traced (trace_recv_bogus_msg c m ++ expand_ktrace x0) ==>
+    traced (trace_recv_bogus_msg (comp_fd c) m ++ expand_ktrace x0) ==>
     traced (expand_ktrace x3)
   ).
   admit.

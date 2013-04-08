@@ -1709,7 +1709,7 @@ Proof.
   | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
   end EQ (shvec_ith sdenote_desc (projT2 (CCONFD cc)) (comp_conf cc) i)
   ); simpl in *.
-  admit. (* easy *)
+  admit. (* need to know that f'' coming from a component conf is open *)
   refine (
   match svec_ith (projT2 (CPAY cm)) i as _s return
     _s = fd_d -> forall (v : s[[_s]]),

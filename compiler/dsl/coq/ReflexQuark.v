@@ -89,7 +89,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
          then
-           [ fun s => send envd _ (stvar curtab) Input (slit input, tt)
+           [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS Tab
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) curtab))
+                         (None, tt))
+                       Input (slit input, tt)
            ]
          else
            []
@@ -103,7 +108,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) curtab)
          then
-           [ fun s => send envd _ (stvar screen) Display (slit url, tt)
+           [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS Screen
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) screen))
+                         tt)
+                       Display (slit url, tt)
            ]
          else
            []
@@ -117,8 +127,18 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
          then
-           [ fun s => send envd _ (stvar curtab) Quit tt
-           ; fun s => send envd _ (stvar screen) Quit tt
+           [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS Tab
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) curtab))
+                         (None, tt))
+                       Quit tt
+           ; fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS Screen
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) screen))
+                         tt)
+                       Quit tt
            ]
          else
            []

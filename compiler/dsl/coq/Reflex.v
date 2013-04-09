@@ -437,7 +437,7 @@ Inductive KAction : Set :=
 | KExec   : str -> list str -> fd -> KAction
 | KCall   : str -> list str -> fd -> KAction
 | KSelect : list comp -> comp -> KAction
-| KSend   : fd -> msg -> KAction
+| KSend   : comp -> msg -> KAction
 | KRecv   : comp -> msg -> KAction
 | KBogus  : comp -> bogus_msg -> KAction
 .
@@ -450,7 +450,7 @@ Definition expand_kaction (ka : KAction) : Trace :=
   | KExec cmd args f => Exec cmd args f :: nil
   | KCall cmd args pipe => Call cmd args pipe :: nil
   | KSelect cs c => Select (proj_fds cs) (comp_fd c) :: nil
-  | KSend f m => trace_send_msg f m
+  | KSend c m => trace_send_msg (comp_fd c) m
   | KRecv c m => trace_recv_msg (comp_fd c) m
   | KBogus c bm => trace_recv_bogus_msg (comp_fd c) bm
   end.
@@ -775,7 +775,8 @@ Definition eval_payload_expr (pd : vdesc) (e : payload_expr pd) : s[[ pd ]] :=
   eval_payload_expr' (projT1 pd) (projT2 pd) e.
 
 Inductive cmd : Type :=
-| Send  : expr fd_d -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
+(*| Send  : expr fd_d -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd*)
+| SendAll  : comp_pat -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
 | Spawn :
     forall (t : COMPT), s[[ comp_conf_desc t ]] ->
     forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = fd_d -> cmd
@@ -804,7 +805,7 @@ Definition hdlr_prog := kstate -> list hdlr_cmd.
 
 Definition cmd_input_desc {t} (c : cmd t)  :=
   match c with
-  | Send _ _ _  => None
+  | SendAll _ _ _  => None
   | Spawn _ _ _ _ => Some fd_d
   | StUpd _ _ => None
   end.
@@ -835,16 +836,29 @@ Definition eval_hdlr_expr {d} (e : s[[ENVD]]) (s : s[[KSTD]]) : expr hdlr_term d
 Definition eval_hdlr_payload_expr e s :=
   eval_payload_expr hdlr_term (@eval_hdlr_term s e).
 
+Definition ktrace_send_msgs (cps : list comp) (m : msg) : KTrace :=
+  (map (fun c => KSend c m) cps).
+
 Definition init_state_run_cmd (s : init_state) (cmd : cmd base_term)
   : cmd_input cmd -> init_state :=
   let (cs, tr, e, st, fds) := s in
   match cmd as _cmd return cmd_input _cmd -> init_state with
 
-  | Send fe t me => fun _ =>
+(*  | Send fe t me => fun _ =>
     let f := eval_base_expr e fe in
     let m := eval_base_payload_expr e _ me in
     {| init_comps := cs
      ; init_ktr   := tr ~~~ KSend f (Build_msg t m) :: tr
+     ; init_env   := e
+     ; init_kst   := st
+     ; init_fds   := fds
+     |}*)
+  | SendAll cp t me => fun _ =>
+    let m := eval_base_payload_expr e _ me in
+    let msg := (Build_msg t m) in
+    let comps := filter_comps cp cs in
+    {| init_comps := cs
+     ; init_ktr   := tr ~~~ ktrace_send_msgs comps msg ++ tr
      ; init_env   := e
      ; init_kst   := st
      ; init_fds   := fds
@@ -901,12 +915,24 @@ Definition hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd hdlr_term)
   let (cs, tr, st, fd) := s' in
   match cmd as _cmd return cmd_input _cmd -> _ with
 
-  | Send fe t me => fun _ =>
+(*  | Send fe t me => fun _ =>
     let f := eval_hdlr_expr env st fe in
     let m := eval_hdlr_payload_expr st env _ me in
     {| hdlr_kst :=
          {| kcs := cs
           ; ktr := tr ~~~ KSend f (Build_msg t m) :: tr
+          ; kst := st
+          ; kfd := fd
+          |}
+     ; hdlr_env := env
+    |}*)
+  | SendAll cp t me => fun _ =>
+    let m := eval_hdlr_payload_expr st env _ me in
+    let msg := (Build_msg t m) in
+    let comps := filter_comps cp cs in
+    {| hdlr_kst :=
+         {| kcs := cs
+          ; ktr := tr ~~~ ktrace_send_msgs comps msg ++ tr
           ; kst := st
           ; kfd := fd
           |}
@@ -1133,6 +1159,12 @@ Definition all_open_set s := all_open (FdSet.elements s).
 
 Definition all_open_set_drop f s := all_open (FdSet.elements (FdSet.remove f s)).
 
+Fixpoint all_open_set_drop_all fs s :=
+  match fs with
+  | nil    => all_open_set s
+  | f::fs' => all_open_set_drop_all fs' (FdSet.remove f s)
+  end.
+
 Definition all_fds_in l s := List.Forall (fun x => FdSet.In (comp_fd x) s) l.
 
 Definition pl_fds_subset {envd} (env : s[[envd]]) (s : FdSet.t) :=
@@ -1355,6 +1387,65 @@ Proof.
   intros. now apply all_open_payload_replace'.
 Qed.
 
+Definition trace_send_msg_comps (cps : list comp) (m : msg) : Trace :=
+  flat_map (fun c => trace_send_msg (comp_fd c) m) cps.
+
+Definition send_msg_comps :
+  forall (m : msg) (cps : list comp) (fds : FdSet.t)
+         (tr : [Trace]),
+  STsep (tr ~~ all_open_set fds * [all_fds_in cps fds] * traced tr)
+        (fun _ : unit => tr ~~
+          all_open_set fds * [all_fds_in cps fds] *
+          traced ((trace_send_msg_comps cps m)  ++ tr)).
+Proof.
+  intros; refine (
+    Fix2
+      (fun (cps : list comp) (tr : [Trace]) =>
+         (tr ~~ all_open_set fds * [all_fds_in cps fds] * traced tr))
+      (fun cps tr (_ : unit) => tr ~~
+          all_open_set fds * [all_fds_in cps fds] *
+          traced ((trace_send_msg_comps cps m)  ++ tr))
+      (fun self cps tr =>
+        match cps with
+        | nil => {{ Return tt }}
+        | c::cps' =>
+          self cps' tr <@> [all_fds_in (c::cps') fds];;
+          send_msg (comp_fd c) m (tr ~~~ (trace_send_msg_comps cps' m)  ++ tr)
+          <@> [all_fds_in (c::cps') fds] * all_open_set_drop (comp_fd c) fds;;
+          {{ Return tt }}
+        end
+      )
+    cps tr
+  ); sep''.
+  inversion H; auto.
+  admit. (*open_unpack for sets*)
+  rewrite app_assoc; sep''.
+  admit. (*open_pack for sets*)
+Qed.
+
+Lemma expand_ktrace_dist : forall tr1 tr2,
+  expand_ktrace (tr1 ++ tr2) = expand_ktrace tr1 ++ expand_ktrace tr2.
+Proof.
+  intro tr1.
+  induction tr1; simpl.
+    reflexivity.
+
+    intro tr2.
+    rewrite IHtr1.
+    apply app_assoc.
+Qed.
+
+Lemma expand_ktrace_trace_send_msg_comps : forall cps m,
+  trace_send_msg_comps cps m = expand_ktrace (ktrace_send_msgs cps m).
+Proof.
+  intros cps m.
+  induction cps; simpl.
+    reflexivity.
+
+    rewrite IHcps.
+    reflexivity.
+Qed.
+
 Definition run_init_cmd :
   forall (prog_envd : vdesc) (s : init_state prog_envd)
          (c : cmd prog_envd (base_term prog_envd)),
@@ -1367,15 +1458,20 @@ Proof.
   intros; destruct s as [cs tr e st fds]_eqn; refine (
     match c with
 
-    | Send fe t me =>
+    | SendAll cp t me =>
       (* /!\ We lose track of the let-open equalities if existentials remain,
          make sure that Coq can infer _all_ the underscores. *)
-      let f := eval_base_expr _ e fe in
       let m := eval_base_payload_expr _ e _ me in
-      send_msg f (Build_msg t m) (tr ~~~ expand_ktrace tr)
-      <@> open_payload_frame_base_expr e cs fds fe f;;
+      let comps := (filter_comps cp cs) in
+      let msg := (Build_msg t m) in
+      send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
+      <@>   (*all_open_set_drop_all (proj_fds comps) fds*)
+          (** [FdSet.In (comp_fd CC) fds]*)
+          [all_fds_in cs fds]
+          * [pl_fds_subset e fds]
+          (** [pl_fds_subset m fds]*);;
 
-      let tr := tr ~~~ KSend f (Build_msg t m) :: tr in
+      let tr := tr ~~~ ktrace_send_msgs comps msg ++ tr in
       {{ Return {| init_comps := cs
                  ; init_ktr   := tr
                  ; init_env   := e
@@ -1409,85 +1505,23 @@ Proof.
     end
   ); sep''; try subst v; sep'; simpl in *.
 
-  unfold f.
-  refine (
-  match fe as _fe in expr _ _d return
-    let _f := eval_base_expr prog_envd e _fe in
-    _d = fd_d ->
-    all_open_set fds ==>
-    open_if_fd _d _f
-    * open_payload_frame_base_expr' fds _fe _f
-  with
-  | Term _ t => _
-  | UnOp _ _ op e => _
-  | BinOp _ _ _ op e1 e2 => _
-  end (Logic.eq_refl fd_d)
-  ); intros _f EQ; unfold _f; clear _f.
-  destruct t0; try congruence.
+  (*SendAll*)
+  admit. (*easy*)
+  subst tr0.
+  subst tr.
   simpl in *.
-  refine (
-  match svec_ith (projT2 prog_envd) i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    all_open_set fds ==>
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc (projT2 prog_envd) e i)
-  ); simpl in *.
-  admit. (* easy *)
-  destruct op; try congruence.
-  destruct op; try congruence.
+  uninhabit.
+  rewrite expand_ktrace_dist.
+  rewrite expand_ktrace_trace_send_msg_comps.
+  sep''.
 
-  isolate (
-    traced (trace_send_msg f {| tag := t; pay := m |} ++ expand_ktrace x0)
-    ==>
-    traced (expand_ktrace x2)
-  ).
-  admit. (* TODO: figure out why sep'' does not solve this *)
+  exists tt.
+  subst tr0.
+  subst msg0.
+  subst m.
+  reflexivity.
 
-  unfold f.
-  refine (
-  match fe as _fe in expr _ _d return
-    let _f := eval_base_expr prog_envd e _fe in
-    _d = fd_d ->
-    open_if_fd _d _f
-    * open_payload_frame_base_expr' fds _fe _f
-    ==> all_open_set fds
-  with
-  | Term _ t => _
-  | UnOp _ _ op e => _
-  | BinOp _ _ _ op e1 e2 => _
-  end (Logic.eq_refl fd_d)
-  ); intros _f EQ; unfold _f; clear _f.
-  destruct t0; try congruence.
-  simpl in *.
-  refine (
-  match svec_ith (projT2 prog_envd) i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-    ==> all_open_set fds
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc (projT2 prog_envd) e i)
-  ); simpl in *.
-  admit. (* easy *)
-  destruct op; try congruence.
-  destruct op; try congruence.
-
-  exists tt. unfold tr0. sep''.
-
+  (*Spawn*)
   isolate (
     traced (Exec c_cmd c_args c0 :: expand_ktrace x0)
     ==> traced (expand_ktrace x2)
@@ -1619,7 +1653,25 @@ Proof.
   intros; destruct s as [ [ cs tr st fds ] env]_eqn; refine (
   match c with
 
-  | Send fe t me =>
+  | SendAll cp t me =>
+      (* /!\ We lose track of the let-open equalities if existentials remain,
+         make sure that Coq can infer _all_ the underscores. *)
+      let m := eval_hdlr_payload_expr cc cm envd st env _ me in
+      let comps := (filter_comps cp cs) in
+      let msg := (Build_msg t m) in
+      send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
+      <@>   (*all_open_set_drop_all (proj_fds comps) fds*)
+            [FdSet.In (comp_fd cc) fds]
+          * [all_fds_in cs fds]
+          * [pl_fds_subset env fds]
+          * [pl_fds_subset (pay cm) fds];;
+
+      let tr := tr ~~~ ktrace_send_msgs comps msg ++ tr in
+      {{Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := st ; kfd := fds |}
+              ; hdlr_env := env
+              |}
+      }}
+(*  | Send fe t me =>
     let f := eval_hdlr_expr cc cm envd env st fe in
     let m := eval_hdlr_payload_expr cc cm envd st env _ me in
     send_msg f (Build_msg t m)
@@ -1630,7 +1682,7 @@ Proof.
     {{Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := st ; kfd := fds |}
               ; hdlr_env := env
               |}
-    }}
+    }}*)
 
   | Spawn ct cfg i EQ =>
     let c_cmd := compd_cmd (COMPS ct) in
@@ -1661,182 +1713,21 @@ Proof.
   end
   ); sep''; try subst v; sep'; simpl in *.
 
-  unfold f.
-  refine (
-  match fe as _fe in expr _ _d return
-    let _f := eval_hdlr_expr cc cm envd env st _fe in
-    _d = fd_d ->
-    all_open_set fds ==>
-    open_if_fd _d _f
-    * open_payload_frame_hdlr_expr' fds _fe _f
-  with
-  | Term _ t => _
-  | UnOp _ _ op e => _
-  | BinOp _ _ _ op e1 e2 => _
-  end (Logic.eq_refl fd_d)
-  ); intros _f EQ; unfold _f; clear _f.
-  destruct t0; try congruence; simpl in *.
-  destruct b; try congruence; simpl in *.
-  refine (
-  match svec_ith (projT2 envd) i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    all_open_set fds ==>
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc (projT2 envd) env i)
-  ); simpl in *.
-  admit. (* easy *)
-  admit. (* easy *)
-  refine (
-  match svec_ith (projT2 (CCONFD cc)) i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    all_open_set fds ==>
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc (projT2 (CCONFD cc)) (comp_conf cc) i)
-  ); simpl in *.
-  admit. (* need to know that f'' coming from a component conf is open *)
-  refine (
-  match svec_ith (projT2 (CPAY cm)) i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    all_open_set fds ==>
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc (projT2 (CPAY cm)) (pay cm) i)
-  ); simpl in *.
-  admit. (* easy *)
-  refine (
-  match svec_ith KSTD_DESC i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    all_open_set fds ==>
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc KSTD_DESC st i)
-  ); simpl in *.
-  admit. (* easy *)
-  destruct op; try congruence.
-  destruct op; try congruence.
+  (*SendAll*)
+  admit. (*easy*)
+  subst tr0.
+  subst tr.
+  simpl in *.
+  uninhabit.
+  rewrite expand_ktrace_dist.
+  rewrite expand_ktrace_trace_send_msg_comps.
+  sep''.
 
-  isolate (
-    traced (trace_send_msg f {| tag := t; pay := m |} ++ expand_ktrace x0)
-    ==>
-    traced (expand_ktrace x2)
-  ).
-  admit. (* TODO: figure out why sep'' does not solve this *)
-
-  unfold f.
-  refine (
-  match fe as _fe in expr _ _d return
-    let _f := eval_hdlr_expr cc cm envd env st _fe in
-    _d = fd_d ->
-    open_if_fd _d _f
-    * open_payload_frame_hdlr_expr' fds _fe _f
-    ==> all_open_set fds
-  with
-  | Term _ t => _
-  | UnOp _ _ op e => _
-  | BinOp _ _ _ op e1 e2 => _
-  end (Logic.eq_refl fd_d)
-  ); intros _f EQ; unfold _f; clear _f.
-  destruct t0; try congruence; simpl in *.
-  destruct b; try congruence; simpl in *.
-  refine (
-  match svec_ith (projT2 envd) i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-    ==> all_open_set fds
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc (projT2 envd) env i)
-  ); simpl in *.
-  admit. (* easy *)
-  admit. (* easy *)
-  refine (
-  match svec_ith (projT2 (CCONFD cc)) i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-    ==> all_open_set fds
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc (projT2 (CCONFD cc)) (comp_conf cc) i)
-  ); simpl in *.
-  admit.
-  refine (
-  match svec_ith (projT2 (CPAY cm)) i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-    ==> all_open_set fds
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc (projT2 (CPAY cm)) (pay cm) i)
-  ); simpl in *.
-  admit.
-  refine (
-  match svec_ith KSTD_DESC i as _s return
-    _s = fd_d -> forall (v : s[[_s]]),
-    open_if_fd _s v *
-    match _s as __s return sdenote_desc __s -> hprop with
-    | fd_d => fun f => all_open_set_drop f fds
-    | _ => fun _ => emp
-    end v
-    ==> all_open_set fds
-  with
-  | fd_d => fun _ f'' => _
-  | num_d => fun EQ _ _ => False_rec _ (numd_neq_fdd EQ)
-  | str_d => fun EQ _ _ => False_rec _ (strd_neq_fdd EQ)
-  end EQ (shvec_ith sdenote_desc KSTD_DESC st i)
-  ); simpl in *.
-  admit. (* easy *)
-  destruct op; try congruence.
-  destruct op; try congruence.
-
-  exists tt. unfold tr0. sep''.
+  exists tt.
+  subst tr0.
+  subst msg0.
+  subst m.
+  reflexivity.
 
   rewrite Heqh. simpl. sep''.
 

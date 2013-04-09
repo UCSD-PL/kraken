@@ -60,7 +60,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       let envd := existT _ 0 tt in
       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
         let (msg, _) := p in fun st0 =>
-        [ fun s => send envd _ cfd None (mvar EQ None, tt)
+        [ fun s => sendall envd _
+                           (Build_comp_pat COMPT' COMPS Echo (Some cf) tt)
+                           None (mvar EQ None, tt)
         ]
       )
     | Build_msg (Some bad) _ =>

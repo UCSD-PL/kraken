@@ -173,7 +173,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (loginstr, _) := pl in
          (fun st0 =>
-            [ fun s => send envd _ (stvar v_st_system) SLoginReq (slit loginstr, tt)
+            [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS System
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) v_st_system))
+                         (None, tt))
+                       SLoginReq (slit loginstr, tt)
             ]
          )
        )
@@ -189,7 +194,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
             then
             [ fun s => stupd envd _ v_st_auth_user     (slit user)
             ; fun s => stupd envd _ v_st_authenticated (nlit (num_of_nat 1))
-            ; fun s => send  envd _ (stvar v_st_slave) LoginResT tt
+            ; fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS Slave
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) v_st_slave))
+                         tt)
+                       LoginResT tt
             ]
             else []
          )
@@ -199,7 +209,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 =>
-            [ fun s => send envd _ (stvar v_st_slave) LoginResF tt
+            [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS Slave
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) v_st_slave))
+                         tt)
+                       LoginResF tt
             ]
          )
        )
@@ -208,7 +223,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 =>
-            [ fun s => send envd _ (stvar v_st_system) SPubkeyReq tt
+            [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS System
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) v_st_system))
+                         (None, tt))
+                       SPubkeyReq tt
             ]
          )
        )
@@ -218,7 +238,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (pubkey, _) := pl in
          (fun st0 =>
-            [ fun s => send envd _ (stvar v_st_system) SPubkeyRes (slit pubkey, tt)
+            [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS System
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) v_st_system))
+                         (None, tt))
+                       SPubkeyRes (slit pubkey, tt)
             ]
          )
        )
@@ -228,7 +253,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (keystr, _) := pl in
          (fun st0 =>
-            [ fun s => send envd _ (stvar v_st_system) SKeysignReq (slit keystr, tt)
+            [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS System
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) v_st_system))
+                         (None, tt))
+                       SKeysignReq (slit keystr, tt)
             ]
          )
        )
@@ -238,7 +268,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (signedkey, _) := pl in
          (fun st0 =>
-            [ fun s => send envd _ (stvar v_st_system) KeysignRes (slit signedkey, tt)
+            [ fun s => sendall envd _ 
+                       (Build_comp_pat COMPT' COMPS System
+                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                          (kst _ _ _ _ st0) v_st_system))
+                         (None, tt))
+                       KeysignRes (slit signedkey, tt)
             ]
          )
        )
@@ -251,7 +286,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                 (shvec_ith _ (projT2 KSTD:svec desc 4) (kst _ _ _ _ st0) v_st_authenticated)
                 (num_of_nat 0)
            then []
-           else [ fun s => send envd _ (stvar v_st_system) SCreatePtyerReq (stvar v_st_auth_user, tt)
+           else [ fun s => sendall envd _ 
+                            (Build_comp_pat COMPT' COMPS System
+                              (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                               (kst _ _ _ _ st0) v_st_system))
+                              (None, tt))
+                            SCreatePtyerReq (stvar v_st_auth_user, tt)
                 ]
          )
        )
@@ -262,7 +302,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          match pl with
          | (fd0, (fd1, _)) =>
            (fun st0 =>
-              [ fun s => send envd _ (stvar v_st_system) CreatePtyerRes (cfd, (cfd, tt))
+              [ fun s => sendall envd _ 
+                            (Build_comp_pat COMPT' COMPS System
+                              (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
+                                               (kst _ _ _ _ st0) v_st_system))
+                              (None, tt))
+                            CreatePtyerRes (cfd, (cfd, tt))
               ]
            )
          end

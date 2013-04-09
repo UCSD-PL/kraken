@@ -15,7 +15,7 @@ Module Type SystemFeaturesInterface.
 End SystemFeaturesInterface.
 
 Module MkLanguage (Import SF : SystemFeaturesInterface).
-  Definition send  := Send  PAYD COMPT COMPS KSTD.
+  Definition sendall  := SendAll  PAYD COMPT COMPS KSTD.
   Definition spawn := Spawn PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
   Definition stvar {cc envd m} v :=

@@ -173,7 +173,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (loginstr, _) := pl in
          (fun st0 =>
-            [ fun s => sendall envd _ 
+            [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS System
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) v_st_system))
@@ -194,7 +194,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
             then
             [ fun s => stupd envd _ v_st_auth_user     (slit user)
             ; fun s => stupd envd _ v_st_authenticated (nlit (num_of_nat 1))
-            ; fun s => sendall envd _ 
+            ; fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS Slave
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) v_st_slave))
@@ -209,7 +209,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 =>
-            [ fun s => sendall envd _ 
+            [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS Slave
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) v_st_slave))
@@ -223,7 +223,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        let envd := mk_vdesc [] in
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 =>
-            [ fun s => sendall envd _ 
+            [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS System
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) v_st_system))
@@ -238,7 +238,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (pubkey, _) := pl in
          (fun st0 =>
-            [ fun s => sendall envd _ 
+            [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS System
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) v_st_system))
@@ -253,7 +253,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (keystr, _) := pl in
          (fun st0 =>
-            [ fun s => sendall envd _ 
+            [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS System
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) v_st_system))
@@ -268,7 +268,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (signedkey, _) := pl in
          (fun st0 =>
-            [ fun s => sendall envd _ 
+            [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS System
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) v_st_system))
@@ -286,7 +286,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                 (shvec_ith _ (projT2 KSTD:svec desc 4) (kst _ _ _ _ st0) v_st_authenticated)
                 (num_of_nat 0)
            then []
-           else [ fun s => sendall envd _ 
+           else [ fun s => sendall envd _
                             (Build_comp_pat COMPT' COMPS System
                               (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                                (kst _ _ _ _ st0) v_st_system))
@@ -302,7 +302,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          match pl with
          | (fd0, (fd1, _)) =>
            (fun st0 =>
-              [ fun s => sendall envd _ 
+              [ fun s => sendall envd _
                             (Build_comp_pat COMPT' COMPS System
                               (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                                (kst _ _ _ _ st0) v_st_system))

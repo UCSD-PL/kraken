@@ -776,7 +776,7 @@ Definition eval_payload_expr (pd : vdesc) (e : payload_expr pd) : s[[ pd ]] :=
 
 Inductive cmd : Type :=
 (*| Send  : expr fd_d -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd*)
-| SendAll  : comp_pat -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
+| SendAll : comp_pat -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
 | Spawn :
     forall (t : COMPT), s[[ comp_conf_desc t ]] ->
     forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = fd_d -> cmd
@@ -1462,8 +1462,8 @@ Proof.
       (* /!\ We lose track of the let-open equalities if existentials remain,
          make sure that Coq can infer _all_ the underscores. *)
       let m := eval_base_payload_expr _ e _ me in
-      let comps := (filter_comps cp cs) in
-      let msg := (Build_msg t m) in
+      let comps := filter_comps cp cs in
+      let msg := Build_msg t m in
       send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
       <@>   (*all_open_set_drop_all (proj_fds comps) fds*)
           (** [FdSet.In (comp_fd CC) fds]*)
@@ -1657,8 +1657,8 @@ Proof.
       (* /!\ We lose track of the let-open equalities if existentials remain,
          make sure that Coq can infer _all_ the underscores. *)
       let m := eval_hdlr_payload_expr cc cm envd st env _ me in
-      let comps := (filter_comps cp cs) in
-      let msg := (Build_msg t m) in
+      let comps := filter_comps cp cs in
+      let msg := Build_msg t m in
       send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
       <@>   (*all_open_set_drop_all (proj_fds comps) fds*)
             [FdSet.In (comp_fd cc) fds]

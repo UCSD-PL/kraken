@@ -89,7 +89,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
          then
-           [ fun s => sendall envd _ 
+           [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS Tab
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) curtab))
@@ -108,7 +108,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) curtab)
          then
-           [ fun s => sendall envd _ 
+           [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS Screen
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) screen))
@@ -127,13 +127,13 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               cf
               (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
          then
-           [ fun s => sendall envd _ 
+           [ fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS Tab
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) curtab))
                          (None, tt))
                        Quit tt
-           ; fun s => sendall envd _ 
+           ; fun s => sendall envd _
                        (Build_comp_pat COMPT' COMPS Screen
                          (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
                                           (kst _ _ _ _ st0) screen))

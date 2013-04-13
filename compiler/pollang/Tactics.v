@@ -346,16 +346,16 @@ Ltac exists_past s :=
 
 Ltac match_releases :=
   match goal with
-  | [ |- Release _ _ _ nil ]
+  | [ |- Enables _ _ _ nil ]
       => constructor
   (* Induction hypothesis.*)
   | [ H : ktr _ _ _ _ ?s = inhabits ?tr,
       IH : forall tr', ktr _ _ _ _ ?s = inhabits tr' ->
-                       Release _ ?past ?future tr'
-                       |- Release _ ?past ?future ?tr ]
+                       Enables _ ?past ?future tr'
+                       |- Enables _ ?past ?future ?tr ]
       => auto
   (*Branch on whether the head of the trace matches.*)
-  | [ |- Release ?pdv _ ?future (?act::_) ]
+  | [ |- Enables ?pdv _ ?future (?act::_) ]
       => let s := match goal with
                   | [ _ : ktr _ _ _ _ ?s = inhabits _ |- _ ]
                       => s
@@ -366,16 +366,16 @@ Ltac match_releases :=
          pose proof (decide_act pdv future act) as H;
          destruct H;
          [ contradiction ||
-           (apply R_future; [ match_releases | try exists_past s ])
+           (apply E_future; [ match_releases | try exists_past s ])
          | contradiction ||
-           (apply R_not_future; [ match_releases | assumption ]) ]
+           (apply E_not_future; [ match_releases | assumption ]) ]
          (*In some cases, one branch is impossible, so contradiction
            solves the goal immediately.
            In other cases, there are variables in the message payloads,
            so both branches are possible.*)
   end.
 
-(********End Releases Tactics********)
+(********End Enabless Tactics********)
 
 (*******Begin Immediately Before Tactics********)
 
@@ -447,6 +447,6 @@ Ltac crush :=
      => match_immafter
   | [ |- Disables _ _ _ _ ]
      => match_disables
-  | [ |- Release _ _ _ _ ]
+  | [ |- Enables _ _ _ _ ]
      => match_releases
   end.

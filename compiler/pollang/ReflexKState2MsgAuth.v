@@ -100,9 +100,9 @@ Require Import Tactics.
 Require Import List.
 Require Import Ynot.
 
-Theorem release : forall st tr u,
+Theorem enables : forall st tr u,
   Reach _ _ COMPS _ _ _ INIT HANDLERS st -> ktr _ _ _ _ st = inhabits tr ->
-  Release PAYD
+  Enables PAYD
           (KORecv PAYD None
                    (Some (Build_opt_msg PAYD
                                          (Some None) (Some u, tt))))

@@ -86,9 +86,9 @@ Require Import ActionMatch.
 Require Import Tactics.
 Require Import Ynot.
 
-Theorem release : forall st tr u,
+Theorem enable : forall st tr u,
   Reach _ _ COMPS _ _ _ INIT HANDLERS st -> ktr _ _ _ _ st = inhabits tr ->
-  Release PAYD
+  Enables PAYD
           (KORecv PAYD None
                    (Some (Build_opt_msg PAYD
                                          (Some None) (Some u, (None, tt)))))

@@ -93,7 +93,7 @@ Require Import List.
 
 Theorem enable : forall st tr,
   Reach _ _ COMPS _ _ _ INIT HANDLERS st -> ktr _ _ _ _ st = inhabits tr ->
-  Release PAYD
+  Enables PAYD
            (KORecv PAYD None
                     (Some (Build_opt_msg PAYD
                                           msg_enable tt)))

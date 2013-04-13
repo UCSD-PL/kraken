@@ -346,7 +346,7 @@ Require Import Ynot.
 
 Theorem auth_priv : forall st tr u,
   Reach _ _ COMPS _ _ _ INIT HANDLERS st -> ktr _ _ _ _ st = inhabits tr ->
-  Release PAYD
+  Enables PAYD
           (KORecv PAYD None
                    (Some (Build_opt_msg PAYD
                                          SLoginResT (Some u, tt))))
@@ -355,140 +355,7 @@ Theorem auth_priv : forall st tr u,
                                          SCreatePtyerReq (Some u, tt))))
           tr.
 Proof.
-  (*Local Opaque str_of_string.
-  intros.
-  generalize dependent tr.
-  induction H; intros.
-    unpack.
-    match_releases.
-
-Ltac unpack' :=
-  match goal with
-  | [ Htr : _ = inhabits ?tr |- _ ]
-      => match goal with
-          (*Valid exchange.*)
-         | [ _ : Reach _ _ _ _ _ _ _ ?HDLRS _,
-             H : ?s = _,
-             H' : ?s' = kstate_run_prog _ _ _ _ _ _ _ ?s _ _,
-             input : kstate_run_prog_return_type _ _ _ _ _ _ _ _ _ |- _ ]
-           => (*unfold HDLRS in H'; unfold HDLRS in input;*)
-              unfold kstate_run_prog in H'(*; simpl in **);
-              simpl in H'; simpl in input;
-              destruct_eq H'; simpl in H'; rewrite H in H';
-              rewrite H' in Htr; destruct_input input
-          (*Initialization.*)
-         | [ s : init_state _ _ _ _ _,
-             input : init_state_run_prog_return_type _ _ _ _ _ _ _ _ _ |- _ ]
-           => match goal with
-              | [ H : s = _ |- _ ]
-                => rewrite H in Htr; destruct_input input
-              end
-         | _ => idtac
-         end; unpack_inhabited Htr
-  end.
-
-    destruct_msg; unpack'. try match_releases.
-
-    simpl in H3.
-    simpl in input.
-unfold kstate_run_prog in H3.
-
-match type of H3 with
-| context [if ?x then _ else _] => destruct x
-end.
-
-    unpack'.*)
-
   crush.
 Qed.
-
-
-(*  Local Opaque str.
-Local Opaque str_of_string.
-intros.
-generalize dependent tr.
-induction H; intros.
-  unpack; match_releases.
-
-  destruct_msg.
-    unpack.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    admit.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-    match_releases.
-Ltac match_releases :=
-  match goal with
-  | [ |- Release _ _ _ nil ]
-      => constructor
-  (* Induction hypothesis.*)
-  | [ H : ktr _ _ _ _ ?s = inhabits ?tr,
-      IH : forall tr', ktr _ _ _ _ ?s = inhabits tr' ->
-                       Release _ ?past ?future tr'
-                       |- Release _ ?past ?future ?tr ]
-      => auto
-  (*Branch on whether the head of the trace matches.*)
-  | [ |- Release ?pdv _ ?future (?act::_) ]
-      => idtac "Balls" (*let s := match goal with
-                  | [ _ : ktr _ _ _ _ ?s = inhabits _ |- _ ]
-                      => s
-                  | [ s : init_state _ _ _ _ _ |- _ ]
-                      => s
-                  end in
-         let H := fresh "H" in
-         pose proof (decide_act pdv future act) as H;
-         destruct H;
-         [ contradiction ||
-           (apply R_future; [ match_releases | try exists_past s ])
-         | contradiction ||
-           (apply R_not_future; [ match_releases | assumption ]) ]
-         (*In some cases, one branch is impossible, so contradiction
-           solves the goal immediately.
-           In other cases, there are variables in the message payloads,
-           so both branches are possible.*)*)
-  end.
-
-    destruct_msg.
-    Ltac unpack' :=
-  match goal with
-  | [ Htr : _ = inhabits ?tr |- _ ]
-      => match goal with
-          (*Valid exchange.*)
-         | [ _ : Reach _ _ _ _ _ _ _ ?HDLRS _,
-             H : ?s = _,
-             H' : ?s' = kstate_run_prog _ _ _ _ _ _ _ ?s _ _,
-             input : kstate_run_prog_return_type _ _ _ _ _ _ _ _ _ |- _ ]
-           => unfold HDLRS in H'; unfold HDLRS in input;
-              unfold kstate_run_prog in H'; simpl in *;
-              destruct_eq H'; rewrite H in H';
-              rewrite H' in Htr; destruct_input input
-          (*Initialization.*)
-         | [ s : init_state _ _ _ _ _,
-             input : init_state_run_prog_return_type _ _ _ _ _ _ _ _ _ |- _ ]
-           => match goal with
-              | [ H : s = _ |- _ ]
-                => rewrite H in Htr; destruct_input input
-              end
-         | _ => idtac
-         end(*; unpack_inhabited Htr*)
-  end.
-unpack'. unpack_inhabited H4.
-match_releases*)
 
 Definition main := mk_main (Build_spec NB_MSG PAYD IENVD KSTD COMPT COMPTDEC COMPS IMSG INIT HANDLERS).

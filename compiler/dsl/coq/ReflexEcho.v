@@ -30,10 +30,10 @@ Definition COMPS (t : COMPT) : compd :=
   | Echo => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
   end.
 
-Definition KSTD : vdesc := mk_vdesc [].
+Definition KSTD : vcdesc COMPT := mk_vcdesc [].
 
-Definition IENVD : vdesc := mk_vdesc
-  [ fd_d
+Definition IENVD : vcdesc COMPT := mk_vcdesc
+  [ Comp _ Echo
   ].
 
 End SystemFeatures.
@@ -44,9 +44,9 @@ Module Language := MkLanguage(SystemFeatures).
 
 Import Language.
 
-Module Spec : SpecInterface.
+Module Spec <: SpecInterface.
 
-Module FEATURES := SystemFeatures.
+Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   [fun s => spawn IENVD _ Echo tt None (Logic.eq_refl _)

@@ -7,53 +7,59 @@ Section PolLang.
 
 Context {NB_MSG:nat}.
 Variable PAYD:vvdesc NB_MSG.
+Variable COMPT : Set.
+Variable COMPS : COMPT -> compd.
+Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
+Definition KOAction := KOAction PAYD COMPT COMPS.
+Definition KTrace := KTrace PAYD COMPT COMPS.
+Definition AMatch := AMatch PAYD COMPT COMPS COMPTDEC.
 
 (*after occurs immediately after before occurs.*)
-Inductive ImmAfter (after:KOAction PAYD) (before:KOAction PAYD)
-  : KTrace PAYD -> Prop :=
+Inductive ImmAfter (after:KOAction) (before:KOAction)
+  : KTrace -> Prop :=
 | IA_nil : ImmAfter after before nil
 (*An action not matching before is added*)
 | IA_nB : forall before' tr, ImmAfter after before tr ->
-                             ~AMatch PAYD before before' ->
+                             ~AMatch before before' ->
                              ImmAfter after before (before'::tr)
 (*An action matching before is added*)
 | IA_B : forall before' after' tr, ImmAfter after before tr ->
-                                   AMatch PAYD after after' ->
+                                   AMatch after after' ->
                                    ImmAfter after before (after'::before'::tr).
 
 (*before occurs immediate before after occurs*)
-Inductive ImmBefore (before:KOAction PAYD) (after:KOAction PAYD)
-  : KTrace PAYD -> Prop :=
+Inductive ImmBefore (before:KOAction) (after:KOAction)
+  : KTrace -> Prop :=
 | IB_nil : ImmBefore before after nil
 (*An action not matching after is added*)
 | IB_nA : forall after' tr, ImmBefore before after tr ->
-                            ~AMatch PAYD after after' ->
+                            ~AMatch after after' ->
                             ImmBefore before after (after'::tr)
 (*An action matching after is added*)
 | IB_A : forall after' before' tr, ImmBefore before after tr ->
-                                   AMatch PAYD before before' ->
+                                   AMatch before before' ->
                                    ImmBefore before after (after'::before'::tr).
 
-Inductive Enables (past:KOAction PAYD) (future:KOAction PAYD)
-  : KTrace PAYD -> Prop :=
+Inductive Enables (past:KOAction) (future:KOAction)
+  : KTrace -> Prop :=
 | E_nil : Enables past future nil
 | E_not_future : forall act tr, Enables past future tr ->
-                                ~AMatch PAYD future act ->
+                                ~AMatch future act ->
                                 Enables past future (act::tr)
 | E_future : forall act tr, Enables past future tr ->
                             (exists past', In past' (act::tr) /\
-                                           AMatch PAYD past past') ->
+                                           AMatch past past') ->
                             Enables past future (act::tr).
 
-Definition Not_In (A:KOAction PAYD) (tr:KTrace PAYD) : Prop :=
-  forall a, In a tr -> ~AMatch PAYD A a.
+Definition Not_In (A:KOAction) (tr:KTrace) : Prop :=
+  forall a, In a tr -> ~AMatch A a.
 
-Inductive Enables' (past:KOAction PAYD) (future:KOAction PAYD)
-  : KTrace PAYD -> Prop :=
+Inductive Enables' (past:KOAction) (future:KOAction)
+  : KTrace -> Prop :=
 | E_not_A_B : forall tr, Not_In past tr -> Not_In future tr ->
                          Enables' past future tr
 | E_A : forall tr tr' a, Not_In future tr ->
-                         AMatch PAYD past a ->
+                         AMatch past a ->
                          Enables' past future (tr' ++ a::tr).
 
 Lemma not_in_cons : forall A x tr,
@@ -78,7 +84,8 @@ Proof.
       apply E_not_A_B; unfold Not_In; intros a HIn; auto.
 
       inversion IHE.
-        pose proof (decide_act PAYD A act) as Hact; destruct Hact.
+        pose proof (decide_act PAYD COMPT COMPS COMPTDEC A act) as Hact;
+        destruct Hact.
           (*act matches A*)
           replace (act::tr) with (nil++act::tr) by auto;
           apply E_A; auto.
@@ -159,15 +166,15 @@ Proof.
             exists a; intuition.
 Qed.        
 
-Inductive Disables (disabler:KOAction PAYD) (disablee:KOAction PAYD)
-  : KTrace PAYD -> Prop :=
+Inductive Disables (disabler:KOAction) (disablee:KOAction)
+  : KTrace -> Prop :=
 | D_nil : Disables disabler disablee nil
 | D_not_disablee : forall act tr, Disables disabler disablee tr ->
-                                  ~AMatch PAYD disablee act ->
+                                  ~AMatch disablee act ->
                                   Disables disabler disablee (act::tr)
 | D_disablee : forall act tr, Disables disabler disablee tr ->
                               (forall act', In act' tr ->
-                                            ~AMatch PAYD disabler act') ->
+                                            ~AMatch disabler act') ->
                               Disables disabler disablee (act::tr).
 
 End PolLang.

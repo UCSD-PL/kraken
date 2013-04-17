@@ -126,32 +126,6 @@ Fixpoint shvec_match {desc:Set} {n:nat} (vd:svec desc n)
     end v v'
   end vd v v'.
 
-Fixpoint shvec_match_prop {desc:Set} {n:nat} (vd:svec desc n)
-  (sdenote_desc:desc->Set) (sdenote_desc':desc->Set)
-  (elt_match:forall (d:desc), sdenote_desc d -> sdenote_desc' d -> Prop)
-  (v:shvec sdenote_desc vd) (v':shvec sdenote_desc' vd) : Prop :=
-  match n as _n
-  return forall (vd' : svec desc _n),
-         shvec sdenote_desc vd' ->
-         shvec sdenote_desc' vd' ->
-         Prop
-  with
-  | O => fun _ _ _ => True
-  | S n' => fun vd v v' =>
-    match vd as _vd return
-      @shvec desc sdenote_desc (S n') _vd ->
-      @shvec desc sdenote_desc' (S n') _vd ->
-      Prop
-    with
-    | (t, vd') => fun v v' =>
-      match v, v' with
-      | (elt, rest), (elt', rest') =>
-        (elt_match t elt elt') /\
-        (shvec_match_prop vd' sdenote_desc sdenote_desc' elt_match rest rest')
-      end
-    end v v'
-  end vd v v'.
-
 Theorem shvec_ith_in
   (desc : Set) (sdenote_desc : desc -> Set) desc_eqdec
   (UIP_refl_desc : forall (d : desc) (e : d = d), e = Logic.eq_refl d) (n : nat) :

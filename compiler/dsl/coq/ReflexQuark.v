@@ -8,23 +8,50 @@ Require Import ReflexFrontend.
 Require Import ReflexHVec.
 Require Import ReflexVec.
 
+Definition splitAt c s :=
+  let fix splitAt_aux c s r_res :=
+    match s with
+    | nil    => (List.rev r_res, nil)
+    | h :: t =>
+      if Ascii.ascii_dec h c then (List.rev r_res, t) else splitAt_aux c t (h :: r_res)
+    end
+  in splitAt_aux c s nil.
+
+Definition dom s :=
+  let url_end := snd (splitAt "." s) in
+  fst (splitAt "/" url_end).
+
 Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 3.
+Definition NB_MSG : nat := 10.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
-  [ ("Input",   [str_d])
-  ; ("Display", [str_d])
-  ; ("Quit",    [ ])
+  [ ("Display",     [str_d])
+  ; ("Navigate",    [str_d])
+  ; ("ReqResource", [str_d])
+  ; ("ResResource", [fd_d])
+  ; ("ReqSocket",   [str_d])
+  ; ("ResSocket",   [fd_d])
+  ; ("SetDomain",   [str_d])
+  ; ("KeyPress",    [str_d])
+  ; ("MouseClick",  [str_d])
+  ; ("Go",          [str_d])
   ].
 
-Notation Input   := (None) (only parsing).
-Notation Display := (Some None) (only parsing).
-Notation Quit    := (Some (Some None)) (only parsing).
+Notation Display     := (None) (only parsing).
+Notation Navigate    := (Some None) (only parsing).
+Notation ReqResource := (Some (Some None)) (only parsing).
+Notation ResResource := (Some (Some (Some None))) (only parsing).
+Notation ReqSocket   := (Some (Some (Some (Some None)))) (only parsing).
+Notation ResSocket   := (Some (Some (Some (Some (Some None))))) (only parsing).
+Notation SetDomain   := (Some (Some (Some (Some (Some (Some None)))))) (only parsing).
+Notation KeyPress    := (Some (Some (Some (Some (Some (Some (Some None))))))) (only parsing).
+Notation MouseClick  := (Some (Some (Some (Some (Some (Some (Some (Some None)))))))) (only parsing).
+Notation Go          := (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))) (only parsing).
 
-Inductive COMPT' : Set := Tab | Screen | UserInput.
+Inductive COMPT' : Set := UserInput | Output | Tab | DomainBar.
 
 Definition COMPT := COMPT'.
 
@@ -33,26 +60,24 @@ Proof. decide equality. Defined.
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | Tab       => mk_compd "Tab"       "test/quark/tab.py"        [] (mk_vdesc [str_d])
-  | Screen    => mk_compd "Screen"    "test/quark/screen.py"     [] (mk_vdesc [])
-  | UserInput => mk_compd "UserInput" "test/quark/user-input.py" [] (mk_vdesc [])
+  | UserInput => mk_compd "UserInput" "tab.py"       [] (mk_vdesc [])
+  | Output    => mk_compd "Output"    "output.py"    [] (mk_vdesc [])
+  | Tab       => mk_compd "Tab"       "input.py"     [] (mk_vdesc [str_d])
+  | DomainBar => mk_compd "DomainBar" "domainbar.py" [] (mk_vdesc [])
   end.
 
-Definition IENVD : vdesc := mk_vdesc
-  [ fd_d (* curtab *)
-  ; fd_d (* screen *)
-  ; fd_d (* userinput *)
-  ].
+Definition IENVD : vcdesc COMPT := mk_vcdesc
+  [ Comp _ Output; Comp _ Tab; Comp _ UserInput ].
 
-Definition KSTD : vdesc := mk_vdesc
-  [ fd_d (* curtab *)
-  ; fd_d (* screen *)
-  ; fd_d (* user-input *)
-  ].
+Notation i_output    := (None) (only parsing).
+Notation i_curtab    := (Some None) (only parsing).
+Notation i_userinput := (Some (Some None)) (only parsing).
 
-Notation curtab    := (None) (only parsing).
-Notation screen    := (Some None) (only parsing).
-Notation userinput := (Some (Some None)) (only parsing).
+Definition KSTD : vcdesc COMPT := mk_vcdesc
+  [ Comp _ Output; Comp _ Tab ].
+
+Notation v_output := (None) (only parsing).
+Notation v_curtab := (Some None) (only parsing).
 
 End SystemFeatures.
 
@@ -63,89 +88,171 @@ Module Language := MkLanguage(SystemFeatures).
 Import Language.
 
 Definition default_domain := str_of_string "google.com".
+Definition default_url := str_of_string "http://www.google.com".
 
-Module Spec : SpecInterface.
+Module Spec <: SpecInterface.
 
-Module FEATURES := SystemFeatures.
+Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  [ fun s => spawn IENVD _ Tab       (default_domain, tt) None (Logic.eq_refl _)
-  ; fun s => spawn IENVD _ Screen    tt                   None (Logic.eq_refl _)
-  ; fun s => spawn IENVD _ UserInput tt                   None (Logic.eq_refl _)
+  [ fun s => spawn IENVD _ Output    tt                   i_output    (Logic.eq_refl _)
+  ; fun s => spawn IENVD _ Tab       (default_domain, tt) i_curtab    (Logic.eq_refl _)
+  ; fun s => spawn IENVD _ UserInput tt                   i_userinput (Logic.eq_refl _)
+  ; fun s => sendall IENVD _
+                     (mk_comp_pat
+                        Tab
+                        (Some (comp_fd s#i_curtab%ienv))
+                        (None, tt)
+                     )
+                     Go (i_slit default_url, tt)
+  ; fun s => stupd IENVD _ v_output (Term _ (base_term _ IENVD) (Var _ IENVD i_output))
+  ; fun s => stupd IENVD _ v_curtab (Term _ (base_term _ IENVD) (Var _ IENVD i_curtab))
   ].
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   (fun m cc =>
-     let (_, cf, _) := cc in
-     match tag PAYD m as _tm return
+     let (ct, cf, cconf) := cc in
+     match ct, tag PAYD m as _tm return
        @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
      with
 
-     | Input => fun pl =>
-       let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd (
-         let (input, _) := pl in fun st0 =>
-         if fd_eq
-              cf
-              (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
-         then
-           [ fun s => sendall envd _
-                       (Build_comp_pat COMPT' COMPS Tab
-                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
-                                          (kst _ _ _ _ st0) curtab))
-                         (None, tt))
-                       Input (slit input, tt)
-           ]
-         else
-           []
-       )
+     | Tab, Display => fun pl =>
+       let envd := mk_vcdesc [] in
+       match pl with (disp, _) =>
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+            if fd_eq cf (comp_fd (kst_ith st0 v_curtab))
+            then
+              [ fun s => sendall envd _
+                                 (mk_comp_pat
+                                    Tab
+                                    (Some (comp_fd s#v_output%kst))
+                                    (None, tt)
+                                 )
+                                 Display (slit disp, tt)
+              ]
+            else
+              []
+         )
+       end
 
-     | Display => fun pl =>
-       let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd (
-         let (url, _) := pl in fun st0 =>
-         if fd_eq
-              cf
-              (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) curtab)
-         then
-           [ fun s => sendall envd _
-                       (Build_comp_pat COMPT' COMPS Screen
-                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
-                                          (kst _ _ _ _ st0) screen))
-                         tt)
-                       Display (slit url, tt)
-           ]
-         else
-           []
-       )
+     | Tab, Navigate => fun pl =>
+       let envd := mk_vcdesc [Comp _ Tab] in
+       match pl with (url, _) =>
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+            if fd_eq cf (comp_fd (kst_ith st0 v_curtab))
+            then
+              if str_eq (dom url)
+                        (
+                          shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
+                            sdenote_desc
+                            (projT2 (compd_conf (COMPS Tab)))
+                            (comp_conf (st0#v_curtab%kst))
+                            None
+                        )
+              then
+                [ fun s => spawn envd _ Tab (dom url, tt) None (Logic.eq_refl _)
+                ; fun s => stupd envd _ v_curtab (envvar envd None)
+                ; fun s => sendall envd _
+                             (mk_comp_pat
+                                Tab
+                                (Some (comp_fd s#v_curtab%kst))
+                                (None, tt)
+                             )
+                             Go (slit url, tt)
+                ]
+              else
+                []
+            else
+              []
+         )
+       end
 
-     | Quit => fun pl =>
-       let envd := mk_vdesc [] in
-       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd (
-         let _ := pl in fun st0 =>
-         if fd_eq
-              cf
-              (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD) (kst _ _ _ _ st0) userinput)
-         then
-           [ fun s => sendall envd _
-                       (Build_comp_pat COMPT' COMPS Tab
-                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
-                                          (kst _ _ _ _ st0) curtab))
-                         (None, tt))
-                       Quit tt
-           ; fun s => sendall envd _
-                       (Build_comp_pat COMPT' COMPS Screen
-                         (Some (shvec_ith (n := projT1 KSTD) _ (projT2 KSTD)
-                                          (kst _ _ _ _ st0) screen))
-                         tt)
-                       Quit tt
+     | Tab, ReqResource => fun pl =>
+       let envd := mk_vcdesc [] in
+       match pl with (url, _) =>
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+           [ (* need call *)
            ]
-         else
-           []
-       )
+         )
+       end
 
-     | Some (Some (Some bad)) => fun _ =>
+     | Tab, ReqSocket => fun pl =>
+       let envd := mk_vcdesc [] in
+       match pl with (url, _) =>
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+            if fd_eq cf (comp_fd (kst_ith st0 v_curtab))
+            then
+              if str_eq (dom url)
+                        (
+                          shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
+                            sdenote_desc
+                            (projT2 (compd_conf (COMPS Tab)))
+                            (comp_conf (st0#v_curtab%kst))
+                            None
+                        )
+              then
+                [ (* need connect *)
+                ]
+              else
+                []
+            else
+              []
+         )
+       end
+
+     | UserInput, KeyPress => fun pl =>
+       let envd := mk_vcdesc [] in
+       match pl with (key, _) =>
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+           [ fun s => sendall envd _
+                              (mk_comp_pat
+                                 Tab
+                                 (Some (comp_fd s#v_curtab%kst))
+                                 (None, tt)
+                              )
+                              KeyPress (slit key, tt)
+           ]
+         )
+       end
+
+     | UserInput, MouseClick => fun pl =>
+       let envd := mk_vcdesc [] in
+       match pl with (pos, _) =>
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+           [ fun s => sendall envd _
+                              (mk_comp_pat
+                                 Tab
+                                 (Some (comp_fd s#v_curtab%kst))
+                                 (None, tt)
+                              )
+                              MouseClick (slit pos, tt)
+           ]
+         )
+       end
+
+     | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some  bad))))))))) => fun _ =>
        match bad with end
+
+     | _, _ => fun pl =>
+       let envd := mk_vcdesc [] in
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+           []
+         )
+
     end (pay PAYD m)
   ).
 

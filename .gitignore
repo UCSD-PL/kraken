@@ -2,3 +2,5 @@
 *.vo
 *.glob
 *.swp
+.*
+*.pyc

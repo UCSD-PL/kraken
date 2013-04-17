@@ -30,10 +30,10 @@ Definition COMPS (t : COMPT) : compd :=
   | Echo => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
   end.
 
-Definition KSTD : vdesc := mk_vdesc [].
+Definition KSTD : vcdesc COMPT := mk_vcdesc [].
 
-Definition IENVD : vdesc := mk_vdesc
-  [ fd_d
+Definition IENVD : vcdesc COMPT := mk_vcdesc
+  [ Comp _ Echo
   ].
 
 End SystemFeatures.
@@ -54,7 +54,7 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun m cc =>
-     let (_, cf, _) := cc in
+    let (_, cf, _) := cc in
     match m as _m return forall (EQ : _m = m), _ with
     | Build_msg None p => fun EQ =>
       let envd := existT _ 0 tt in

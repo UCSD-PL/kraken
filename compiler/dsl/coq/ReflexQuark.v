@@ -112,11 +112,11 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   (fun m cc =>
      let (ct, cf, cconf) := cc in
-     match tag PAYD m as _tm return
+     match ct, tag PAYD m as _tm return
        @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
      with
 
-     | Display     => fun pl =>
+     | Tab, Display => fun pl =>
        let envd := mk_vcdesc [] in
        match pl with (disp, _) =>
        existT
@@ -137,7 +137,52 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
          )
        end
 
-     | Navigate    => fun pl =>
+     | Tab, Navigate => fun pl =>
+       let envd := mk_vcdesc [Comp _ Tab] in
+       match pl with (url, _) =>
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+            if fd_eq cf (comp_fd (kst_ith st0 v_curtab))
+            then
+              if str_eq (dom url)
+                        (
+                          shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
+                            sdenote_desc
+                            (projT2 (compd_conf (COMPS Tab)))
+                            (comp_conf (st0#v_curtab%kst))
+                            None
+                        )
+              then
+                [ fun s => spawn envd _ Tab (dom url, tt) None (Logic.eq_refl _)
+                ; fun s => stupd envd _ v_curtab (envvar envd None)
+                ; fun s => sendall envd _
+                             (mk_comp_pat
+                                Tab
+                                (Some (comp_fd s#v_curtab%kst))
+                                (None, tt)
+                             )
+                             Go (slit url, tt)
+                ]
+              else
+                []
+            else
+              []
+         )
+       end
+
+     | Tab, ReqResource => fun pl =>
+       let envd := mk_vcdesc [] in
+       match pl with (url, _) =>
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+           [ (* need call *)
+           ]
+         )
+       end
+
+     | Tab, ReqSocket => fun pl =>
        let envd := mk_vcdesc [] in
        match pl with (url, _) =>
        existT
@@ -153,78 +198,61 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                             (comp_conf (st0#v_curtab%kst))
                             None
                         )
-              then []
-              else []
-            else []
+              then
+                [ (* need connect *)
+                ]
+              else
+                []
+            else
+              []
          )
        end
 
-     | ReqResource => fun pl =>
+     | UserInput, KeyPress => fun pl =>
        let envd := mk_vcdesc [] in
+       match pl with (key, _) =>
        existT
          (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
          (fun st0 =>
-           []
+           [ fun s => sendall envd _
+                              (mk_comp_pat
+                                 Tab
+                                 (Some (comp_fd s#v_curtab%kst))
+                                 (None, tt)
+                              )
+                              KeyPress (slit key, tt)
+           ]
          )
+       end
 
-     | ResResource => fun pl =>
+     | UserInput, MouseClick => fun pl =>
        let envd := mk_vcdesc [] in
+       match pl with (pos, _) =>
        existT
          (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
          (fun st0 =>
-           []
+           [ fun s => sendall envd _
+                              (mk_comp_pat
+                                 Tab
+                                 (Some (comp_fd s#v_curtab%kst))
+                                 (None, tt)
+                              )
+                              MouseClick (slit pos, tt)
+           ]
          )
+       end
 
-     | ReqSocket   => fun pl =>
-       let envd := mk_vcdesc [] in
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           []
-         )
-
-     | ResSocket   => fun pl =>
-       let envd := mk_vcdesc [] in
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           []
-         )
-
-     | SetDomain   => fun pl =>
-       let envd := mk_vcdesc [] in
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           []
-         )
-
-     | KeyPress    => fun pl =>
-       let envd := mk_vcdesc [] in
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           []
-         )
-
-     | MouseClick  => fun pl =>
-       let envd := mk_vcdesc [] in
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           []
-         )
-
-     | Go          => fun pl =>
-       let envd := mk_vcdesc [] in
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           []
-         )
-
-     | Some (Some (Some (Some (Some (Some (Some (Some (Some (Some  bad))))))))) => fun _ =>
+     | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some  bad))))))))) => fun _ =>
        match bad with end
+
+     | _, _ => fun pl =>
+       let envd := mk_vcdesc [] in
+       existT
+         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+         (fun st0 =>
+           []
+         )
+
     end (pay PAYD m)
   ).
 

@@ -23,6 +23,8 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
   Definition stvar {cc envd m} v :=
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (StVar _ _ _ _ _ _ _ v).
+  Definition envvar {cc m} envd i :=
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (Var _ envd i)).
   Definition slit {cc envd m} v :=
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (SLit _ _ v)).
   Definition nlit {cc envd m} v :=

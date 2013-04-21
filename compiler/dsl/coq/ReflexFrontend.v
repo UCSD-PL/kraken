@@ -121,3 +121,27 @@ Definition mvar
   {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p}
   (EQ : Build_msg PAYD t p = m) i :=
   cast_m_expr EQ (Term _ _ (MVar PAYD COMPT COMPS KSTD cc (Build_msg PAYD t p) envd i)).
+
+Delimit Scope fin_scope with fin.
+
+Notation "0"  := (None) : fin_scope.
+Notation "1"  := (Some (None)) : fin_scope.
+Notation "2"  := (Some (Some None)) : fin_scope.
+Notation "3"  := (Some (Some (Some None))) : fin_scope.
+Notation "4"  := (Some (Some (Some (Some None)))) : fin_scope.
+Notation "5"  := (Some (Some (Some (Some (Some None))))) : fin_scope.
+Notation "6"  := (Some (Some (Some (Some (Some (Some None)))))) : fin_scope.
+Notation "7"  := (Some (Some (Some (Some (Some (Some (Some None))))))) : fin_scope.
+Notation "8"  := (Some (Some (Some (Some (Some (Some (Some (Some None)))))))) : fin_scope.
+Notation "9"  := (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))) : fin_scope.
+Notation "10" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))) : fin_scope.
+Notation "11" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))) : fin_scope.
+Notation "12" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))) : fin_scope.
+Notation "13" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))) : fin_scope.
+Notation "14" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))) : fin_scope.
+Notation "15" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))) : fin_scope.
+Notation "16" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))))) : fin_scope.
+Notation "17" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))))) : fin_scope.
+Notation "18" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))))))) : fin_scope.
+Notation "19" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))))))) : fin_scope.
+Notation "20" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))))))))) : fin_scope.

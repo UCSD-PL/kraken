@@ -101,24 +101,24 @@ Definition COMPS (t : COMPT) : compd :=
                 (mk_vdesc [])
   end.
 
-Notation LoginReq  := (None) (only parsing).
-Notation LoginResT := (Some None) (only parsing).
-Notation LoginResF := (Some (Some None)) (only parsing).
-Notation PubkeyReq :=      (Some (Some (Some None))) (only parsing).
-Notation PubkeyRes :=      (Some (Some (Some (Some None)))) (only parsing).
-Notation KeysignReq :=     (Some (Some (Some (Some (Some None))))) (only parsing).
-Notation KeysignRes :=     (Some (Some (Some (Some (Some (Some None)))))) (only parsing).
-Notation CreatePtyerReq := (Some (Some (Some (Some (Some (Some (Some None))))))) (only parsing).
-Notation CreatePtyerRes := (Some (Some (Some (Some (Some (Some (Some (Some None)))))))) (only parsing).
-Notation SLoginReq :=      (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))) (only parsing).
-Notation SLoginResT :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))) (only parsing).
-Notation SLoginResF :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))) (only parsing).
-Notation SPubkeyReq :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))) (only parsing).
-Notation SPubkeyRes :=     (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))) (only parsing).
-Notation SKeysignReq :=    (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))) (only parsing).
-Notation SKeysignRes :=    (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))) (only parsing).
-Notation SCreatePtyerReq := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))))) (only parsing).
-Notation SCreatePtyerRes := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))))) (only parsing).
+Notation LoginReq        := 0%fin (only parsing).
+Notation LoginResT       := 1%fin (only parsing).
+Notation LoginResF       := 2%fin (only parsing).
+Notation PubkeyReq       := 3%fin (only parsing).
+Notation PubkeyRes       := 4%fin (only parsing).
+Notation KeysignReq      := 5%fin (only parsing).
+Notation KeysignRes      := 6%fin (only parsing).
+Notation CreatePtyerReq  := 7%fin (only parsing).
+Notation CreatePtyerRes  := 8%fin (only parsing).
+Notation SLoginReq       := 9%fin (only parsing).
+Notation SLoginResT      := 10%fin (only parsing).
+Notation SLoginResF      := 11%fin (only parsing).
+Notation SPubkeyReq      := 12%fin (only parsing).
+Notation SPubkeyRes      := 13%fin (only parsing).
+Notation SKeysignReq     := 14%fin (only parsing).
+Notation SKeysignRes     := 15%fin (only parsing).
+Notation SCreatePtyerReq := 16%fin (only parsing).
+Notation SCreatePtyerRes := 17%fin (only parsing).
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
   [ Comp _ System; Comp _ Slave ].

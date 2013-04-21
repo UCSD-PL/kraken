@@ -40,16 +40,16 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("Go",          [str_d])
   ].
 
-Notation Display     := (None) (only parsing).
-Notation Navigate    := (Some None) (only parsing).
-Notation ReqResource := (Some (Some None)) (only parsing).
-Notation ResResource := (Some (Some (Some None))) (only parsing).
-Notation ReqSocket   := (Some (Some (Some (Some None)))) (only parsing).
-Notation ResSocket   := (Some (Some (Some (Some (Some None))))) (only parsing).
-Notation SetDomain   := (Some (Some (Some (Some (Some (Some None)))))) (only parsing).
-Notation KeyPress    := (Some (Some (Some (Some (Some (Some (Some None))))))) (only parsing).
-Notation MouseClick  := (Some (Some (Some (Some (Some (Some (Some (Some None)))))))) (only parsing).
-Notation Go          := (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))) (only parsing).
+Notation Display     := 0%fin (only parsing).
+Notation Navigate    := 1%fin (only parsing).
+Notation ReqResource := 2%fin (only parsing).
+Notation ResResource := 3%fin (only parsing).
+Notation ReqSocket   := 4%fin (only parsing).
+Notation ResSocket   := 5%fin (only parsing).
+Notation SetDomain   := 6%fin (only parsing).
+Notation KeyPress    := 7%fin (only parsing).
+Notation MouseClick  := 8%fin (only parsing).
+Notation Go          := 9%fin (only parsing).
 
 Inductive COMPT' : Set := UserInput | Output | Tab | DomainBar.
 

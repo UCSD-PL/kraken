@@ -17,7 +17,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [ ("M", [str_d])
   ].
 
-Notation M := (None) (only parsing).
+Notation M := 0%fin (only parsing).
 
 Inductive COMPT' : Type := Echo.
 Definition COMPT := COMPT'.

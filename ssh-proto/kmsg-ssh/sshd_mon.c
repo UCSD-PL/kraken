@@ -29,17 +29,18 @@
 /*
 (*
   # slave <-> monitor 
-  LoginReq(str);
-  LoginRes(num);
+  LoginReq(str); 0
+  LoginResT(); 1
+  LoginResF(); 2
 
-  PubkeyReq();
-  PubkeyRes(str);
+  PubkeyReq(); 3
+  PubkeyRes(str); 4
 
-  KeysignReq(str);
-  KeysignRes(str);
+  KeysignReq(str); 5
+  KeysignRes(str); 6
 
-  CreatePtyerReq();
-  CreatePtyerRes(fdesc, fdesc);
+  CreatePtyerReq(); 7
+  CreatePtyerRes(fdesc, fdesc); 8
 *)
 */
 
@@ -91,18 +92,21 @@ void processCreatePtyerReq(param* fp, const char* username) {
   send_to_sys_free(mk_SysCreatePtyerReq_msg(&obuf));
 }
 
-int processSysLoginRes(param* fp, char* username) {
-  int result = 0;
-
-  if(fp->ptyp != PTYP_STR || fp->next == NULL || fp->next->ptyp != PTYP_NUM) {
-    logerror("mon:sysloginres:payload type is unmached"); 
+void processSysLoginResT(param* fp, char* username) {
+  if(fp->ptyp != PTYP_STR) {
+    logerror("mon:sysloginresT:payload type is unmached"); 
   }
   memcpy(username, fp->pval.pstr->buf, fp->pval.pstr->len);
   username[fp->pval.pstr->len] = 0;
-  result = fp->next->pval.num;
-  send_to_slv_free(mk_LoginRes_msg(result));
+  //result = fp->next->pval.num;
+  send_to_slv_free(mk_LoginResT_msg());
+}
 
-  return result;
+void processSysLoginResF(param* fp) {
+  if(fp != NULL) {
+    logerror("mon:sysloginresF:payload type is unmached"); 
+  }
+  send_to_slv_free(mk_LoginResF_msg());
 }
 
 void processSysPubKeyRes(param* fp) {
@@ -146,7 +150,7 @@ void run_msg_loop() {
     } else {
       KCHAN = sys_socket;
     }
-    syslog (LOG_ERR, "sshd_mon:a new msg is ready:%d", slv_socket == KCHAN);
+    syslog (LOG_ERR, "sshd_mon:a new msg is ready:from_slave:%d", slv_socket == KCHAN);
 
     FD_ZERO(&read_fds);
     FD_SET(slv_socket, &read_fds);
@@ -167,14 +171,23 @@ void run_msg_loop() {
       processKeysignReq(fp); break;
 
     case MTYP_CreatePtyerReq:
+      syslog(LOG_ERR, "login status : %d", login_succeeded);
       if(login_succeeded) {
-	processCreatePtyerReq(fp, username); 
+        syslog(LOG_ERR, "ptyer is created for (%s)", username);
+        processCreatePtyerReq(fp, username); 
       }
       break;
 	
       // from sys
-    case MTYP_SysLoginRes:
-      login_succeeded = processSysLoginRes(fp, username);
+    case MTYP_SysLoginResT:
+      login_succeeded = 1;
+      processSysLoginResT(fp, username);
+      break;
+
+      // from sys
+    case MTYP_SysLoginResF:
+      login_succeeded = 0;
+      processSysLoginResF(fp);
       break;
       
     case MTYP_SysPubkeyRes:

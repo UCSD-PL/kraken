@@ -213,7 +213,13 @@ void processLoginReq(param* fp) {
   tmp[0] = 0; ++tmp;
   obuf.buf = buf;
   obuf.len = strlen(buf);
-  send_free(mk_SysLoginRes_msg(&obuf, !check_login(buf, tmp)));
+
+  if(check_login(buf, tmp) == 0) {
+    // login succeeded 
+    send_free(mk_SysLoginResT_msg(&obuf));
+  } else {
+    send_free(mk_SysLoginResF_msg());
+  }
 }
 
 void processPubKeyReq(param* fp) {

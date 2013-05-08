@@ -161,7 +161,7 @@ Definition exists_comp := exists_comp COMPT COMPTDEC COMPS.
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   (fun m cc =>
-     let (_, cf, _) := cc in
+     let (ct, cf, _) := cc in
      match tag PAYD m as _tm return
        @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
      with
@@ -174,7 +174,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
             [ fun s => sendall envd _
                                (mk_comp_pat
                                   System
-                                  (Some (comp_fd st0#v_st_system%kst))
+                                  (Some (comp_fd st0##v_st_system%kst))
                                   (None, tt)
                                )
                                SLoginReq (slit loginstr, tt)
@@ -187,21 +187,21 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          let (user, _) := pl in
          (fun st0 =>
-            if exists_comp
-                 (mk_comp_pat System (Some cf) system_pat)
-                 (kcs _ _ _ _ st0)
-            then
-            [ fun s => stupd envd _ v_st_auth_user     (slit user)
-            ; fun s => stupd envd _ v_st_authenticated (nlit (num_of_nat 1))
-            ; fun s => sendall envd _
-                               (mk_comp_pat
-                                  Slave
-                                  (Some (comp_fd st0#v_st_slave%kst))
-                                  tt
-                               )
-                               LoginResT tt
-            ]
-            else []
+            match ct with
+            | System =>
+              [ fun s => stupd envd _ v_st_auth_user     (slit user)
+              ; fun s => stupd envd _ v_st_authenticated (nlit (num_of_nat 1))
+              ; fun s => sendall envd _
+                                 (mk_comp_pat
+                                    Slave
+                                    (Some (comp_fd st0##v_st_slave%kst))
+                                    tt
+                                 )
+                                 LoginResT tt
+              ]
+            | _ =>
+              []
+            end
          )
        )
 
@@ -212,7 +212,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
             [ fun s => sendall envd _
                        (mk_comp_pat
                           Slave
-                          (Some (comp_fd st0#v_st_slave%kst))
+                          (Some (comp_fd st0##v_st_slave%kst))
                           tt
                        )
                        LoginResF tt
@@ -227,7 +227,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
             [ fun s => sendall envd _
                                (mk_comp_pat
                                   System
-                                  (Some (comp_fd st0#v_st_system%kst))
+                                  (Some (comp_fd st0##v_st_system%kst))
                                   (None, tt)
                                )
                                SPubkeyReq tt
@@ -243,7 +243,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
             [ fun s => sendall envd _
                                (mk_comp_pat
                                   System
-                                  (Some (comp_fd st0#v_st_system%kst))
+                                  (Some (comp_fd st0##v_st_system%kst))
                                   (None, tt)
                                )
                                SPubkeyRes (slit pubkey, tt)
@@ -259,7 +259,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
             [ fun s => sendall envd _
                                (mk_comp_pat
                                   System
-                                  (Some (comp_fd st0#v_st_system%kst))
+                                  (Some (comp_fd st0##v_st_system%kst))
                                   (None, tt)
                                )
                                SKeysignReq (slit keystr, tt)
@@ -275,7 +275,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
             [ fun s => sendall envd _
                                (mk_comp_pat
                                   System
-                                  (Some (comp_fd st0#v_st_system%kst))
+                                  (Some (comp_fd st0##v_st_system%kst))
                                   (None, tt)
                                )
                                KeysignRes (slit signedkey, tt)
@@ -288,13 +288,13 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
          (fun st0 =>
            if num_eq
-                (st0#v_st_authenticated%kst)
+                (st0##v_st_authenticated%kst)
                 (num_of_nat 0)
            then []
            else [ fun s => sendall envd _
                                    (mk_comp_pat
                                       System
-                                      (Some (comp_fd st0#v_st_system%kst))
+                                      (Some (comp_fd st0##v_st_system%kst))
                                       (None, tt)
                                    )
                                    SCreatePtyerReq (stvar v_st_auth_user, tt)
@@ -311,7 +311,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               [ fun s => sendall envd _
                                  (mk_comp_pat
                                     System
-                                    (Some (comp_fd st0#v_st_system%kst))
+                                    (Some (comp_fd st0##v_st_system%kst))
                                     (None, tt)
                                  )
                                  CreatePtyerRes (cfd, (cfd, tt))
@@ -384,3 +384,123 @@ End Spec.
 
 Module Main := MkMain(Spec).
 Import Main.
+
+Require Import PolLang.
+Require Import ActionMatch.
+Require Import Tactics.
+Require Import Ynot.
+
+Import Spec.
+
+Local Opaque str_of_string.
+
+Ltac destruct_fin f :=
+  match type of f with
+  | False => destruct f
+  | _ => let f' := fresh "f" in
+         destruct f as [ f' | ]; [destruct_fin f' | ]
+  end.
+
+Ltac destruct_pay pay :=
+  vm_compute in pay;
+  match type of pay with
+  | unit => idtac
+  | _ =>
+    let x := fresh "x" in
+    let r := fresh "r" in
+    destruct pay as [x r]; simpl in x; destruct_pay r
+  end.
+
+Ltac destruct_msg :=
+  match goal with [ m : msg _ |- _ ] =>
+    let tag := fresh "tag" in
+    let pay := fresh "pay" in
+    destruct m as [tag pay]; destruct_fin tag; destruct_pay pay
+  end.
+
+(*Destructs num, str, or fd equalities in the context.*)
+Ltac destruct_eq H :=
+  repeat match type of H with
+         | context[if ?x then _ else _ ]
+           => destruct x
+         end.
+
+Ltac destruct_input input :=
+  unfold cmd_input in *;
+  simpl in *; (*compute in input;*)
+  match type of input with
+  | unit => idtac
+  | _ => let x := fresh "x" in
+         let input' := fresh "input'" in
+         destruct input as [x input']; destruct_input input'
+  end.
+
+Ltac unpack_inhabited Htr :=
+  match type of Htr with
+  | _ = inhabits ?tr
+     => simpl in Htr; apply pack_injective in Htr; subst tr
+  end.
+
+Ltac unpack :=
+  match goal with
+  | [ Htr : ktr _ _ _ _ ?s = inhabits ?tr |- _ ] =>
+    match goal with
+    (*Valid exchange.*)
+    | [ c : comp _ _, _ : ?s' = _,
+        input : kstate_run_prog_return_type _ _ _ _ _ _ _ _ ?s' _ |- _ ] =>
+      subst s'; destruct c; destruct_eq Htr; destruct_input input
+    (*Initialization.*)
+    | [ s : init_state _ _ _ _ _,
+        input : init_state_run_prog_return_type _ _ _ _ _ _ _ _ |- _ ] =>
+      match goal with
+      | [ H : s = _ |- _ ] =>
+        rewrite H in Htr; destruct_input input
+      end
+    (*Bogus msg*)
+    | [ c : comp _ _ |- _ ] =>
+      subst s; destruct c
+    end(*; unpack_inhabited Htr*)
+  end.
+
+Ltac destruct_unpack :=
+  match goal with
+  | [ m : msg _ |- _ ]
+      => destruct_msg; unpack
+  | _
+      => unpack
+  end.
+
+Ltac reach_induction :=
+  intros;
+  match goal with
+  | [ _ : ktr _ _ _ _ _ = inhabits ?tr, H : Reach _ _ _ _ _ _ _ _ _ |- _ ]
+      => generalize dependent tr; induction H;
+         (*Do not put simpl anywhere in here. It breaks destruct_unpack.*)
+         intros; destruct_unpack
+  end.
+
+Theorem Enables_app : forall A B tr tr',
+  (forall elt, List.In elt tr' -> ~ PolLang.AMatch PAYD COMPT COMPS COMPTDEC B elt) ->
+  Enables PAYD COMPT COMPS COMPTDEC A B tr ->
+  Enables PAYD COMPT COMPS COMPTDEC A B (tr' ++ tr)%list.
+Proof.
+  intros. induction tr'.
+  now simpl.
+  apply E_not_future. apply IHtr'. intros. apply H. now right.
+  apply H. now left.
+Qed.
+
+Theorem auth_priv : forall st tr u,
+  Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
+  ktr _ _ _ _ st = inhabits tr ->
+  Enables PAYD COMPT COMPS COMPTDEC
+          (KORecv PAYD COMPT COMPS None
+                  (Some (Build_opt_msg PAYD
+                                       SLoginResT (Some u, tt))))
+          (KOSend PAYD COMPT COMPS None
+                  (Some (Build_opt_msg PAYD
+                                       SCreatePtyerReq (Some u, tt))))
+          tr.
+Proof.
+  admit. (*reach_induction.*)
+Qed.

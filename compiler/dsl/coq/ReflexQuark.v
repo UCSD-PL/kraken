@@ -101,7 +101,7 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   ; fun s => sendall IENVD _
                      (mk_comp_pat
                         Tab
-                        (Some (comp_fd s#i_curtab%ienv))
+                        (Some (comp_fd s##i_curtab%ienv))
                         (None, tt)
                      )
                      Go (i_slit default_url, tt)
@@ -127,7 +127,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               [ fun s => sendall envd _
                                  (mk_comp_pat
                                     Tab
-                                    (Some (comp_fd s#v_output%kst))
+                                    (Some (comp_fd s##v_output%kst))
                                     (None, tt)
                                  )
                                  Display (slit disp, tt)
@@ -150,7 +150,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                           shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
                             sdenote_desc
                             (projT2 (compd_conf (COMPS Tab)))
-                            (comp_conf (st0#v_curtab%kst))
+                            (comp_conf (st0##v_curtab%kst))
                             None
                         )
               then
@@ -159,7 +159,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                 ; fun s => sendall envd _
                              (mk_comp_pat
                                 Tab
-                                (Some (comp_fd s#v_curtab%kst))
+                                (Some (comp_fd s##v_curtab%kst))
                                 (None, tt)
                              )
                              Go (slit url, tt)
@@ -195,7 +195,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                           shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
                             sdenote_desc
                             (projT2 (compd_conf (COMPS Tab)))
-                            (comp_conf (st0#v_curtab%kst))
+                            (comp_conf (st0##v_curtab%kst))
                             None
                         )
               then
@@ -217,7 +217,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
            [ fun s => sendall envd _
                               (mk_comp_pat
                                  Tab
-                                 (Some (comp_fd s#v_curtab%kst))
+                                 (Some (comp_fd s##v_curtab%kst))
                                  (None, tt)
                               )
                               KeyPress (slit key, tt)
@@ -234,7 +234,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
            [ fun s => sendall envd _
                               (mk_comp_pat
                                  Tab
-                                 (Some (comp_fd s#v_curtab%kst))
+                                 (Some (comp_fd s##v_curtab%kst))
                                  (None, tt)
                               )
                               MouseClick (slit pos, tt)

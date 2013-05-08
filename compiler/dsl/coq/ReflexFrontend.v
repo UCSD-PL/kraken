@@ -46,19 +46,19 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition i_env_ith s i :=
     shvec_ith (n := projT1 IENVD) (sdenote_cdesc COMPT COMPS) (projT2 IENVD)
               (init_env PAYD COMPT COMPS KSTD IENVD s) i.
-  Notation "s # i" := (i_env_ith s i) (at level 0) : ienv.
+  Notation "s ## i" := (i_env_ith s i) (at level 0) : ienv.
   Delimit Scope ienv with ienv.
 
   Definition env_ith {ENVD : vcdesc COMPT} s i :=
     shvec_ith (n := projT1 ENVD) (sdenote_cdesc COMPT COMPS) (projT2 ENVD)
               (hdlr_env PAYD COMPT COMPS KSTD ENVD s) i.
-  Notation "s # i" := (env_ith s i) (at level 0) : env.
+  Notation "s ## i" := (env_ith s i) (at level 0) : env.
   Delimit Scope env with env.
 
   Definition kst_ith s i :=
     shvec_ith (n := projT1 KSTD) (sdenote_cdesc COMPT COMPS) (projT2 KSTD)
               (kst PAYD COMPT COMPS KSTD s) i.
-  Notation "s # i" := (kst_ith s i) (at level 0) : kst.
+  Notation "s ## i" := (kst_ith s i) (at level 0) : kst.
   Delimit Scope kst with kst.
 
 End MkLanguage.

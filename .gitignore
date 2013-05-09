@@ -1,6 +1,9 @@
-*~
-*.vo
-*.glob
-*.swp
 .*
+*~
+*.cm*
+*.glob
+*.native
+*.o
 *.pyc
+*.swp
+*.vo

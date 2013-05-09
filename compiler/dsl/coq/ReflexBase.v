@@ -39,9 +39,9 @@ Proof with try discriminate.
   destruct n as [[l h]]; simpl.
   unfold num_of_nat, nat_of_num.
   repeat f_equal.
-  rewrite mod_add... rewrite mod_small. now rewrite ascii_nat_embedding.
+  rewrite Nat.mod_add... rewrite Nat.mod_small. now rewrite ascii_nat_embedding.
   apply nat_of_ascii_bound.
-  rewrite div_add... rewrite div_small. simpl. now rewrite ascii_nat_embedding.
+  rewrite Nat.div_add... rewrite Nat.div_small. simpl. now rewrite ascii_nat_embedding.
   apply nat_of_ascii_bound.
 Qed.
 

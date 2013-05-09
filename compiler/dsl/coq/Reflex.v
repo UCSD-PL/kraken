@@ -376,7 +376,7 @@ Proof.
          | S n' => fun (pd : vdesc' (S n'))
                        (pv : sdenote_vdesc' (S n') pd) =>
            match pd as _pd return
-             forall (pv : sdenote_vdesc' (S n') _pd), STsep _ (fun _ => _)
+             forall (pv : sdenote_vdesc' (S n') _pd), STsep _ _
            with
            | (d, pt') => fun pv =>
              match pv with
@@ -1927,7 +1927,7 @@ Proof.
     <@> all_open_set_drop (comp_fd c) fds * [FdSet.In (comp_fd c) fds] * [Reach s]
     * [all_fds_in cs fds] * [vcdesc_fds_subset st fds];
 
-    match mm with
+    match mm return STsep _ (fun s' => kstate_inv s') with
     | inl m =>
       let tr := tr ~~~ KRecv c m :: tr in
       let henv  := projT1 (HANDLERS m c) in
@@ -1959,8 +1959,10 @@ Proof.
   admit. (* combine 'In c (proj_fds cs)' and 'all_fds_in cs fds' *)
 
   (*unfold s'. simpl.*)
+  (* here we probably need to fix the return annotation so that mm is
+     reduced correctly *)
   isolate (
-    traced (trace_recv_msg (comp_fd c) m ++ expand_ktrace x0) ==>
+    traced (trace_recv_maybe_msg (comp_fd c) mm ++ expand_ktrace x0) ==>
     traced (expand_ktrace x3)
   ).
   admit.
@@ -1986,7 +1988,7 @@ Proof.
   admit.
 
   isolate (
-    traced (trace_recv_bogus_msg (comp_fd c) m ++ expand_ktrace x0) ==>
+    traced (trace_recv_maybe_msg (comp_fd c) mm ++ expand_ktrace x0) ==>
     traced (expand_ktrace x3)
   ).
   admit.

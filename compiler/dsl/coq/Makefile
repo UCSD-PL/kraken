@@ -14,7 +14,7 @@ depend: $(FILES)
 coq: $(FILES:.v=.vo)
 
 %.vo: %.v
-	$(COQC) $(INCLUDES) $*.v
+	$(COQC) $(INCLUDES) ./$*.v
 
 extract: Extract.vo
 

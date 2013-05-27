@@ -5,6 +5,7 @@ Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
 Require Import ReflexHVec.
+Require Import ReflexIO.
 
 Module Type SystemFeaturesInterface.
   Parameter NB_MSG   : nat.
@@ -18,6 +19,10 @@ End SystemFeaturesInterface.
 
 Module MkLanguage (Import SF : SystemFeaturesInterface).
   Instance SDenoted_cdesc : SDenoted (cdesc COMPT) := SDenoted_cdesc COMPT COMPS.
+  Definition seq {envd term} := Seq PAYD COMPT COMPS KSTD envd term.
+  Definition nop {envd term} := Nop PAYD COMPT COMPS KSTD envd term.
+  Definition ite := Ite PAYD COMPT COMPS KSTD.
+  Definition send := Reflex.Send PAYD COMPT COMPS KSTD.
   Definition sendall := SendAll PAYD COMPT COMPS KSTD.
   Definition spawn := Spawn PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.

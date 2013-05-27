@@ -2,6 +2,7 @@ Require Import Reflex.
 Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
+Require Import ReflexIO.
 Require Import ReflexVec.
 Require Import ReflexHVec.
 
@@ -12,7 +13,7 @@ Variable PAYD : vvdesc NB_MSG.
 Variable COMPT : Set.
 Variable COMPS : COMPT -> compd.
 Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
-Definition comp_pat := comp_pat COMPT COMPS.
+Definition conc_pat := conc_pat COMPT COMPS.
 
 Definition soptdenote_desc (d : desc) : Set :=
   option (sdenote_desc d).
@@ -25,10 +26,10 @@ Record opt_msg : Set :=
 Inductive KOAction : Set :=
 | KOExec   : option str -> option (list (option str)) -> option fd -> KOAction
 | KOCall   : option str -> option (list (option str)) -> option fd -> KOAction
-| KOSelect : option (list (option comp_pat)) -> option comp_pat -> KOAction
-| KOSend   : option comp_pat -> option opt_msg -> KOAction
-| KORecv   : option comp_pat -> option opt_msg -> KOAction
-| KOBogus  : option comp_pat -> option num -> KOAction.
+| KOSelect : option (list (option conc_pat)) -> option conc_pat -> KOAction
+| KOSend   : option conc_pat -> option opt_msg -> KOAction
+| KORecv   : option conc_pat -> option opt_msg -> KOAction
+| KOBogus  : option conc_pat -> option num -> KOAction.
 
 Definition eltMatch (d:desc) (opt:option s[[d]]) (arg:s[[d]]) : Prop :=
   match opt with
@@ -36,15 +37,13 @@ Definition eltMatch (d:desc) (opt:option s[[d]]) (arg:s[[d]]) : Prop :=
   | Some t => t = arg
   end.
 
-Definition match_comp' (cp : comp_pat) (c : comp COMPT COMPS) : Prop :=
+Definition match_comp' (cp : conc_pat) (c : comp COMPT COMPS) : Prop :=
   match c, cp with
-  | Build_comp t f cfg, Build_comp_pat t' fp cfgp =>
+  | Build_comp t f cfg, Build_conc_pat t' cfgp =>
     match COMPTDEC t t' with
     | left EQ =>
-      match fp with None => True | Some f' => f = f' end
-      /\
       match EQ in _ = _t return
-        shvec sdenote_desc_cfg_pat (projT2 (comp_conf_desc _ _ _t)) -> Prop
+        shvec sdenote_desc_conc_pat (projT2 (comp_conf_desc _ _ _t)) -> Prop
       with
       | Logic.eq_refl => fun cfgp =>
         shvec_match_prop (projT2 (comp_conf_desc _ _ t))
@@ -55,7 +54,7 @@ Definition match_comp' (cp : comp_pat) (c : comp COMPT COMPS) : Prop :=
     end
   end.
 
-Definition match_comp (cpopt:option comp_pat) (c:comp COMPT COMPS) : Prop :=
+Definition match_comp (cpopt:option conc_pat) (c:comp COMPT COMPS) : Prop :=
   match cpopt with
   | None    => True
   | Some cp => match_comp' cp c
@@ -98,7 +97,7 @@ Definition listMatch (d:desc)
   end.
 
 Fixpoint comp_list_match'
-  (lopt:list (option comp_pat)) (l:list (comp COMPT COMPS)) :=
+  (lopt:list (option conc_pat)) (l:list (comp COMPT COMPS)) :=
   match lopt, l with
   | nil, nil          => True
   | cpopt::lopt', c::l' => match_comp cpopt c /\ comp_list_match' lopt' l'
@@ -106,7 +105,7 @@ Fixpoint comp_list_match'
   end.
 
 Definition comp_list_match
-  (lopt:option (list (option comp_pat))) (l:list (comp COMPT COMPS)) :=
+  (lopt:option (list (option conc_pat))) (l:list (comp COMPT COMPS)) :=
   match lopt with
   | None => True
   | Some lopt' => comp_list_match' lopt' l
@@ -175,10 +174,7 @@ Proof.
       => destruct (COMPTDEC comp_type comp_pat_type) as [eq | ];
          [destruct eq | auto]
     end.
-
-    destruct comp_pat_fd;
-      [apply decide_and; [apply fd_eq | apply decide_shvec_match]
-      | apply decide_and; [auto | apply decide_shvec_match] ].
+  apply decide_shvec_match.
 Qed.
 
 Definition decide_list_match_comp :

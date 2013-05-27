@@ -49,8 +49,8 @@ Definition num_eq (n1 n2 : num) : decide (n1 = n2).
   decide equality; apply ascii_dec.
 Defined.
 
-Let FALSE : num := Num "000" "000".
-Let TRUE  : num := Num "001" "000".
+Notation FALSE := (Num "000" "000").
+Notation TRUE  := (Num "001" "000").
 
 Definition str : Set :=
   list ascii.

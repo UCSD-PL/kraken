@@ -70,16 +70,20 @@ Ltac unpack :=
   | [ Htr : ktr _ _ _ _ ?s = inhabits ?tr |- _ ]
       => match goal with
           (*Valid exchange.*)
+(*
          | [ c : comp _ _, _ : ?s' = _,
              input : kstate_run_prog_return_type _ _ _ _ _ _ _ _ ?s' _ |- _ ]
            => subst s'; destruct c; destruct_eq Htr; destruct_input input
+*)
           (*Initialization.*)
+(*
          | [ s : init_state _ _ _ _ _,
              input : init_state_run_prog_return_type _ _ _ _ _ _ _ _ |- _ ]
            => match goal with
               | [ H : s = _ |- _ ]
                 => rewrite H in Htr; destruct_input input
               end
+*)
          (*Bogus msg*)
          | [ c : comp _ _ |- _ ]
            => subst s; destruct c
@@ -130,7 +134,7 @@ Ltac destruct_unpack :=
   end.
 
 Ltac subst_states :=
-  repeat match goal with 
+  repeat match goal with
          | [ s : kstate _ _ _ _ |- _ ]
              => match goal with
                 | [ _ : s = _ |- _ ]
@@ -246,7 +250,7 @@ Ltac forall_not_disabler s :=
   (*Should this take s as an argument?*)
   reach_induction;
   match goal with
-  | [ H : _ = init_state_run_prog _ _ _ _ _ _ _ _ _,
+  | [ H : _ = init_state_run_cmd _ _ _ _ _ _ _ _ _,
           H' : context[ List.In ?act _ ] |- _ ]
     => simpl in *; subst_states;
        try solve [impossible]; simpl in H'; decompose [or] H';
@@ -322,7 +326,7 @@ repeat match goal with
        | [ IHReach : context[ forall tr : KTrace _ _ _, _ ] |- _ ]
          => apply IHReach; auto
        | _
-         => apply cut_exists 
+         => apply cut_exists
        end.
 
 Ltac exists_past s :=
@@ -337,7 +341,7 @@ Ltac exists_past s :=
   (*Should this take s as an argument?*)
   reach_induction;
   match goal with
-  | [ H : _ = init_state_run_prog _ _ _ _ _ _ _ _ _ |- _ ]
+  | [ H : _ = init_state_run_cmd _ _ _ _ _ _ _ _ _ |- _ ]
     => simpl in *; subst_states;
        try solve [ impossible
                  | releaser_match ]
@@ -388,7 +392,7 @@ Ltac match_releases :=
 
 (*******Begin Immediately Before Tactics********)
 
-Ltac match_immbefore := 
+Ltac match_immbefore :=
   match goal with
   | [ |- ImmBefore _ _ _ _ _ _ nil ]
       => constructor
@@ -416,7 +420,7 @@ Ltac match_immbefore :=
 
 (*******Begin Immediately After Tactics********)
 
-Ltac match_immafter := 
+Ltac match_immafter :=
   match goal with
   | [ |- ImmAfter _ _ _ _ _ _ nil ]
       => constructor

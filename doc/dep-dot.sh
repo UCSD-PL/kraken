@@ -9,15 +9,16 @@ fi
 
 function graph {
   echo "digraph { "
-  sed -e 's/\([^ ]*\).vo/\1/g' \
-      -e 's/[^ ]*\.v//' \
-      -e 's/[^ ]*\.glob//' \
-      -e 's:[^ /]*/::g' \
-      -e 's/:/->/' \
-      $DEP
-  echo "labelloc=\"t\""
-  echo "label=\"Reflex Module Dependencies ($(date))\""
+  cat $DEP \
+    | sed -e 's/\([^ ]*\).vo/\1/g' \
+          -e 's/[^ ]*\.v//' \
+          -e 's/[^ ]*\.glob//' \
+          -e 's:[^ /]*/::g' \
+          -e 's/://' \
+    | awk '{ for(i=2; i<=NF; i++) { print $1, "->", $i ";"} }'
+  echo "labelloc=\"t\";"
+  echo "label=\"Reflex Module Dependencies ($(date))\";"
   echo "}"
 }
 
-graph | dot -Tpng > reflex-module-deps.png
+graph | tred | dot -Tpng > reflex-module-deps.png

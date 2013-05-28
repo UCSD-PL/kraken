@@ -1,4 +1,4 @@
-include ../Makefile.config
+include ../../Makefile.config
 
 SODIR := $(CURDIR)/../c-stubs
 SOBJS := $(wildcard $(SODIR)/*.c)

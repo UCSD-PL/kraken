@@ -1,4 +1,5 @@
 all:
+	touch coq/.depend
 	$(MAKE) -C coq
 	$(MAKE) -C c-stubs
 	$(MAKE) -C ml

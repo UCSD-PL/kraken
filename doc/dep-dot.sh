@@ -15,7 +15,9 @@ function graph {
       -e 's:[^ /]*/::g' \
       -e 's/:/->/' \
       $DEP
+  echo "labelloc=\"t\""
+  echo "label=\"Reflex Module Dependencies ($(date))\""
   echo "}"
 }
 
-graph | dot -Tpng > dep.png
+graph | dot -Tpng > reflex-module-deps.png

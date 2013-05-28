@@ -7,9 +7,15 @@ if [ ! -f $DEP ]; then
   exit 1
 fi
 
-sed -e 's/\([^ ]*\).vo/\1/g' \
-    -e 's/[^ ]*\.v//' \
-    -e 's/[^ ]*\.glob//' \
-    -e 's:[^ /]*/::g' \
-    -e 's/:/->/' \
-    < $DEP > reflex-dep.dot
+function graph {
+  echo "digraph { "
+  sed -e 's/\([^ ]*\).vo/\1/g' \
+      -e 's/[^ ]*\.v//' \
+      -e 's/[^ ]*\.glob//' \
+      -e 's:[^ /]*/::g' \
+      -e 's/:/->/' \
+      $DEP
+  echo "}"
+}
+
+graph | dot -Tpng > dep.png

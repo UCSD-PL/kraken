@@ -1,2 +1,0 @@
-client: msg.o test.o
-	$(CC) $(CFLAGS) -o test test.o msg.o

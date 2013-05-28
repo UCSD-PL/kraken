@@ -648,7 +648,7 @@ Inductive base_term : cdesc -> Set :=
 
 Inductive hdlr_term : cdesc -> Set :=
 | Base  : forall {d}, base_term d -> hdlr_term d
-| CFd   : hdlr_term (Desc fd_d)
+| CComp   : hdlr_term (Comp (comp_type CC))
 | CConf : forall (i : fin (projT1 CCONFD)), hdlr_term (Desc (svec_ith (projT2 CCONFD) i))
 | MVar  : forall (i : fin (projT1 CPAY)), hdlr_term (Desc (svec_ith (projT2 CPAY) i))
 | StVar : forall (i : fin KSTD_SIZE), hdlr_term (svec_ith KSTD_DESC i)
@@ -702,7 +702,7 @@ Fixpoint eval_base_term {d} (t : base_term d) : s[[ d ]] :=
 Definition eval_hdlr_term {d} (t : hdlr_term d) : s[[ d ]] :=
   match t with
   | Base _ bt => eval_base_term bt
-  | CFd       => comp_fd CC
+  | CComp       => existT _ CC (Logic.eq_refl (comp_type CC))
   | CConf i   => shvec_ith _ (projT2 CCONFD) (comp_conf CC) i
   | MVar i    => shvec_ith _ (projT2 CPAY) (pay CMSG) i
   | StVar i   => shvec_ith _ (projT2 KSTD) KST i
@@ -1263,7 +1263,7 @@ Definition open_payload_frame_hdlr {CC CMSG ENVD d}
   :=
   match ht in hdlr_term _ _ _ _d return s[[ _d ]] -> hprop with
   | Base _ bt => fun f => open_payload_frame_base s bt f
-  | CFd => fun _ => all_open_set_drop (comp_fd CC) s
+  | CComp => fun _ => all_open_set_drop (comp_fd CC) s
   | CConf i => fun f =>
     match svec_ith (projT2 (CCONFD CC)) i as _s return s[[ _s ]] -> hprop with
     | num_d => fun _ => emp

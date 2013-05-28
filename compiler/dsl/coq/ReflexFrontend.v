@@ -34,8 +34,8 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (SLit _ _ v)).
   Definition nlit {cc envd m} v :=
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (NLit _ _ v)).
-  Definition cfd {cc envd m} :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (CFd _ _ _ _ _ _ _).
+  Definition ccomp {cc envd m} :=
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (CComp _ _ _ _ _ _ _).
   Definition i_slit v := Term COMPT (base_term _ IENVD) (SLit _ _ v).
   Definition i_nlit v := Term COMPT (base_term _ IENVD) (NLit _ _ v).
   Definition mk_comp_pat := Build_comp_pat COMPT COMPS.

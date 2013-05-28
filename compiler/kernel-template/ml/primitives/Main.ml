@@ -1,1 +1,0 @@
-STImpl.exec Kernel.main ()

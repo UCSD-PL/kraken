@@ -1,6 +1,6 @@
-.*
 *~
-*.cm*
+*.cmi
+*.cmo
 *.glob
 *.native
 *.o

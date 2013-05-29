@@ -5,6 +5,7 @@ Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
 Require Import ReflexFrontend.
+Require Import ReflexIO.
 Require Import ReflexVec.
 
 Open Scope string_scope.
@@ -49,8 +50,8 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  [fun s => spawn IENVD _ Echo tt None (Logic.eq_refl _)
-  ].
+  seq (spawn IENVD _ Echo tt None (Logic.eq_refl _))
+  nop.
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun m cc =>
@@ -59,11 +60,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     | Build_msg None p => fun EQ =>
       let envd := existT _ 0 tt in
       existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
-        let (msg, _) := p in fun st0 =>
-        [ fun s => sendall envd _
-                           (Build_comp_pat COMPT' COMPS Echo (Some cf) tt)
-                           None (mvar EQ None, tt)
-        ]
+        let (msg, _) := p in
+        seq (send envd _ _ ccomp None (mvar EQ None, tt))
+        nop
       )
     | Build_msg (Some bad) _ =>
       match bad with end

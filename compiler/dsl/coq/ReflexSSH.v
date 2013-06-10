@@ -4,9 +4,10 @@ Require Import Reflex.
 Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
-Require Import ReflexVec.
-Require Import ReflexHVec.
 Require Import ReflexFrontend.
+Require Import ReflexHVec.
+Require Import ReflexIO.
+Require Import ReflexVec.
 
 Open Scope string_scope.
 

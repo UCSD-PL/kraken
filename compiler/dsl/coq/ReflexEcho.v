@@ -55,18 +55,22 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun m cc =>
-    let (_, cf, _) := cc in
-    match m as _m return forall (EQ : _m = m), _ with
-    | Build_msg None p => fun EQ =>
-      let envd := existT _ 0 tt in
-      existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
-        let (msg, _) := p in
-        seq (send envd _ _ ccomp None (mvar EQ None, tt))
-        nop
-      )
-    | Build_msg (Some bad) _ =>
-      match bad with end
-    end (Logic.eq_refl m).
+  let (_, cf, _) := cc in
+  match m as _m return forall (EQ : _m = m), _ with
+  | {| tag := t; pay := p |} =>
+  match t as _t return
+    forall _p, Build_msg PAYD _t _p = m -> _
+  with
+  | None => fun p EQ =>
+    let envd := existT _ 0 tt in
+    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
+      seq (send envd _ _ ccomp None (mvar EQ None, tt))
+      nop
+    )
+  | Some bad =>
+    match bad with end
+  end p
+  end (Logic.eq_refl m).
 
 End Spec.
 

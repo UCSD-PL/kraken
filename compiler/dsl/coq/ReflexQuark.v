@@ -6,6 +6,7 @@ Require Import ReflexDenoted.
 Require Import ReflexFin.
 Require Import ReflexFrontend.
 Require Import ReflexHVec.
+Require Import ReflexIO.
 Require Import ReflexVec.
 
 Definition splitAt c s :=
@@ -95,19 +96,95 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  [ fun s => spawn IENVD _ Output    tt                   i_output    (Logic.eq_refl _)
-  ; fun s => spawn IENVD _ Tab       (default_domain, tt) i_curtab    (Logic.eq_refl _)
-  ; fun s => spawn IENVD _ UserInput tt                   i_userinput (Logic.eq_refl _)
-  ; fun s => sendall IENVD _
-                     (mk_comp_pat
-                        Tab
-                        (Some (comp_fd s##i_curtab%ienv))
-                        (None, tt)
-                     )
-                     Go (i_slit default_url, tt)
-  ; fun s => stupd IENVD _ v_output (Term _ (base_term _ IENVD) (Var _ IENVD i_output))
-  ; fun s => stupd IENVD _ v_curtab (Term _ (base_term _ IENVD) (Var _ IENVD i_curtab))
-  ].
+  seq (spawn IENVD _ Output    tt                   i_output    (Logic.eq_refl _)) (
+  seq (spawn IENVD _ Tab       (default_domain, tt) i_curtab    (Logic.eq_refl _)) (
+  seq (spawn IENVD _ UserInput tt                   i_userinput (Logic.eq_refl _)) (
+  seq (sendall IENVD _ (mk_comp_pat _ Tab (None, tt)) Go (i_slit default_url, tt)) (
+  seq (stupd IENVD _ v_output (Term _ (base_term _ IENVD) (Var _ IENVD i_output))) (
+  seq (stupd IENVD _ v_curtab (Term _ (base_term _ IENVD) (Var _ IENVD i_curtab))
+  ) nop))))).
+
+(*
+                        (
+                          shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
+                            sdenote_desc
+                            (projT2 (compd_conf (COMPS Tab)))
+                            (comp_conf (st0##v_curtab%kst))
+                            None
+                        )
+*)
+
+Print comp.
+
+Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
+  fun m cc =>
+  let (ct, cf, ccf) := cc in
+  match m as _m return forall (EQ : _m = m), _ with
+  | {| tag := t; pay := p |} =>
+  match ct as _ct, t as _t return
+    forall _p, Build_msg PAYD _t _p = m -> s[[ comp_conf_desc _ _ _ct ]] -> _
+  with
+
+  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad))))))))) =>
+    match bad with end
+
+  | Tab, ReqSocket => fun pl EQ ccf =>
+    let envd := mk_vcdesc [] in
+    match pl with (url, _) =>
+    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+    (
+      ite envd _ (
+            BinOp _ _
+                  (Eq _ (Desc _ fd_d))
+                  (Term _ _ (CompFd _ _ ccomp))
+                  (Term _ _ (CompFd _ _ (stvar v_curtab)))
+          )
+      (
+        ite envd _ (BinOp _ _
+                      (Eq _ (Desc _ str_d))
+                      (slit (dom url))
+                      (cconf (cc:= Build_comp SystemFeatures.COMPT SystemFeatures.COMPS Tab cf ccf) 0%fin)
+                   )
+        (
+          nop
+        )
+        (
+          nop
+        )
+      )
+      (
+        nop
+      )
+    )
+    end
+
+  | UserInput, KeyPress => fun pl EQ ccf =>
+    let envd := mk_vcdesc [] in
+    match pl with (key, _) =>
+    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+    (
+      seq (send envd _ _ (stvar v_curtab) KeyPress (slit key, tt))
+      nop
+    )
+    end
+
+  | UserInput, MouseClick => fun pl EQ ccf =>
+    let envd := mk_vcdesc [] in
+    match pl with (pos, _) =>
+    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+    (
+      seq (send envd _ _ (stvar v_curtab) MouseClick (slit pos, tt))
+      nop
+    )
+    end
+
+  | _, _ => fun _ _ _ =>
+    let envd := mk_vcdesc [] in
+    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
+    nop
+
+  end p
+  end (Logic.eq_refl m).
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   (fun m cc =>
@@ -176,82 +253,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
        match pl with (url, _) =>
        existT
          (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           [ (* need call *)
-           ]
+         (
+           nop
          )
        end
-
-     | Tab, ReqSocket => fun pl =>
-       let envd := mk_vcdesc [] in
-       match pl with (url, _) =>
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-            if fd_eq cf (comp_fd (kst_ith st0 v_curtab))
-            then
-              if str_eq (dom url)
-                        (
-                          shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
-                            sdenote_desc
-                            (projT2 (compd_conf (COMPS Tab)))
-                            (comp_conf (st0##v_curtab%kst))
-                            None
-                        )
-              then
-                [ (* need connect *)
-                ]
-              else
-                []
-            else
-              []
-         )
-       end
-
-     | UserInput, KeyPress => fun pl =>
-       let envd := mk_vcdesc [] in
-       match pl with (key, _) =>
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           [ fun s => sendall envd _
-                              (mk_comp_pat
-                                 Tab
-                                 (Some (comp_fd s##v_curtab%kst))
-                                 (None, tt)
-                              )
-                              KeyPress (slit key, tt)
-           ]
-         )
-       end
-
-     | UserInput, MouseClick => fun pl =>
-       let envd := mk_vcdesc [] in
-       match pl with (pos, _) =>
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           [ fun s => sendall envd _
-                              (mk_comp_pat
-                                 Tab
-                                 (Some (comp_fd s##v_curtab%kst))
-                                 (None, tt)
-                              )
-                              MouseClick (slit pos, tt)
-           ]
-         )
-       end
-
-     | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some  bad))))))))) => fun _ =>
-       match bad with end
-
-     | _, _ => fun pl =>
-       let envd := mk_vcdesc [] in
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-           []
-         )
 
     end (pay PAYD m)
   ).

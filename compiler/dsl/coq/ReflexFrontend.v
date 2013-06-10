@@ -112,6 +112,16 @@ Notation " [ ] " := nil.
 Notation " [ x ] " := (cons x nil).
 Notation " [ x ; .. ; y ] " := (cons x .. (cons y nil) ..).
 
+Definition cast_cc_expr
+  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc ct cf ccf d}
+  (EQ : Build_comp COMPT COMPS ct cf ccf = cc)
+  (e : expr COMPT (hdlr_term PAYD COMPT COMPS KSTD (Build_comp COMPT COMPS ct cf ccf) m envd) d)
+  : expr COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) d
+  :=
+  match EQ in _ = _cc return expr _ (hdlr_term _ _ _ _ _cc _ _) _ with
+  | Logic.eq_refl => e
+  end.
+
 Definition cast_m_expr
   {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p d}
   (EQ : Build_msg PAYD t p = m)
@@ -126,6 +136,11 @@ Definition mvar
   {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p}
   (EQ : Build_msg PAYD t p = m) i :=
   cast_m_expr EQ (Term _ _ (MVar PAYD COMPT COMPS KSTD cc (Build_msg PAYD t p) envd i)).
+
+Definition cconf
+  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc ct cf ccf p}
+  (EQ : Build_comp COMPT COMPS ct cf ccf = cc) i :=
+  cast_m_expr EQ (Term _ _ (CConf PAYD COMPT COMPS KSTD (Build_comp COMPT COMPS ct cf ccf) m envd i)).
 
 Delimit Scope fin_scope with fin.
 

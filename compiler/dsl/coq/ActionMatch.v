@@ -24,7 +24,8 @@ Record opt_msg : Set :=
   }.
 
 Inductive KOAction : Set :=
-| KOExec   : option str -> option (list (option str)) -> option fd -> KOAction
+| KOExec   : option str -> option (list (option str)) -> option conc_pat
+             -> KOAction
 | KOCall   : option str -> option (list (option str)) -> option fd -> KOAction
 | KOSelect : option (list (option conc_pat)) -> option conc_pat -> KOAction
 | KOSend   : option conc_pat -> option opt_msg -> KOAction
@@ -113,9 +114,9 @@ Definition comp_list_match
 
 Definition AMatch (oact:KOAction) (act:KAction PAYD COMPT COMPS) : Prop :=
 match oact, act with
-| KOExec s ls f, KExec s' ls' f' => eltMatch str_d s s' /\
+| KOExec s ls c, KExec s' ls' c' => eltMatch str_d s s' /\
                                     listMatch str_d ls ls'  /\
-                                    eltMatch fd_d f f'
+                                    match_comp c c'
 | KOCall s ls f, KCall s' ls' f' => eltMatch str_d s s' /\
                                     listMatch str_d ls ls' /\
                                     eltMatch fd_d f f'

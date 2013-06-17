@@ -447,7 +447,7 @@ Proof.
 Qed.
 
 Inductive KAction : Set :=
-| KExec   : str -> list str -> fd -> KAction
+| KExec   : str -> list str -> comp -> KAction
 | KCall   : str -> list str -> fd -> KAction
 | KSelect : list comp -> comp -> KAction
 | KSend   : comp -> msg -> KAction
@@ -460,7 +460,7 @@ Definition KTrace : Set :=
 
 Definition expand_kaction (ka : KAction) : Trace :=
   match ka with
-  | KExec cmd args f => Exec cmd args f :: nil
+  | KExec cmd args c => Exec cmd args (comp_fd c) :: nil
   | KCall cmd args pipe => Call cmd args pipe :: nil
   | KSelect cs c => Select (proj_fds cs) (comp_fd c) :: nil
   | KSend c m => trace_send_msg (comp_fd c) m
@@ -937,7 +937,7 @@ Fixpoint init_state_run_cmd (s : init_state) (cmd : cmd base_term) : init_state 
     let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
     let comp := COMPS ct in
     {| init_comps := c :: cs
-     ; init_ktr   := tr ~~~ KExec (compd_cmd comp) (compd_args comp) (comp_fd c) :: tr
+     ; init_ktr   := tr ~~~ KExec (compd_cmd comp) (compd_args comp) c :: tr
      ; init_env   := shvec_replace_cast EQ e (existT _ c (Logic.eq_refl _))
      ; init_kst   := st
      ; init_fds   := FdSet.add (comp_fd c) fds
@@ -1009,7 +1009,7 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd hdlr_term) : hdlr_state 
     let comp := COMPS ct in
     {| hdlr_kst :=
          {| kcs := c :: cs
-          ; ktr := tr ~~~ KExec (compd_cmd comp) (compd_args comp) (comp_fd c) :: tr
+          ; ktr := tr ~~~ KExec (compd_cmd comp) (compd_args comp) c :: tr
           ; kst := st
           ; kfd := FdSet.add (comp_fd c) fd
           |}
@@ -1159,28 +1159,39 @@ Fixpoint payload_fds' (n : nat) :
 Definition payload_fds (v : vdesc) : s[[ v ]] -> list fd :=
   payload_fds' (projT1 v) (projT2 v).
 
+Inductive InitialState : kstate -> Prop :=
+| C_is : forall s,
+           s = init_state_run_cmd IENVD initial_init_state IPROG ->
+           InitialState {| kcs := init_comps _ s
+                           ; ktr := init_ktr _ s
+                           ; kst := init_kst _ s
+                           ; kfd := FdSet.union
+                                      (vcdesc_fds_set _ (init_kst _ s))
+                                      (vcdesc_fds_set _ (init_env _ s))
+                        |}.
+
+Inductive ValidExchange (c:comp) (m:msg) : kstate -> kstate -> Prop :=
+| C_ve : forall s tr s',
+           let cs := kcs s in
+           ktr s = [tr]%inhabited ->
+           s' = {| kcs := cs
+                   ; ktr := [KRecv c m :: KSelect cs c :: tr]
+                   ; kst := kst s
+                   ; kfd := FdSet.union (vdesc_fds_set _ (pay m)) (kfd s)
+                |} ->
+           ValidExchange c m s (kstate_run_prog c m (projT1 (HANDLERS m c)) s'
+                                                (projT2 (HANDLERS m c))).
+
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
   forall s,
-  s = init_state_run_cmd IENVD initial_init_state IPROG ->
-  Reach {| kcs := init_comps _ s
-         ; ktr := init_ktr _ s
-         ; kst := init_kst _ s
-         ; kfd := FdSet.union
-                    (vcdesc_fds_set _ (init_kst _ s))
-                    (vcdesc_fds_set _ (init_env _ s))
-         |}
+  InitialState s ->
+  Reach s
 | Reach_valid :
-  forall s c m tr s',
-  let cs := kcs s in
-  ktr s = [tr]%inhabited ->
+  forall c m s s',
   Reach s ->
-  s' = {| kcs := cs
-        ; ktr := [KRecv c m :: KSelect cs c :: tr]
-        ; kst := kst s
-        ; kfd := FdSet.union (vdesc_fds_set _ (pay m)) (kfd s)
-        |} ->
-  Reach (kstate_run_prog c m (projT1 (HANDLERS m c)) s' (projT2 (HANDLERS m c)))
+  ValidExchange c m s s' ->
+  Reach s'
 | Reach_bogus :
   forall s s' f bmsg tr,
   let cs := kcs s in
@@ -1569,7 +1580,7 @@ Proof.
            <@> init_invariant s;
 
       let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
-      let tr := tr ~~~ KExec c_cmd c_args c_fd :: tr in
+      let tr := tr ~~~ KExec c_cmd c_args c :: tr in
       {{ Return {| init_comps := c :: cs
                  ; init_ktr   := tr
                  ; init_env   := shvec_replace_cast _ EQ e (existT _ c (Logic.eq_refl ct))
@@ -1761,7 +1772,7 @@ Proof.
     <@> hdlr_invariant cc cm s;
 
     let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
-    let tr := tr ~~~ KExec c_cmd c_args c_fd :: tr in
+    let tr := tr ~~~ KExec c_cmd c_args c :: tr in
     {{ Return {| hdlr_kst := {| kcs := c :: cs
                               ; ktr := tr
                               ; kst := st
@@ -1788,7 +1799,7 @@ Proof.
   destruct (num_eq (eval_hdlr_expr cc cm envd env st cond) FALSE).
   reflexivity. contradiction.
   destruct (num_eq (eval_hdlr_expr cc cm envd env st cond) FALSE).
-  contradiction. reflexivity.
+ contradiction. reflexivity.
 
 admit.
 admit.

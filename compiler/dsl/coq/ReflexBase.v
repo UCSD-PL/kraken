@@ -88,7 +88,10 @@ Qed.
 (* prevent sep tactic from unfolding *)
 Global Opaque nat_of_num num_of_nat.
 
-Module OrderedFd : OrderedType with Definition t := fd.
+Module OrderedFd : OrderedType
+  with Definition t := fd
+  with Definition eq := @eq fd
+  .
 
   Definition t := fd.
 
@@ -113,4 +116,7 @@ End OrderedFd.
 
 Module RawFdSet : RawSets OrderedFd := MSetAVL.MakeRaw(Int.Z_as_Int)(OrderedFd).
 
-Module FdSet : Sets with Module E := OrderedFd := Raw2Sets(OrderedFd)(RawFdSet).
+Module FdSet : Sets
+  with Module E := OrderedFd
+  := Raw2Sets(OrderedFd)(RawFdSet)
+.

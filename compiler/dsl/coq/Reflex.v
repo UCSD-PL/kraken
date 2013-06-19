@@ -498,7 +498,7 @@ Definition eval_unop
 Implicit Arguments eval_unop.
 
 Inductive binop : cdesc -> cdesc -> cdesc -> Set :=
-| Eq  : forall d, binop (Desc d) (Desc d) (Desc num_d)
+| Eq  : forall d, binop d d (Desc num_d)
 | Add : binop (Desc num_d) (Desc num_d) (Desc num_d)
 | Sub : binop (Desc num_d) (Desc num_d) (Desc num_d)
 | Mul : binop (Desc num_d) (Desc num_d) (Desc num_d)
@@ -508,15 +508,21 @@ Inductive binop : cdesc -> cdesc -> cdesc -> Set :=
 Definition eval_binop
   (d1 d2 d3: cdesc) (op : binop d1 d2 d3) (v1 : s[[ d1 ]]) (v2 : s[[ d2 ]]) : s[[ d3 ]] :=
   match op in binop _d1 _d2 _d3 return s[[ _d1 ]] -> s[[ _d2 ]] -> s[[ _d3 ]] with
-  | Eq d => fun v1 v2 : s[[ Desc d ]] =>
-    let teq : forall (x y : s[[ d ]]), {x = y} + {x <> y} :=
-      match d with
-      | num_d => num_eq
-      | str_d => str_eq
-      | fd_d  => fd_eq
-      end
-    in
-    if teq v1 v2 then TRUE else FALSE
+  | Eq d =>
+    match d as _d return s[[ _d ]] -> s[[ _d ]] -> _ with
+    | Desc d => fun v1 v2 : s[[ Desc d ]] =>
+      let teq : forall (x y : s[[ d ]]), {x = y} + {x <> y} :=
+        match d with
+        | num_d => num_eq
+        | str_d => str_eq
+        | fd_d  => fd_eq
+        end
+      in
+      if teq v1 v2 then TRUE else FALSE
+    | Comp ct => fun c1 c2 =>
+      (* Assumption: comparing the file descriptors is enough *)
+      if fd_eq (comp_fd (projT1 c1)) (comp_fd (projT1 c2)) then TRUE else FALSE
+    end
   | Add => fun v1 v2 : num =>
     num_of_nat (plus (nat_of_num v1) (nat_of_num v2))
   | Sub => fun v1 v2 : num =>
@@ -1447,6 +1453,28 @@ Qed.
 Definition trace_send_msg_comps (cps : list comp) (m : msg) : Trace :=
   flat_map (fun c => trace_send_msg (comp_fd c) m) cps.
 
+Theorem all_open_set_unpack : forall x s, FdSet.In x s ->
+  all_open_set s ==>
+  open x * all_open_set_drop x s.
+Proof.
+  intros. unfold all_open_set, all_open_set_drop.
+  apply himp_trans with (Q := open x * all_open_drop (FdSet.elements s) x).
+  apply unpack_all_open.
+  apply FdSet.elements_spec1 in H.
+  apply SetoidList.InA_alt in H.
+  destruct H as [y [EQ IN] ]. now inversion_clear EQ.
+  sep'.
+  (* TODO: this is tedious *)
+Admitted.
+
+Theorem all_open_set_pack : forall x s, FdSet.In x s ->
+  open x * all_open_set_drop x s ==>
+  all_open_set s.
+Proof.
+  (* TODO: Just copy on all_open_set_unpack *)
+  intros.
+Admitted.
+
 Definition send_msg_comps :
   forall (m : msg) (cps : list comp) (fds : FdSet.t)
          (tr : [Trace]),
@@ -1475,9 +1503,9 @@ Proof.
     cps tr
   ); sep''.
   inversion H; auto.
-  admit. (*open_unpack for sets*)
+  apply all_open_set_unpack. now inversion H0.
   rewrite app_assoc; sep''.
-  admit. (*open_pack for sets*)
+  apply all_open_set_pack. now inversion H.
 Qed.
 
 Lemma expand_ktrace_dist : forall tr1 tr2,
@@ -1485,11 +1513,11 @@ Lemma expand_ktrace_dist : forall tr1 tr2,
 Proof.
   intro tr1.
   induction tr1; simpl.
-    reflexivity.
+  reflexivity.
 
-    intro tr2.
-    rewrite IHtr1.
-    apply app_assoc.
+  intro tr2.
+  rewrite IHtr1.
+  apply app_assoc.
 Qed.
 
 Lemma expand_ktrace_trace_send_msg_comps : forall cps m,
@@ -1497,10 +1525,10 @@ Lemma expand_ktrace_trace_send_msg_comps : forall cps m,
 Proof.
   intros cps m.
   induction cps; simpl.
-    reflexivity.
+  reflexivity.
 
-    rewrite IHcps.
-    reflexivity.
+  rewrite IHcps.
+  reflexivity.
 Qed.
 
 Definition run_init_cmd :
@@ -1524,8 +1552,6 @@ Proof.
   destruct s as [cs tr e st fds]_eqn.
 
   refine (
-  (* /!\ We lose track of the let-open equalities if existentials remain,
-         make sure that Coq can infer _all_ the underscores. *)
     match c with
 
     | Nop => {{ Return s }}
@@ -1533,7 +1559,7 @@ Proof.
     | Seq c1 c2 =>
       s1 <- self c1 s;
       s2 <- self c2 s1
-         <@> [s1 = init_state_run_cmd envd s c1];
+        <@> [s1 = init_state_run_cmd envd s c1];
       {{ Return s2 }}
 
     | Ite cond c1 c2 =>
@@ -1542,11 +1568,11 @@ Proof.
       else s' <- self c1 s; {{ Return s' }}
 
     | Send ct ce t me =>
-      let (c, _) := eval_base_expr _ e ce in
+      let c := projT1 (eval_base_expr envd e ce) in
       let m := eval_base_payload_expr _ e _ me in
       let msg := Build_msg t m in
       send_msg (comp_fd c) msg (tr ~~~ expand_ktrace tr)
-        <@> [In c cs] * [vcdesc_fds_subset e fds];;
+        <@> all_open_set_drop (comp_fd c) fds * [In c cs] * [vcdesc_fds_subset e fds];;
 
       let tr := tr ~~~ KSend c msg :: tr in
       {{ Return {| init_comps := cs
@@ -1608,44 +1634,48 @@ Proof.
   destruct (num_eq (eval_base_expr envd e cond) FALSE).
   contradiction. reflexivity.
 
-Admitted.
+(* Send *)
+  unfold c0. clear c0.
+
+  dependent inversion ce with (
+    fun _d _ce =>
+    match _d as __d return expr _ __d -> _ with
+    | Comp _ => fun ce =>
+      all_open_set fds ==>
+      all_open_set_drop (comp_fd (projT1 (eval_base_expr envd e ce))) fds *
+      open (comp_fd (projT1 (eval_base_expr envd e ce)))
+    | _      => fun _ => False
+    end _ce
+  ).
+  simpl. subst.
+
+  assert (FdSet.In (comp_fd (projT1 (eval_base_term envd e b))) fds).
+
+(* This one is actually hard to get through! *)
 
 (*
-Definition run_init_prog :
-  forall (envd : vcdesc) (s : init_state envd) (p : init_prog envd),
-  STsep (tr :~~ init_ktr envd s in
-          init_invariant s * traced (expand_ktrace tr))
-        (fun s' : init_state envd => tr :~~ init_ktr envd s' in
-          init_invariant s' * traced (expand_ktrace tr)
-          * [s' = init_state_run_cmd envd s p]).
-Proof.
-  intros; refine (
-    Fix2
-      (fun p s => tr :~~ init_ktr envd s in
-        init_invariant s * traced (expand_ktrace tr))
-      (fun p s (s' : init_state envd) => tr :~~ init_ktr envd s' in
-        init_invariant s' * traced (expand_ktrace tr)
-        * [s' = init_state_run_cmd envd s p])
-      (fun self p s =>
-        match p with
-        | nil => {{ Return s }}
-        | c::cs =>
-          s' <- run_init_cmd envd s (c s);
-          s'' <- self cs s' <@> [exists input, s' = init_state_run_cmd envd s (c s) input];
-          {{ Return s'' }}
-        end
-      )
-    p s
-  ); sep''.
-  exists tt. reflexivity.
-  destruct H3 as [i1 I1]. destruct H4 as [i2 I2]. subst s'.
-  exists (existT
-            (fun x : cmd_input envd (c s0) =>
-               init_state_run_prog_return_type envd
-                 (init_state_run_cmd envd s0 (c s0) x) cs)
-            i2 i1). assumption.
-Qed.
+  refine (
+    match b as _b in base_term _ _d return
+      forall (EQ : _d = Comp ct),
+      match _d with
+      | Comp _ =>
+        FdSet.In (comp_fd (projT1 (
+          match EQ in _ = _e return s[[ _e ]] with
+          | Logic.eq_refl => eval_base_term envd e _b
+          end
+        ))) fds
+      | _      => False
+      end
+    with
+    | Var i => fun EQ => _
+    | _     => fun EQ => _
+    end (Logic.eq_refl (Comp ct))
+  ); try discriminate.
 *)
+
+  admit.
+
+Admitted.
 
 Theorem all_open_default_payload : forall henv,
   emp ==> all_open_payload (default_payload henv).

@@ -58,6 +58,7 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun m cc =>
+(*<<<<<<< HEAD
     match m as _m return forall (EQ : _m = m), _ with
     | Build_msg None p => fun EQ =>
       let envd := existT _ 0 tt in
@@ -69,6 +70,24 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     | Build_msg (Some bad) _ =>
       match bad with end
     end (Logic.eq_refl m).
+=======*)
+  let (_, cf, _) := cc in
+  match m as _m return forall (EQ : _m = m), _ with
+  | {| tag := t; pay := p |} =>
+  match t as _t return
+    forall _p, Build_msg PAYD _t _p = m -> _
+  with
+  | None => fun p EQ =>
+    let envd := existT _ 0 tt in
+    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
+      seq (send envd _ _ ccomp None (mvar EQ None, tt))
+      nop
+    )
+  | Some bad =>
+    match bad with end
+  end p
+  end (Logic.eq_refl m).
+(*>>>>>>> ifthenelse*)
 
 Require Import NonInterference.
 
@@ -129,6 +148,12 @@ Ltac unpack_inhabited :=
            => simpl in H; apply pack_injective in H; subst tr
          end.
 
+Ltac destruct_comp :=
+  match goal with
+  | [ c : Reflex.comp _ _ |- _ ]
+      => destruct c
+  end.
+
 Ltac unpack :=
   match goal with
   (*Valid exchange.*)
@@ -159,6 +184,7 @@ Ltac spawn_call :=
              repeat apply spawn_ok_sub in Hspawn; try assumption;
              apply spawn_ok_sym; try assumption
       end.
+
 Ltac high_steps :=
   intros;
   match goal with
@@ -170,8 +196,8 @@ Ltac high_steps :=
            Hins : inputs _ _ _ _ _ = inputs _ _ _ _ _,
            Hhigh : _ _ = true |- _ ]
          => inversion Hve1; inversion Hve2;
-            destruct_msg; repeat unpack; simpl in *;
-            rewrite Hhigh in *; inversion Hins;
+            destruct_msg; destruct_comp; repeat unpack;
+             simpl in *; rewrite Hhigh in *; inversion Hins;
             f_equal; auto; apply IH; auto; try spawn_call
        end
   end.
@@ -184,8 +210,8 @@ Ltac low_step :=
        match goal with
        | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _,
            Hlow : _ _ = false |- _ ]
-         => inversion Hve; destruct_msg; repeat unpack; simpl in *;
-            rewrite Hlow in *; apply IH; auto; try spawn_call
+         => inversion Hve; destruct_msg; destruct_comp; repeat unpack;
+            simpl in *; rewrite Hlow in *; apply IH; auto; try spawn_call
        end
   end.
 

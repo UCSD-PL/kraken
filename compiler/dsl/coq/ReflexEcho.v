@@ -146,14 +146,6 @@ Ltac unpack :=
   (*Bogus msg*)
   end; unpack_inhabited.
 
-Definition labeler (c : comp COMPT COMPS) :=
-  match comp_type _ _ c with
-  | Echo1 => true
-  | Echo2 => false
-  end.
-
-Local Opaque str_of_string.
-
 Ltac spawn_call :=
       match goal with
       | [ Hcall : call_ok _ _ _ _ _ _ |- call_ok _ _ _ _ _ _ ]
@@ -167,31 +159,50 @@ Ltac spawn_call :=
              repeat apply spawn_ok_sub in Hspawn; try assumption;
              apply spawn_ok_sym; try assumption
       end.
+Ltac high_steps :=
+  intros;
+  match goal with
+  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
+    => unfold NonInterferenceSt in *; intros;
+       match goal with
+       | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hins : inputs _ _ _ _ _ = inputs _ _ _ _ _,
+           Hhigh : _ _ = true |- _ ]
+         => inversion Hve1; inversion Hve2;
+            destruct_msg; repeat unpack; simpl in *;
+            rewrite Hhigh in *; inversion Hins;
+            f_equal; auto; apply IH; auto; try spawn_call
+       end
+  end.
 
-Theorem ni : NIWeak' PAYD COMPT COMPTDEC COMPS IENVD KSTD INIT HANDLERS labeler.
+Ltac low_step :=
+  intros;
+  match goal with
+  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
+    => unfold NonInterferenceSt in *; intros;
+       match goal with
+       | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hlow : _ _ = false |- _ ]
+         => inversion Hve; destruct_msg; repeat unpack; simpl in *;
+            rewrite Hlow in *; apply IH; auto; try spawn_call
+       end
+  end.
+
+Ltac ni :=
+  apply ni_suf; [high_steps | low_step].
+
+Definition labeler (c : comp COMPT COMPS) :=
+  match comp_type _ _ c with
+  | Echo1 => true
+  | Echo2 => false
+  end.
+
+Theorem ni : NonInterference PAYD COMPT COMPTDEC COMPS
+                             IENVD KSTD INIT HANDLERS
+                             (nd_strong PAYD COMPT COMPS) labeler.
 Proof.
-  apply ni_suf.
-  unfold NonInterferenceSt'.
-  intros.
-  inversion H1.
-  inversion H2.
-  intros.
-  destruct_msg.
-  repeat unpack.
-  simpl in *.
-  rewrite H in *.
-  inversion H7.
-  f_equal; auto.
-  apply H0; auto; try spawn_call.
-
-  unfold NonInterferenceSt'.
-  intros.
-  inversion H1.
-  destruct_msg.
-  repeat unpack.
-  simpl in *.
-  rewrite H in *.
-  apply H0; auto; try spawn_call.
+  ni.
 Qed.
 (*
 unfold NIWeak'.

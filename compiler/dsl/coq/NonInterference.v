@@ -58,7 +58,7 @@ Definition spawn_ok nd_filt (tr1 : KTrace) (tr2 : KTrace) :=
     filter nd_filt tr1bef = filter nd_filt tr2bef ->
     (comp_fd _ _ c1) = (comp_fd _ _ c2).
 
-Definition NonInterferenceSt' nd_filt labeler (s1 s2:kstate) : Prop :=
+Definition NonInterferenceSt nd_filt labeler (s1 s2:kstate) : Prop :=
   forall tr1 tr2, ktr _ _ _ _ s1 = [tr1]%inhabited ->
                   ktr _ _ _ _ s2 = [tr2]%inhabited ->
                   call_ok nd_filt tr1 tr2 ->
@@ -66,24 +66,12 @@ Definition NonInterferenceSt' nd_filt labeler (s1 s2:kstate) : Prop :=
                   inputs labeler tr1 = inputs labeler tr2 ->
                   outputs labeler tr1 = outputs labeler tr2.
 
-Definition NonInterference' nd_filt labeler : Prop :=
-  forall s1 s2, Reach s1 -> Reach s2 ->
-                NonInterferenceSt' nd_filt labeler s1 s2.
-
 Definition NonInterference nd_filt labeler : Prop :=
-  forall s1 s2 tr1 tr2, Reach s1 -> Reach s2 ->
-                        ktr _ _ _ _ s1 = [tr1]%inhabited ->
-                        ktr _ _ _ _ s2 = [tr2]%inhabited ->
-                        call_ok nd_filt tr1 tr2 ->
-                        spawn_ok nd_filt tr1 tr2 ->
-                        inputs labeler tr1 = inputs labeler tr2 ->
-                        outputs labeler tr1 = outputs labeler tr2.
+  forall s1 s2, Reach s1 -> Reach s2 ->
+                NonInterferenceSt nd_filt labeler s1 s2.
 
 Definition nd_weak : KAction -> bool := fun _ => false.
-
-(*Non deterministic calls are independent of the trace history.*)
-Definition NIWeak := NonInterference nd_weak.
-Definition NIWeak' := NonInterference' nd_weak.
+Definition nd_strong : KAction -> bool := fun _ => true.
 
 Lemma call_ok_sub : forall nd_filt act tr1 tr2,
   call_ok nd_filt tr1 (act::tr2) ->
@@ -124,10 +112,10 @@ Qed.
 Hint Resolve call_ok_sub spawn_ok_sub call_ok_sym spawn_ok_sym.
 
 Lemma nist_sym : forall s1 s2 nd_filt lblr,
-  NonInterferenceSt' nd_filt lblr s1 s2 ->
-  NonInterferenceSt' nd_filt lblr s2 s1.
+  NonInterferenceSt nd_filt lblr s1 s2 ->
+  NonInterferenceSt nd_filt lblr s2 s1.
 Proof.
-  unfold NonInterferenceSt'.
+  unfold NonInterferenceSt.
   intros.
   symmetry.
   apply H; auto.
@@ -486,29 +474,29 @@ Ltac low_ins :=
 Theorem ni_suf : forall lblr nd_filt,
   (forall c m s1 s1' s2 s2',
      lblr c = true ->
-     NonInterferenceSt' nd_filt lblr s1 s2 ->
+     NonInterferenceSt nd_filt lblr s1 s2 ->
      ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
      ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s2 s2' ->
-     NonInterferenceSt' nd_filt lblr s1' s2') ->
+     NonInterferenceSt nd_filt lblr s1' s2') ->
   (forall c m s1 s1' s2,
      lblr c = false ->
-     NonInterferenceSt' nd_filt lblr s1 s2 ->
+     NonInterferenceSt nd_filt lblr s1 s2 ->
      ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
-     NonInterferenceSt' nd_filt lblr s1' s2) ->
-  NonInterference' nd_filt lblr.
+     NonInterferenceSt nd_filt lblr s1' s2) ->
+  NonInterference nd_filt lblr.
 Proof.
-  unfold NonInterference'.
+  unfold NonInterference.
   intros.
   generalize dependent s2.
   induction H1; intros.
     induction H2.
-      unfold NonInterferenceSt'; intros.
+      unfold NonInterferenceSt; intros.
       assert (tr1 = tr2) as Heq by (apply init_tr_same with (s1:=s) (s2:=s0); auto).
       rewrite Heq.
       reflexivity.
 
       case_eq (lblr c); intros.
-        unfold NonInterferenceSt'.
+        unfold NonInterferenceSt.
         intros.
         assert (inputs lblr tr1 = nil) as Heq by
           (apply init_inputs_nil with (s:=s); auto).
@@ -521,13 +509,13 @@ Proof.
         apply H0 with (c:=c) (m:=m) (s1:=s0); auto.
 
       rewrite H4.
-      unfold NonInterferenceSt'.
+      unfold NonInterferenceSt.
       simpl.
       intros.
       apply pack_injective in H6.
       subst tr2.
       simpl in *.
-      unfold NonInterferenceSt' in IHReach.
+      unfold NonInterferenceSt in IHReach.
       simpl in IHReach.
       destruct (lblr f).
         assert (inputs lblr tr1 = nil) as Heq by
@@ -541,7 +529,7 @@ Proof.
 
     case_eq (lblr c); intros.    
       induction H3.
-        unfold NonInterferenceSt'; intros.
+        unfold NonInterferenceSt; intros.
         assert (inputs lblr tr2 = nil) as Heq by
           (apply init_inputs_nil with (s:=s0); auto).
         rewrite Heq in H9.
@@ -549,12 +537,12 @@ Proof.
         discriminate.
 
         case_eq (lblr c0); intros.
-          unfold NonInterferenceSt'; intros.
+          unfold NonInterferenceSt; intros.
           assert (c0 = c) by (repeat high_ins; inversion H11; auto).
           assert (m0 = m) by (repeat high_ins; inversion H11; auto).
           subst c0.
           subst m0.
-          unfold NonInterferenceSt' at 2 in H.
+          unfold NonInterferenceSt at 2 in H.
           apply H with (m:=m) (c:=c) (s1:=s) (s1':=s') (s2:=s0) (s2':=s'0); auto.
 
           apply nist_sym.
@@ -562,15 +550,15 @@ Proof.
           apply H0 with (c:=c0) (m:=m0) (s1:=s0) (s1':=s'0) (s2:=s'); auto.
           
         rewrite H6.
-        unfold NonInterferenceSt'.
+        unfold NonInterferenceSt.
         simpl.
         intros.
         apply pack_injective in H8.
         subst tr2.
         simpl in *.
-        unfold NonInterferenceSt' in IHReach.
+        unfold NonInterferenceSt in IHReach.
         simpl in IHReach.
-        unfold NonInterferenceSt' in IHReach0.
+        unfold NonInterferenceSt in IHReach0.
         destruct (lblr f).
           high_ins.
           discriminate.
@@ -582,7 +570,7 @@ Proof.
       apply H0 with (c:=c) (m:=m) (s1:=s); auto.
 
     rewrite H3.
-    unfold NonInterferenceSt'.
+    unfold NonInterferenceSt.
     simpl.
     intros.
     apply pack_injective in H5.
@@ -602,7 +590,7 @@ Proof.
           discriminate.
 
           low_ins.
-          unfold NonInterferenceSt' in H0.
+          unfold NonInterferenceSt in H0.
           symmetry.
           apply H0 with (c:=c) (m:=m) (s1:={| kcs := cs0; ktr := [tr0]; kst := st; kfd := fd |})
                         (s1':=s'0) (s2:=s') (tr1:=tr2)
@@ -632,7 +620,7 @@ Proof.
           simpl in *.
           destruct (lblr f0).
             inversion H11.
-            unfold NonInterferenceSt' in IHReach.
+            unfold NonInterferenceSt in IHReach.
             eapply IHReach; eauto.
             repeat apply call_ok_sub in H9; apply call_ok_sym in H9;
             repeat apply call_ok_sub in H9; apply call_ok_sym in H9; assumption.
@@ -640,11 +628,12 @@ Proof.
             repeat apply spawn_ok_sub in H10; apply spawn_ok_sym in H10; assumption.
 
             eapply IHReach0; auto.
+
             repeat apply call_ok_sub in H9. assumption.
             repeat apply spawn_ok_sub in H10; assumption.
           
       rewrite H5 in *.
-      unfold NonInterferenceSt' in IHReach.
+      unfold NonInterferenceSt in IHReach.
       simpl in IHReach.
       eapply IHReach; eauto.
 Qed.

@@ -12,15 +12,23 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 1.
+Definition NB_MSG : nat := 5.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
-  [ ("M", [str_d])
+  [ ("CrashDetected", [])
+  ; ("Stop",          [])
+  ; ("Unlock",        [])
+  ; ("NewLocation",   [num_d; num_d])
+  ; ("Speed",  [num_d])
   ].
 
-Notation M := 0%fin (only parsing).
+Notation CrashDetected := 0%fin (only parsing).
+Notation Stop := 1%fin (only parsing).
+Notation Unlock := 2%fin (only parsing).
+Notation NewLocation := 3%fin (only parsing).
+Notation Speed := 4%fin (only parsing).
 
-Inductive COMPT' : Type := Echo1 | Echo2.
+Inductive COMPT' : Type := Control | Body | Telematics | Media | KeylessEntry.
 Definition COMPT := COMPT'.
 
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
@@ -28,15 +36,22 @@ Proof. decide equality. Defined.
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | Echo1 => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
-  | Echo2 => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
+  | Control => mk_compd "Control" "test/echo-00/test.py" [] (mk_vdesc [])
+  | Body => mk_compd "Body" "test/echo-00/test.py" [] (mk_vdesc [])
+  | Telematics => mk_compd "Telematics" "test/echo-00/test.py" [] (mk_vdesc [])
+  | Media => mk_compd "Media" "test/echo-00/test.py" [] (mk_vdesc [])
+  | KeylessEntry => mk_compd "KeylessEntry" "test/echo-00/test.py" [] (mk_vdesc [])
   end.
 
-Definition KSTD : vcdesc COMPT := mk_vcdesc [].
+Definition KSTD : vcdesc COMPT := mk_vcdesc [(*crashed*)Desc _ num_d
+                                            ;(*locked*) Desc _ num_d].
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
-  [ Comp _ Echo1;
-    Comp _ Echo2
+  [ Comp _ Control;
+    Comp _ Body;
+    Comp _ Telematics;
+    Comp _ Media;
+    Comp _ KeylessEntry
   ].
 
 End SystemFeatures.
@@ -52,26 +67,43 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  seq (spawn IENVD _ Echo1 tt None (Logic.eq_refl _))
-  (seq (spawn IENVD _ Echo2 tt (Some None) (Logic.eq_refl _))
-  nop).
+  seq (spawn IENVD _ Control tt None (Logic.eq_refl _))
+  (seq (spawn IENVD _ Body tt (Some None) (Logic.eq_refl _))
+  (seq (spawn IENVD _ Telematics tt (Some (Some None)) (Logic.eq_refl _))
+  (seq (spawn IENVD _ Media tt (Some (Some (Some None))) (Logic.eq_refl _))
+  (seq (spawn IENVD _ KeylessEntry tt (Some (Some (Some (Some None)))) (Logic.eq_refl _))
+  nop)))).
+
+(*(*Something stupid*)
+Section Stupid.
+
+Variable NB_COMPT : nat.
+
+Definition desc := fin NB_COMPT.
+
+Print hdlr_prog.
+Print mk_vvdesc.
+Definition sdenote_desc (d : desc) :=
+Definition msg_handler (tag : fin NB_MSG) : Type := 
+
+End Stupid.
+(*End something stupid*)*)
 
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun m cc =>
-  let (_, cf, _) := cc in
+  let (ct, _, _) := cc in
   match m as _m return forall (EQ : _m = m), _ with
   | {| tag := t; pay := p |} =>
-  match t as _t return
-    forall _p, Build_msg PAYD _t _p = m -> _
+  match ct as _ct, t as _t return
+    forall _p, Build_msg PAYD _t _p = m -> s[[ comp_conf_desc _ _ _ct ]] -> _
   with
-  | None => fun p EQ =>
+  | _, (Some (Some (Some (Some (Some bad))))) => fun _ _ _ => match bad with end
+  | _, _ => fun p EQ =>
     let envd := existT _ 0 tt in
     existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
       seq (send envd _ _ ccomp None (mvar EQ None, tt))
       nop
     )
-  | Some bad =>
-    match bad with end
   end p
   end (Logic.eq_refl m).
 
@@ -203,103 +235,3 @@ Ltac low_step :=
 
 Ltac ni :=
   apply ni_suf; [high_steps | low_step].
-
-Definition labeler (c : comp COMPT COMPS) :=
-  match comp_type _ _ c with
-  | Echo1 => true
-  | Echo2 => false
-  end.
-
-Theorem ni : NonInterference PAYD COMPT COMPTDEC COMPS
-                             IENVD KSTD INIT HANDLERS
-                             (nd_strong PAYD COMPT COMPS) labeler.
-Proof.
-  ni.
-Qed.
-(*
-unfold NIWeak'.
-unfold NonInterference'.
-  unfold NonInterferenceSt'.
-  intros.
-  generalize dependent tr1.
-  generalize dependent tr2.
-  generalize dependent s2.
-  induction H; intros.
-    induction H0.
-      admit.
-
-      inversion H6.
-      destruct_msg.
-      repeat unpack.
-      simpl in *.
-      destruct (labeler c).
-        admit.
-        admit.
-
-      admit.
-
-    inversion H0.
-    destruct_msg.
-    repeat unpack.
-    simpl in *.
-    destruct (labeler c).
-      simpl in *.
-      apply call_ok_sym in H4.
-      repeat apply call_ok_sub in H4.
-      apply spawn_ok_sym in H5.
-      repeat apply spawn_ok_sub in H5.
-      generalize dependent tr2.
-      induction H1; intros.
-        admit.
-
-        inversion H2.
-        destruct_msg.
-        repeat unpack.
-        simpl in *.
-        destruct (labeler c0).
-          inversion H6.
-          replace a with a0 in * by admit.
-          replace b with b0 in * by admit.
-          f_equal; auto.
-          apply IHReach with (s2:=s1); auto.
-          admit.
-          admit.
-
-          apply IHReach0; auto.
-          admit.
-          admit.
-
-        subst s'.
-        simpl in *.
-        apply pack_injective in H4.
-        subst tr2.
-        simpl in *.
-        apply IHReach0; auto.
-        admit.
-        admit.
-
-    apply IHReach with (s2:=s2); auto.
-admit.
-admit.
-
-apply
-  inversion H0.
-  inversion H1.
-  destruct_msg.
-  repeat unpack.
-  simpl in *.
-  destruct (labeler c).
-  
-    
-
-  apply H; eauto.
-  apply call_ok_sym in H3; apply call_ok_sym;
-  repeat apply call_ok_sub in H3; assumption.
-  apply spawn_ok_sym in H4; apply spawn_ok_sym;
-  repeat apply spawn_ok_sub in H4; assumption.
-Qed.
-*)
-End Spec.
-
-Module Main := MkMain(Spec).
-Import Main.

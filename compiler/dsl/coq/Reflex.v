@@ -67,7 +67,8 @@ Record compd :=
 ; compd_conf : vdesc
 }.
 
-Variable COMPT : Set.
+Variable NB_COMPT : nat.
+Definition COMPT := fin NB_COMPT.
 
 Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
 
@@ -541,11 +542,81 @@ Variable CKST : kstate.
 Variable CC : comp.
 Variable CMSG : msg.
 
-Definition CPAY : vdesc := lkup_tag (tag CMSG).
-Definition CCONFD := comp_conf_desc (comp_type CC).
+Section WITH_ENVD.
 
-Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ svec_ith (projT2 CPAY) i ]] :=
-  shvec_ith _ (projT2 CPAY) (pay CMSG) i.
+Variable ENVD : vcdesc.
+Notation ENVD_SIZE := (projT1 ENVD).
+Notation ENVD_DESC := (projT2 ENVD).
+
+Section WITH_TERM.
+
+Variable TERM : cdesc -> Set.
+
+Section HANDLER_PROG.
+
+Variable CCT : COMPT.
+Variable CMSGT : fin NB_MSG.
+
+Definition CPAY : vdesc := lkup_tag CMSGT.
+Definition CCONFD := comp_conf_desc CCT.
+
+
+Inductive expr : cdesc -> Set :=
+| Term  : forall {d}, TERM d -> expr d
+| UnOp  : forall {d1 d2}, unop d1 d2 -> expr d1 -> expr d2
+| BinOp : forall {d1 d2 d3}, binop d1 d2 d3 -> expr d1 -> expr d2 -> expr d3
+.
+
+Fixpoint payload_expr' (n : nat) (pd : vdesc' n) : Type :=
+  match n as _n return vdesc' _n -> Type with
+  | O => fun p => unit
+  | S n' => fun (pd : vdesc' (S n')) =>
+    match pd with
+    | (d, pd') => expr (Desc d) * payload_expr' n' pd'
+    end
+  end%type pd.
+
+Definition payload_expr pd := payload_expr' (projT1 pd) (projT2 pd).
+
+Definition sdenote_desc_cfg_pat (d : desc) : Set := option (expr (Desc d)).
+
+Record comp_pat : Set :=
+{ comp_pat_type : COMPT
+; comp_pat_conf : shvec sdenote_desc_cfg_pat (projT2 (comp_conf_desc comp_pat_type))
+}.
+
+Inductive cmd : Type :=
+| Nop : cmd
+| Seq : cmd -> cmd -> cmd
+| Ite : expr (Desc num_d) -> cmd -> cmd -> cmd
+| Send : forall ct, expr (Comp ct) -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
+| SendAll : comp_pat -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
+| Spawn :
+    forall (t : COMPT), s[[ comp_conf_desc t ]] ->
+    forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = Comp t -> cmd
+| StUpd : forall i, expr (svec_ith (projT2 KSTD) i) -> cmd
+.
+
+Inductive base_term : cdesc -> Set :=
+| SLit   : str -> base_term (Desc str_d)
+| NLit   : num -> base_term (Desc num_d)
+| Var    : forall (i : fin ENVD_SIZE), base_term (svec_ith ENVD_DESC i)
+| CompFd : forall ct, base_term (Comp ct) -> base_term (Desc fd_d)
+.
+
+Inductive hdlr_term : cdesc -> Set :=
+| Base  : forall {d}, base_term d -> hdlr_term d
+| CComp   : hdlr_term (Comp CCT)
+| CConf : forall (i : fin (projT1 CCONFD)), hdlr_term (Desc (svec_ith (projT2 CCONFD) i))
+| MVar  : forall (i : fin (projT1 CPAY)), hdlr_term (Desc (svec_ith (projT2 CPAY) i))
+| StVar : forall (i : fin KSTD_SIZE), hdlr_term (svec_ith KSTD_DESC i)
+.
+
+End HANDLER_PROG.
+
+(*This is not used anywhere.*)
+(*Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ svec_ith (projT2 CPAY) i ]] :=
+  shvec_ith _ (projT2 CPAY) (pay CMSG) i.*)
 
 Fixpoint all_open_payload_drop' (n : nat) :
   forall (v : vdesc' n) (drop : fd), sdenote_vdesc' n v -> hprop :=
@@ -639,13 +710,13 @@ Definition vcdesc_fds_in l (envd : vcdesc) (env : s[[ envd ]]) : Prop :=
   | _ => fun _ => True
   end (shvec_ith _ (projT2 envd) env i).
 
-Section WITH_ENVD.
+(*Section WITH_ENVD.*)
 
-Variable ENVD : vcdesc.
+(*Variable ENVD : vcdesc.
 Notation ENVD_SIZE := (projT1 ENVD).
-Notation ENVD_DESC := (projT2 ENVD).
+Notation ENVD_DESC := (projT2 ENVD).*)
 
-Inductive base_term : cdesc -> Set :=
+(*Inductive base_term : cdesc -> Set :=
 | SLit   : str -> base_term (Desc str_d)
 | NLit   : num -> base_term (Desc num_d)
 | Var    : forall (i : fin ENVD_SIZE), base_term (svec_ith ENVD_DESC i)
@@ -658,17 +729,17 @@ Inductive hdlr_term : cdesc -> Set :=
 | CConf : forall (i : fin (projT1 CCONFD)), hdlr_term (Desc (svec_ith (projT2 CCONFD) i))
 | MVar  : forall (i : fin (projT1 CPAY)), hdlr_term (Desc (svec_ith (projT2 CPAY) i))
 | StVar : forall (i : fin KSTD_SIZE), hdlr_term (svec_ith KSTD_DESC i)
-.
+.*)
 
-Section WITH_TERM.
+(*Section WITH_TERM.*)
 
-Variable TERM : cdesc -> Set.
+(*Variable TERM : cdesc -> Set.*)
 
-Inductive expr : cdesc -> Set :=
+(*Inductive expr : cdesc -> Set :=
 | Term  : forall {d}, TERM d -> expr d
 | UnOp  : forall {d1 d2}, unop d1 d2 -> expr d1 -> expr d2
 | BinOp : forall {d1 d2 d3}, binop d1 d2 d3 -> expr d1 -> expr d2 -> expr d3
-.
+.*)
 
 Fixpoint payload_cexpr' (n : nat) (pd : vcdesc' n) : Type :=
   match n as _n return vcdesc' _n -> Type with
@@ -681,7 +752,7 @@ Fixpoint payload_cexpr' (n : nat) (pd : vcdesc' n) : Type :=
 
 Definition payload_cexpr pd := payload_cexpr' (projT1 pd) (projT2 pd).
 
-Fixpoint payload_expr' (n : nat) (pd : vdesc' n) : Type :=
+(*Fixpoint payload_expr' (n : nat) (pd : vdesc' n) : Type :=
   match n as _n return vdesc' _n -> Type with
   | O => fun p => unit
   | S n' => fun (pd : vdesc' (S n')) =>
@@ -690,7 +761,7 @@ Fixpoint payload_expr' (n : nat) (pd : vdesc' n) : Type :=
     end
   end%type pd.
 
-Definition payload_expr pd := payload_expr' (projT1 pd) (projT2 pd).
+Definition payload_expr pd := payload_expr' (projT1 pd) (projT2 pd).*)
 
 Section WITH_PROG_ENV.
 
@@ -705,12 +776,13 @@ Fixpoint eval_base_term {d} (t : base_term d) : s[[ d ]] :=
   | CompFd ct t' => comp_fd (projT1 (eval_base_term t'))
   end.
 
-Definition eval_hdlr_term {d} (t : hdlr_term d) : s[[ d ]] :=
+Definition eval_hdlr_term {d} (t : hdlr_term (comp_type CC) (tag CMSG) d)
+  : s[[ d ]] :=
   match t with
   | Base _ bt => eval_base_term bt
   | CComp       => existT _ CC (Logic.eq_refl (comp_type CC))
-  | CConf i   => shvec_ith _ (projT2 CCONFD) (comp_conf CC) i
-  | MVar i    => shvec_ith _ (projT2 CPAY) (pay CMSG) i
+  | CConf i   => shvec_ith _ (projT2 (CCONFD (comp_type CC))) (comp_conf CC) i
+  | MVar i    => shvec_ith _ (projT2 (CPAY (tag CMSG))) (pay CMSG) i
   | StVar i   => shvec_ith _ (projT2 KSTD) KST i
   end.
 
@@ -762,12 +834,12 @@ Definition eval_payload_cexpr (pd : vcdesc) (e : payload_cexpr pd) : s[[ pd ]] :
 Definition eval_payload_expr (pd : vdesc) (e : payload_expr pd) : s[[ pd ]] :=
   eval_payload_expr' (projT1 pd) (projT2 pd) e.
 
-Definition sdenote_desc_cfg_pat (d : desc) : Set := option (expr (Desc d)).
+(*Definition sdenote_desc_cfg_pat (d : desc) : Set := option (expr (Desc d)).*)
 
-Record comp_pat : Set :=
+(*Record comp_pat : Set :=
 { comp_pat_type : COMPT
 ; comp_pat_conf : shvec sdenote_desc_cfg_pat (projT2 (comp_conf_desc comp_pat_type))
-}.
+}.*)
 
 Definition sdenote_desc_conc_pat (d : desc) : Set := option (s[[ d ]]).
 
@@ -817,7 +889,7 @@ Definition exists_comp (cp : comp_pat) (comps : list comp) :=
   | Some _ => true
   end.
 
-Inductive cmd : Type :=
+(*Inductive cmd : Type :=
 | Nop : cmd
 | Seq : cmd -> cmd -> cmd
 | Ite : expr (Desc num_d) -> cmd -> cmd -> cmd
@@ -827,7 +899,7 @@ Inductive cmd : Type :=
     forall (t : COMPT), s[[ comp_conf_desc t ]] ->
     forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = Comp t -> cmd
 | StUpd : forall i, expr (svec_ith (projT2 KSTD) i) -> cmd
-.
+.*)
 
 Record init_state :=
 { init_comps : list comp
@@ -843,7 +915,7 @@ End WITH_TERM.
 
 Definition init_prog := cmd base_term.
 
-Definition hdlr_prog := cmd hdlr_term.
+(*Definition hdlr_prog := cmd hdlr_term.*)
 
 Inductive bintree T :=
 | Leaf    : T -> bintree T
@@ -888,14 +960,17 @@ Definition eval_base_payload_cexpr e :=
 Definition eval_base_payload_expr e :=
   eval_payload_expr base_term (@eval_base_term e).
 
-Definition eval_hdlr_expr {d} (e : s[[ENVD]]) (s : s[[KSTD]]) : expr hdlr_term d -> s[[ d ]] :=
-  eval_expr hdlr_term (@eval_hdlr_term e s).
+Definition eval_hdlr_expr {d} (e : s[[ENVD]]) (s : s[[KSTD]]) :
+  expr (hdlr_term (comp_type CC) (tag CMSG)) d -> s[[ d ]] :=
+  eval_expr (hdlr_term (comp_type CC) (tag CMSG)) (@eval_hdlr_term e s).
 
 Definition eval_hdlr_payload_cexpr e s :=
-  eval_payload_cexpr hdlr_term (@eval_hdlr_term s e).
+  eval_payload_cexpr (hdlr_term (comp_type CC) (tag CMSG))
+                     (@eval_hdlr_term s e).
 
 Definition eval_hdlr_payload_expr e s :=
-  eval_payload_expr hdlr_term (@eval_hdlr_term s e).
+  eval_payload_expr (hdlr_term (comp_type CC) (tag CMSG))
+                     (@eval_hdlr_term s e).
 
 Definition ktrace_send_msgs (cps : list comp) (m : msg) : KTrace :=
   (map (fun c => KSend c m) cps).
@@ -966,7 +1041,8 @@ Record hdlr_state :=
 }.
 
 (* This should probably move out once the environment can change *)
-Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd hdlr_term) : hdlr_state :=
+Fixpoint hdlr_state_run_cmd (s : hdlr_state)
+  (cmd : cmd (hdlr_term (comp_type CC) (tag CMSG))) : hdlr_state :=
   let (s', env) := s in
   let (cs, tr, st, fd) := s' in
   match cmd with
@@ -999,7 +1075,8 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd hdlr_term) : hdlr_state 
   | SendAll cp t me =>
     let m := eval_hdlr_payload_expr st env _ me in
     let msg := (Build_msg t m) in
-    let comps := filter_comps hdlr_term (@eval_hdlr_term env st) cp cs in
+    let comps := filter_comps (hdlr_term (comp_type CC) (tag CMSG))
+                              (@eval_hdlr_term env st) cp cs in
     {| hdlr_kst :=
          {| kcs := cs
           ; ktr := tr ~~~ ktrace_send_msgs comps msg ++ tr
@@ -1082,7 +1159,10 @@ Definition default_cpayload (v : vcdesc) : s[[ v ]] :=
 Definition default_hdlr_state s :=
   {| hdlr_kst := s; hdlr_env := default_cpayload ENVD |}.
 
-Definition kstate_run_prog (s : kstate) (p : hdlr_prog) : kstate :=
+Definition hdlr_prog ct tag := cmd (hdlr_term ct tag).
+
+Definition kstate_run_prog (s : kstate)
+  (p : hdlr_prog (comp_type CC) (tag CMSG)) : kstate :=
   hdlr_kst (hdlr_state_run_cmd (default_hdlr_state s) p).
 
 End WITH_ENVD.
@@ -1103,8 +1183,286 @@ Definition initial_init_state :=
 
 Section WITH_HANDLER.
 
-Definition handlers := forall (m : msg) (cc : comp),
-  sigT (fun prog_envd => hdlr_prog cc m prog_envd).
+(*SearchAbout minus.
+SearchAbout lt.
+SearchAbout minus.
+Fixpoint fin_vec (bound n : nat) (pf : n <= bound) : vec (fin bound) n :=
+  match n as _n return
+    _n <= bound -> vec (fin bound) _n
+  with
+  | O    => fun _ => tt
+  | S n' => fun pf =>
+              (fin_of_nat_ok bound (bound - (S n'))
+                (Minus.lt_minus bound (S n') pf (Lt.lt_0_Sn n')),
+                       fin_vec bound n' (Le.le_Sn_le n' bound pf))
+(*match fin_of_nat bound n' with
+                      | inl f => (f, fin_vec bound n' (Le.le_Sn_le n' bound pf))
+                      | inr bad => match bad pf with end
+                      end*)
+  end pf.
+
+Definition denote_compt (tag : fin NB_MSG) (ct : COMPT) :=
+  sigT (fun prog_envd => hdlr_prog prog_envd ct tag).
+
+Definition msg_handler_d :=
+  (fin_vec NB_COMPT NB_COMPT (Le.le_refl _)).
+
+Definition msg_handler (tag : fin NB_MSG) :=
+  hvec (denote_compt tag) msg_handler_d.
+
+Definition handler_d :=
+  (fin_vec NB_MSG NB_MSG (Le.le_refl _)).
+
+Definition handlers :=
+  hvec msg_handler handler_d.
+
+(*Definition get_msg_hdlr (m : msg) (hdlrs : handlers) : msg_handler (tag m).
+  pose (hvec_ith msg_handler handler_d hdlrs (tag m)).
+simpl in *.
+unfold handler_d in d.
+unfold fin_vec in d.
+simpl in *.
+destruct m.
+simpl in *.
+unfold vec_ith in d.
+simpl in *.*)
+(*Definition fin_pred {n} (f : fin n) : fin n :=
+  match n as _n return
+    fin _n -> fin _n
+  with
+  | O    => fun f => match f with end
+  | S n' => fun f => match f with
+                     | None    => f
+                     | Some f' => lift_fin f'
+                     end
+  end f.
+
+Fixpoint msg_handler (tag : fin NB_MSG) (f : fin NB_COMPT) {struct f} : Type :=
+  match NB_COMPT as _NB_COMPT return
+    fin _NB_COMPT -> _
+  with
+  | O    => fun f => match f with end
+  | S n' => fun f_ =>
+              match f_ with
+              | None    => sigT (fun prog_envd => hdlr_prog prog_envd f tag)
+              | Some f' => (sigT (fun prog_envd => hdlr_prog prog_envd f tag)
+                            * (msg_handler tag (fin_pred f)))%type
+              end
+  end f.
+
+  match n as _n return
+    _n <= NB_COMPT -> Type
+  with
+  | O    => fun _  => unit
+  | S n' => fun pf =>
+              match fin_of_nat NB_COMPT n' with
+              | inl ct => ((sigT (fun prog_envd => hdlr_prog prog_envd ct tag))
+                          * (msg_handler tag n' (Le.le_Sn_le n' NB_COMPT pf)))%type
+              | inr bad => match bad pf with end
+              end
+  end pf.*)
+(*
+Inductive msg_handler (tag : fin NB_MSG) : nat -> Type :=
+| Empty : msg_handler tag 0
+| AddT  : forall n (ct : fin (S n)),
+            sigT (fun prog_envd => hdlr_prog prog_envd ct tag) ->
+            msg_handler tag n -> msg_handler tag (S n).*)
+
+(*Definition fin_of_nat_ok bound n (pf : n < bound) : fin bound :=
+  match fin_of_nat bound n with
+  | inl t => t
+  | inr bad => match bad pf with end
+  end.*)
+
+Definition denote_lift {n} (d : fin (S n) -> Type) : fin n -> Type :=
+  fun f => d (lift_fin f).
+
+Fixpoint hvec_fin bound n (pf : n <= bound)
+         (d : forall n, fin n -> n <= bound -> Type) :=
+  match n as _n return
+    _n <= bound -> Type
+  with
+  | O    => fun _ => unit
+  | S n' => fun pf => (d (S n') (max_fin n') pf *
+                         hvec_fin bound n' (Le.le_Sn_le _ _ pf) d)%type
+  end pf.
+
+Fixpoint hvec_fin_ith bound n (pf : n <= bound) d
+         (v : hvec_fin bound n pf d) (i : fin n) : d n i pf :=
+  match n as _n return
+    forall (i : fin _n) (pf : _n <= bound),
+      hvec_fin bound _n pf d -> d _n i pf
+  with
+  | O => fun i _ _ => match i with end
+  | S n' => fun i pf v =>
+              let (h, rest) := v in
+              if fin_eq_dec (max_fin n') i
+              then _
+              else hvec_fin_ith bound n' _ d rest _
+  end i pf v.
+
+Fixpoint hvec_fin bound n (pf : n <= bound)
+         (d : forall n, n < bound -> Type) :=
+  match n as _n return
+    _n <= bound -> Type
+  with
+  | O    => fun _  => unit
+  | S n' => fun pf => (d (fin_of_nat_ok bound (bound - (S n'))
+                          (Minus.lt_minus bound (S n') pf (Lt.lt_0_Sn n')))
+                      * (hvec_fin bound n' (Le.le_Sn_le _ _ pf) d))%type
+  end pf.
+
+Fixpoint hvec_fin bound n (pf : n <= bound) (d : fin bound -> Type) :=
+  match n as _n return
+    _n <= bound -> Type
+  with
+  | O    => fun _  => unit
+  | S n' => fun pf => (d (fin_of_nat_ok bound (bound - (S n'))
+                          (Minus.lt_minus bound (S n') pf (Lt.lt_0_Sn n')))
+                      * (hvec_fin bound n' (Le.le_Sn_le _ _ pf) d))%type
+  end pf.
+
+Lemma fin_of_nat_max : forall n,
+  fin_of_nat_ok (S n) n (Lt.lt_n_Sn _) = max_fin n.
+Proof.
+  induction n.
+    unfold fin_of_nat_ok in *; simpl in *.
+    reflexivity.
+
+    simpl in *.
+    rewrite <- IHn.
+    unfold fin_of_nat_ok.
+    simpl.
+    destruct n; auto.
+    destruct (fin_of_nat (S n) n); auto.
+    contradict n0.
+Qed.
+
+Definition hvec_fin_ith :
+  forall b n pf (i : fin n) d (v : hvec_fin b n pf d), d i.
+intros.
+induction n.
+  simpl in *.
+  contradiction.
+
+  simpl in *.
+  destruct i.
+    
+    
+  destruct v. 
+    unfold fin_of_nat_ok in *.
+    simpl in d0.
+    destruct (b-b).
+    assert (b-b=0) by omega.
+    rewrite H in d0.
+
+refine(fix F n (i : fin n) d (v : hvec_fin n d) : d i :=
+  match n as _n return
+    forall (d : fin _n -> Type) (i : fin _n), hvec_fin _n d -> d i
+  with
+  | O => fun _ i _ => match i with end
+(*  | 1 => fun d i v => let (h, _) := v in
+                      match i with
+                      | None => h
+                      | Some f => match f with end
+                      end*)
+  | S n' => fun d i v =>
+              let (h, rest) := v in
+              if fin_eq_dec i (max_fin n')
+              then _
+              else _
+              (*match i as _i return
+                d _i
+              with
+              | None => _
+              | Some i' => _
+              end*)
+  end d i v).
+rewrite fin_of_nat_max in *; rewrite _H; assumption.
+pose proof (F (S n')
+
+Definition msg_handler (tag : fin NB_MSG) :=
+  hvec_fin (denote_compt tag).
+
+Definition handlers :=
+  hvec_fin (fun tag => msg_handler tag).
+
+Fixpoint 
+
+Fixpoint msg_handler (tag : fin NB_MSG) n (pf : n <= NB_COMPT) : Type :=
+  match n as _n return
+    _n <= NB_COMPT -> Type
+  with
+  | O    => fun _  => unit
+  | S n' => fun pf =>
+              match fin_of_nat NB_COMPT n' with
+              | inl ct => ((sigT (fun prog_envd => hdlr_prog prog_envd ct tag))
+                          * (msg_handler tag n' (Le.le_Sn_le n' NB_COMPT pf)))%type
+              | inr bad => match bad pf with end
+              end
+  end pf.
+
+Definition fin_of_nat_ok bound n (pf : n < bound) : fin bound :=
+  match fin_of_nat bound n with
+  | inl t => t
+  | inr bad => match bad pf with end
+  end.
+
+Lemma lt_le : forall m n, S n <= m -> n < m.
+auto.
+Qed.
+
+Fixpoint handlers n (pf : n <= NB_MSG) : Type :=
+  match n as _n return
+    _n <= NB_MSG -> Type
+  with
+  | O    => fun _  => unit
+  | S n' => fun pf =>
+              ((msg_handler (fin_of_nat_ok NB_MSG n' (lt_le _ _ pf))
+                            NB_COMPT (Le.le_refl _))
+               * (handlers n' (Le.le_Sn_le n' NB_MSG pf)))%type
+  end pf.
+
+Variable n' : nat.
+Variable pf0 : S n' <= NB_MSG.
+Variable hdlrs0 : handlers (S n') pf0.
+Eval simpl in handlers (S n') pf0.
+
+Fixpoint get_msg_hdlr n i (pf : i <= n) (pf : n <= NB_MSG) (hdlrs : handlers n pf)
+  : msg_handler i NB_COMPT (Le.le_refl _) :=
+  match n as _n return
+    forall (pf : _n <= NB_MSG), fin _n -> handlers _n pf -> _
+  with
+  | O    => fun _ i _ => match i with end
+  | S n' => fun pf i hdlrs =>
+              match hdlrs with
+              | (hd_hdlr, rest) =>
+                match i with
+                | None    => hd_hdlr
+                | Some i' => get_msg_hdlr n' i' (Le.le_Sn_le _ _ pf) rest
+                end
+              end
+  end pf i hdlrs.
+
+Definition msg_handler (tag : fin NB_MSG) :=
+  hvec (denote_compt tag) msg_handler_d.
+
+Definition handler_d :=
+  (fin_vec NB_MSG NB_MSG (Le.le_refl _)).
+
+Definition handlers :=
+  hvec msg_handler handler_d.
+
+Definition get_msg_hdlr (m : msg) (hdlrs : handlers) : msg_handler (tag m).
+  pose (hvec_ith msg_handler handler_d hdlrs (tag m)).
+  simpl in *.
+
+
+Definition get_hdlr (m : msg) (c : comp) (hdlrs : handlers) :=
+  hvec_ith (denote_compt (tag m)) msg_handler_d (get_msg_hdlr m hdlrs) (comp_type c).*)
+
+Definition handlers := forall (tag : fin NB_MSG) (ct : COMPT),
+  sigT (fun prog_envd => hdlr_prog prog_envd ct tag).
 
 Variable HANDLERS : handlers.
 
@@ -1186,7 +1544,8 @@ Inductive Reach : kstate -> Prop :=
         ; kst := kst s
         ; kfd := FdSet.union (vdesc_fds_set _ (pay m)) (kfd s)
         |} ->
-  Reach (kstate_run_prog c m (projT1 (HANDLERS m c)) s' (projT2 (HANDLERS m c)))
+  let hdlr := HANDLERS (tag m) (comp_type c) in
+  Reach (kstate_run_prog c m (projT1 hdlr) s' (projT2 hdlr))
 | Reach_bogus :
   forall s s' f bmsg tr,
   let cs := kcs s in
@@ -1264,14 +1623,14 @@ Definition open_payload_frame_base {ENVD d}
   end f.
 
 Definition open_payload_frame_hdlr {CC CMSG ENVD d}
-  (s : FdSet.t) (ht : hdlr_term CC CMSG ENVD d) (f : s[[ d ]])
+  (s : FdSet.t) (ht : hdlr_term ENVD (comp_type CC) (tag CMSG) d) (f : s[[ d ]])
   : hprop
   :=
   match ht in hdlr_term _ _ _ _d return s[[ _d ]] -> hprop with
   | Base _ bt => fun f => open_payload_frame_base s bt f
   | CComp => fun _ => all_open_set_drop (comp_fd CC) s
   | CConf i => fun f =>
-    match svec_ith (projT2 (CCONFD CC)) i as _s return s[[ _s ]] -> hprop with
+    match svec_ith (projT2 (CCONFD (comp_type CC))) i as _s return s[[ _s ]] -> hprop with
     | num_d => fun _ => emp
     | str_d => fun _ => emp
     | fd_d  => fun f => all_open_set_drop f s
@@ -1315,11 +1674,11 @@ Definition open_payload_frame_base_expr {ENVD : vcdesc} {d}
 .
 
 Definition open_payload_frame_hdlr_expr' {CC CMSG ENVD d} (s : FdSet.t)
-  : expr (hdlr_term CC CMSG ENVD) d -> s[[d]] -> hprop
+  : expr (hdlr_term ENVD (comp_type CC) (tag CMSG)) d -> s[[d]] -> hprop
   := open_payload_frame_expr (open_payload_frame_hdlr s).
 
 Definition open_payload_frame_hdlr_expr {CC CMSG} {ENVD : vcdesc} {d}
-  (e : s[[ENVD]]) cs cm (fds : FdSet.t) (exp : expr (hdlr_term CC CMSG ENVD) d)
+  (e : s[[ENVD]]) cs cm (fds : FdSet.t) (exp : expr (hdlr_term ENVD (comp_type CC) (tag CMSG)) d)
   (res : s[[d]]) : hprop
   :=
   open_payload_frame_hdlr_expr' fds exp res

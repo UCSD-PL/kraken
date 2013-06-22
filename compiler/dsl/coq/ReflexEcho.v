@@ -53,24 +53,19 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn IENVD _ Echo tt None (Logic.eq_refl _))
   nop.
 
+Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  fun m cc =>
-  let (_, cf, _) := cc in
-  match m as _m return forall (EQ : _m = m), _ with
-  | {| tag := t; pay := p |} =>
-  match t as _t return
-    forall _p, Build_msg PAYD _t _p = m -> _
+  fun t ct =>
+  match t as _t, ct as _ct return
+    {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD prog_envd _ct _t}
   with
-  | None => fun p EQ =>
-    let envd := existT _ 0 tt in
-    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
-      seq (send envd _ _ ccomp None (mvar EQ None, tt))
-      nop
-    )
-  | Some bad =>
+  | None, _ =>
+    [[ mk_vcdesc [] :
+       send ccomp None (mvar None None, tt) ]]
+  | Some bad, _ =>
     match bad with end
-  end p
-  end (Logic.eq_refl m).
+  end.
+Close Scope hdlr.
 
 End Spec.
 

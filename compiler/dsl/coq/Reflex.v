@@ -487,22 +487,37 @@ Record kstate : Type := mkst
 
 Inductive unop : cdesc -> cdesc -> Set :=
 | Not : unop (Desc num_d) (Desc num_d)
+| SplitFst : ascii -> unop (Desc str_d) (Desc str_d)
+| SplitSnd : ascii -> unop (Desc str_d) (Desc str_d)
 .
+
+Definition splitAt c s :=
+  let fix splitAt_aux c s r_res :=
+    match s with
+    | nil    => (List.rev r_res, nil)
+    | h :: t =>
+      if Ascii.ascii_dec h c then (List.rev r_res, t) else splitAt_aux c t (h :: r_res)
+    end
+  in splitAt_aux c s nil.
 
 Definition eval_unop
   (d1 d2 : cdesc) (op : unop d1 d2) (v : s[[ d1 ]]) : s[[ d2 ]] :=
   match op in unop t1 t2 return s[[ t1 ]] -> s[[ t2 ]] with
   | Not => fun v => if num_eq v FALSE then TRUE else FALSE
+  | SplitFst c => fun v : str =>
+    fst (splitAt c v)
+  | SplitSnd c => fun v : str =>
+    snd (splitAt c v)
   end v.
 
 Implicit Arguments eval_unop.
 
 Inductive binop : cdesc -> cdesc -> cdesc -> Set :=
-| Eq  : forall d, binop d d (Desc num_d)
-| Add : binop (Desc num_d) (Desc num_d) (Desc num_d)
-| Sub : binop (Desc num_d) (Desc num_d) (Desc num_d)
-| Mul : binop (Desc num_d) (Desc num_d) (Desc num_d)
-| Cat : binop (Desc str_d) (Desc str_d) (Desc str_d)
+| Eq    : forall d, binop d d (Desc num_d)
+| Add   : binop (Desc num_d) (Desc num_d) (Desc num_d)
+| Sub   : binop (Desc num_d) (Desc num_d) (Desc num_d)
+| Mul   : binop (Desc num_d) (Desc num_d) (Desc num_d)
+| Cat   : binop (Desc str_d) (Desc str_d) (Desc str_d)
 .
 
 Definition eval_binop
@@ -541,11 +556,14 @@ Variable CKST : kstate.
 Variable CC : comp.
 Variable CMSG : msg.
 
-Definition CPAY : vdesc := lkup_tag (tag CMSG).
-Definition CCONFD := comp_conf_desc (comp_type CC).
+Definition CTAG := tag CMSG.
+Definition CT := comp_type CC.
+Definition CPAY : vdesc := lkup_tag CTAG.
+Definition CCONFD := comp_conf_desc CT.
 
-Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ svec_ith (projT2 CPAY) i ]] :=
-  shvec_ith _ (projT2 CPAY) (pay CMSG) i.
+(*This is never used.*)
+(*Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ svec_ith (projT2 CPAY) i ]] :=
+  shvec_ith _ (projT2 CPAY) (pay CMSG) i.*)
 
 Fixpoint all_open_payload_drop' (n : nat) :
   forall (v : vdesc' n) (drop : fd), sdenote_vdesc' n v -> hprop :=
@@ -652,12 +670,18 @@ Inductive base_term : cdesc -> Set :=
 | CompFd : forall ct, base_term (Comp ct) -> base_term (Desc fd_d)
 .
 
-Inductive hdlr_term : cdesc -> Set :=
-| Base  : forall {d}, base_term d -> hdlr_term d
-| CComp   : hdlr_term (Comp (comp_type CC))
-| CConf : forall (i : fin (projT1 CCONFD)), hdlr_term (Desc (svec_ith (projT2 CCONFD) i))
-| MVar  : forall (i : fin (projT1 CPAY)), hdlr_term (Desc (svec_ith (projT2 CPAY) i))
-| StVar : forall (i : fin KSTD_SIZE), hdlr_term (svec_ith KSTD_DESC i)
+(*I only want handler and all things it depends on to
+ require a component type and message type. I don't want them
+ to require a full message and component. This hopefully will
+ eliminate the need to do some casts.*)
+Inductive hdlr_term (ct : COMPT) (tag : fin NB_MSG) : cdesc -> Set :=
+| Base  : forall {d}, base_term d -> hdlr_term ct tag d
+| CComp   : hdlr_term ct tag (Comp ct)
+| CConf : forall (i : fin (projT1 (comp_conf_desc ct))),
+            hdlr_term ct tag (Desc (svec_ith (projT2 (comp_conf_desc ct)) i))
+| MVar  : forall (i : fin (projT1 (lkup_tag tag))),
+            hdlr_term ct tag (Desc (svec_ith (projT2 (lkup_tag tag)) i))
+| StVar : forall (i : fin KSTD_SIZE), hdlr_term ct tag (svec_ith KSTD_DESC i)
 .
 
 Section WITH_TERM.
@@ -705,10 +729,11 @@ Fixpoint eval_base_term {d} (t : base_term d) : s[[ d ]] :=
   | CompFd ct t' => comp_fd (projT1 (eval_base_term t'))
   end.
 
-Definition eval_hdlr_term {d} (t : hdlr_term d) : s[[ d ]] :=
+Definition eval_hdlr_term {d} (t : hdlr_term CT CTAG d)
+  : s[[ d ]] :=
   match t with
   | Base _ bt => eval_base_term bt
-  | CComp       => existT _ CC (Logic.eq_refl (comp_type CC))
+  | CComp       => existT _ CC (Logic.eq_refl CT)
   | CConf i   => shvec_ith _ (projT2 CCONFD) (comp_conf CC) i
   | MVar i    => shvec_ith _ (projT2 CPAY) (pay CMSG) i
   | StVar i   => shvec_ith _ (projT2 KSTD) KST i
@@ -843,7 +868,7 @@ End WITH_TERM.
 
 Definition init_prog := cmd base_term.
 
-Definition hdlr_prog := cmd hdlr_term.
+Definition hdlr_prog (ct : COMPT) (tag : fin NB_MSG) := cmd (hdlr_term ct tag).
 
 Inductive bintree T :=
 | Leaf    : T -> bintree T
@@ -888,14 +913,15 @@ Definition eval_base_payload_cexpr e :=
 Definition eval_base_payload_expr e :=
   eval_payload_expr base_term (@eval_base_term e).
 
-Definition eval_hdlr_expr {d} (e : s[[ENVD]]) (s : s[[KSTD]]) : expr hdlr_term d -> s[[ d ]] :=
-  eval_expr hdlr_term (@eval_hdlr_term e s).
+Definition eval_hdlr_expr {d} (e : s[[ENVD]]) (s : s[[KSTD]])
+  : expr (hdlr_term CT CTAG) d -> s[[ d ]] :=
+  eval_expr (hdlr_term CT CTAG) (@eval_hdlr_term e s).
 
 Definition eval_hdlr_payload_cexpr e s :=
-  eval_payload_cexpr hdlr_term (@eval_hdlr_term s e).
+  eval_payload_cexpr (hdlr_term CT CTAG) (@eval_hdlr_term s e).
 
 Definition eval_hdlr_payload_expr e s :=
-  eval_payload_expr hdlr_term (@eval_hdlr_term s e).
+  eval_payload_expr (hdlr_term CT CTAG) (@eval_hdlr_term s e).
 
 Definition ktrace_send_msgs (cps : list comp) (m : msg) : KTrace :=
   (map (fun c => KSend c m) cps).
@@ -966,7 +992,8 @@ Record hdlr_state :=
 }.
 
 (* This should probably move out once the environment can change *)
-Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd hdlr_term) : hdlr_state :=
+Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd (hdlr_term CT CTAG))
+  : hdlr_state :=
   let (s', env) := s in
   let (cs, tr, st, fd) := s' in
   match cmd with
@@ -999,7 +1026,7 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd hdlr_term) : hdlr_state 
   | SendAll cp t me =>
     let m := eval_hdlr_payload_expr st env _ me in
     let msg := (Build_msg t m) in
-    let comps := filter_comps hdlr_term (@eval_hdlr_term env st) cp cs in
+    let comps := filter_comps (hdlr_term CT CTAG) (@eval_hdlr_term env st) cp cs in
     {| hdlr_kst :=
          {| kcs := cs
           ; ktr := tr ~~~ ktrace_send_msgs comps msg ++ tr
@@ -1082,7 +1109,7 @@ Definition default_cpayload (v : vcdesc) : s[[ v ]] :=
 Definition default_hdlr_state s :=
   {| hdlr_kst := s; hdlr_env := default_cpayload ENVD |}.
 
-Definition kstate_run_prog (s : kstate) (p : hdlr_prog) : kstate :=
+Definition kstate_run_prog (s : kstate) (p : hdlr_prog CT CTAG) : kstate :=
   hdlr_kst (hdlr_state_run_cmd (default_hdlr_state s) p).
 
 End WITH_ENVD.
@@ -1103,8 +1130,8 @@ Definition initial_init_state :=
 
 Section WITH_HANDLER.
 
-Definition handlers := forall (m : msg) (cc : comp),
-  sigT (fun prog_envd => hdlr_prog cc m prog_envd).
+Definition handlers := forall (tag : fin NB_MSG) (ct : COMPT),
+  sigT (fun prog_envd => hdlr_prog prog_envd ct tag).
 
 Variable HANDLERS : handlers.
 
@@ -1186,7 +1213,8 @@ Inductive Reach : kstate -> Prop :=
         ; kst := kst s
         ; kfd := FdSet.union (vdesc_fds_set _ (pay m)) (kfd s)
         |} ->
-  Reach (kstate_run_prog c m (projT1 (HANDLERS m c)) s' (projT2 (HANDLERS m c)))
+  let hdlrs := HANDLERS (tag m) (comp_type c) in
+  Reach (kstate_run_prog c m (projT1 hdlrs) s' (projT2 hdlrs))
 | Reach_bogus :
   forall s s' f bmsg tr,
   let cs := kcs s in
@@ -1264,7 +1292,7 @@ Definition open_payload_frame_base {ENVD d}
   end f.
 
 Definition open_payload_frame_hdlr {CC CMSG ENVD d}
-  (s : FdSet.t) (ht : hdlr_term CC CMSG ENVD d) (f : s[[ d ]])
+  (s : FdSet.t) (ht : hdlr_term ENVD (comp_type CC) (tag CMSG) d) (f : s[[ d ]])
   : hprop
   :=
   match ht in hdlr_term _ _ _ _d return s[[ _d ]] -> hprop with
@@ -1315,11 +1343,12 @@ Definition open_payload_frame_base_expr {ENVD : vcdesc} {d}
 .
 
 Definition open_payload_frame_hdlr_expr' {CC CMSG ENVD d} (s : FdSet.t)
-  : expr (hdlr_term CC CMSG ENVD) d -> s[[d]] -> hprop
+  : expr (hdlr_term ENVD (comp_type CC) (tag CMSG)) d -> s[[d]] -> hprop
   := open_payload_frame_expr (open_payload_frame_hdlr s).
 
 Definition open_payload_frame_hdlr_expr {CC CMSG} {ENVD : vcdesc} {d}
-  (e : s[[ENVD]]) cs cm (fds : FdSet.t) (exp : expr (hdlr_term CC CMSG ENVD) d)
+  (e : s[[ENVD]]) cs cm (fds : FdSet.t)
+  (exp : expr (hdlr_term ENVD (comp_type CC) (tag CMSG)) d)
   (res : s[[d]]) : hprop
   :=
   open_payload_frame_hdlr_expr' fds exp res
@@ -1715,7 +1744,7 @@ Admitted.
 
 Definition run_hdlr_cmd :
   forall (cc : comp) (cm : msg) (envd : vcdesc) (s : hdlr_state envd)
-         (c : cmd envd (hdlr_term cc cm envd)),
+         (c : cmd envd (hdlr_term envd (comp_type cc) (tag cm))),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
           hdlr_invariant cc cm s * traced (expand_ktrace tr))
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in
@@ -1770,7 +1799,8 @@ Proof.
 
   | SendAll cp t me =>
     let m := eval_hdlr_payload_expr cc cm envd st env _ me in
-    let comps := filter_comps (hdlr_term _ cm envd) (@eval_hdlr_term _ cm envd env st) cp cs in
+    let comps := filter_comps (hdlr_term envd _ (tag cm))
+                              (@eval_hdlr_term _ cm envd env st) cp cs in
     let msg := Build_msg t m in
     send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
     <@> [FdSet.In (comp_fd cc) fds]
@@ -1860,8 +1890,9 @@ Proof.
     match mm with
     | inl m =>
       let tr := tr ~~~ KRecv c m :: tr in
-      let henv  := projT1 (HANDLERS m c) in
-      let hprog := projT2 (HANDLERS m c) in
+      let hdlrs := HANDLERS (tag m) (comp_type c) in
+      let henv  := projT1 hdlrs in
+      let hprog := projT2 hdlrs in
       let s' := {| hdlr_kst := {| kcs := cs
                                 ; ktr := tr
                                 ; kst := st

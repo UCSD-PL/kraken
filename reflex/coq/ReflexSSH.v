@@ -146,7 +146,7 @@ Import SystemFeatures.
 Module Language := MkLanguage(SystemFeatures).
 
 Import Language.
-
+(*
 Module Spec <: SpecInterface.
 
 Include SystemFeatures.
@@ -505,3 +505,4 @@ Theorem auth_priv : forall st tr u,
 Proof.
   admit. (*reach_induction.*)
 Qed.
+*)

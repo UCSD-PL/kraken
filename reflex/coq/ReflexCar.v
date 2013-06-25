@@ -61,7 +61,7 @@ Import SystemFeatures.
 Module Language := MkLanguage(SystemFeatures).
 
 Import Language.
-
+(*
 Module Spec <: SpecInterface.
 
 Include SystemFeatures.
@@ -234,4 +234,4 @@ Ltac low_step :=
   end.
 
 Ltac ni :=
-  apply ni_suf; [high_steps | low_step].
+  apply ni_suf; [high_steps | low_step].*)

@@ -240,7 +240,7 @@ Definition labeler d (c : comp COMPT COMPS) :=
   | Build_comp UserInput _ _ => true
   | _ => false
   end.
-
+(*
 Theorem ni : forall d, NonInterference PAYD COMPT COMPTDEC COMPS
                                        IENVD KSTD INIT HANDLERS
                                        (nd_strong PAYD COMPT COMPS) (labeler d).
@@ -298,7 +298,7 @@ Ltac low_step :=
   end.
 low_step.
 Qed.
-
+*)
 End Spec.
 
 Module Main := MkMain(Spec).

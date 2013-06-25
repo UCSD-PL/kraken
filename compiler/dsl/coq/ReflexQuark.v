@@ -18,10 +18,6 @@ Definition splitAt c s :=
     end
   in splitAt_aux c s nil.
 
-Definition dom s :=
-  let url_end := snd (splitAt "." s) in
-  fst (splitAt "/" url_end).
-
 Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
@@ -95,6 +91,11 @@ Module Spec <: SpecInterface.
 
 Include SystemFeatures.
 
+Open Scope char_scope.
+Definition dom {term} s :=
+  (splitfst term "/" (splitsnd term "." s)).
+Close Scope char_scope.
+
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn IENVD _ Output    tt                   i_output    (Logic.eq_refl _)) (
   seq (spawn IENVD _ Tab       (default_domain, tt) i_curtab    (Logic.eq_refl _)) (
@@ -104,89 +105,44 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (stupd IENVD _ v_curtab (Term _ (base_term _ IENVD) (Var _ IENVD i_curtab))
   ) nop))))).
 
-(*
-                        (
-                          shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
-                            sdenote_desc
-                            (projT2 (compd_conf (COMPS Tab)))
-                            (comp_conf (st0##v_curtab%kst))
-                            None
-                        )
-*)
-
-Print comp.
-
+Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  fun m cc =>
-  let (ct, cf, ccf) := cc in
-  match m as _m return forall (EQ : _m = m), _ with
-  | {| tag := t; pay := p |} =>
+  fun t ct =>
   match ct as _ct, t as _t return
-    forall _p, Build_msg PAYD _t _p = m -> s[[ comp_conf_desc _ _ _ct ]] -> _
+    {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD prog_envd _ct _t}
   with
-
   | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad))))))))) =>
     match bad with end
 
-  | Tab, ReqSocket => fun pl EQ ccf =>
-    let envd := mk_vcdesc [] in
-    match pl with (url, _) =>
-    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-    (
-      ite envd _ (
-            BinOp _ _
-                  (Eq _ (Desc _ fd_d))
-                  (Term _ _ (CompFd _ _ ccomp))
-                  (Term _ _ (CompFd _ _ (stvar v_curtab)))
-          )
-      (
-        ite envd _ (BinOp _ _
-                      (Eq _ (Desc _ str_d))
-                      (slit (dom url))
-                      (cconf (cc:= Build_comp SystemFeatures.COMPT SystemFeatures.COMPS Tab cf ccf) 0%fin)
-                   )
-        (
-          nop
-        )
-        (
-          nop
-        )
-      )
-      (
-        nop
-      )
-    )
-    end
-
-  | UserInput, KeyPress => fun pl EQ ccf =>
-    let envd := mk_vcdesc [] in
-    match pl with (key, _) =>
-    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-    (
-      seq (send envd _ _ (stvar v_curtab) KeyPress (slit key, tt))
-      nop
-    )
-    end
-
-  | UserInput, MouseClick => fun pl EQ ccf =>
-    let envd := mk_vcdesc [] in
-    match pl with (pos, _) =>
-    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-    (
-      seq (send envd _ _ (stvar v_curtab) MouseClick (slit pos, tt))
-      nop
-    )
-    end
-
-  | _, _ => fun _ _ _ =>
-    let envd := mk_vcdesc [] in
-    existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-    nop
-
-  end p
-  end (Logic.eq_refl m).
-
-Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
+  | Tab, ReqSocket =>
+    [[ mk_vcdesc [] :
+        ite (eq ccomp (stvar v_curtab))
+            (
+              ite (eq (dom (mvar ReqSocket None)) (cconf Tab None))
+                  (
+                    nop
+                  )
+                  (
+                    nop
+                  )
+            ) 
+            ( 
+              nop
+            )
+    ]]
+  | UserInput, KeyPress =>
+      [[ mk_vcdesc [] :
+      seq (send (stvar v_curtab) KeyPress (mvar KeyPress None, tt))
+      nop ]]
+  | UserInput, MouseClick =>
+      [[ mk_vcdesc [] :
+      seq (send (stvar v_curtab) MouseClick (mvar MouseClick None, tt))
+      nop ]]
+  | _, _ =>
+    [[ mk_vcdesc [] : nop ]]
+  end.
+Close Scope hdlr.
+(*Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   (fun m cc =>
      let (ct, cf, cconf) := cc in
      match ct, tag PAYD m as _tm return
@@ -260,6 +216,88 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 
     end (pay PAYD m)
   ).
+*)
+
+
+Require Import NonInterference.
+Require Import NITactics.
+
+Open Scope char_scope.
+Definition dom' s :=
+  let url_end := snd (splitAt "." s) in
+  fst (splitAt "/" url_end).
+Close Scope char_scope.
+
+Definition labeler d (c : comp COMPT COMPS) :=
+  match c
+  with
+  | Build_comp Tab _ cfg =>
+    let cfgd := comp_conf_desc COMPT COMPS Tab in
+    if str_eq (dom' (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
+                               cfg None)) d
+    then true
+    else false
+  | Build_comp UserInput _ _ => true
+  | _ => false
+  end.
+
+Theorem ni : forall d, NonInterference PAYD COMPT COMPTDEC COMPS
+                                       IENVD KSTD INIT HANDLERS
+                                       (nd_strong PAYD COMPT COMPS) (labeler d).
+Proof.
+  intro d.
+  apply ni_suf.  
+    Ltac high_steps :=
+  intros;
+  match goal with
+  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
+    => unfold NonInterferenceSt in *; intros;
+       match goal with
+       | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hins : inputs _ _ _ _ _ = inputs _ _ _ _ _,
+           Hhigh : _ = true |- _ ]
+         => inversion Hve1; inversion Hve2;
+            destruct_msg; destruct_comp; try discriminate;
+            repeat unpack; simpl in *; try rewrite Hhigh in *;
+            inversion Hins;
+            repeat match goal with
+                   | [ |- _::_ = _::_ ]
+                      => f_equal; auto
+                   | [ |- _ ]
+                      => apply IH; auto; try spawn_call
+                   end
+       end
+  end.
+high_steps.
+match goal with
+| [ |- ?l = ?r ]
+  => match type of l with
+     | context
+end.
+admit.
+rewrite H3.
+match goal with
+| [ |- (if ?e then _ else _) = (if ?e then _ else _) ]
+  => destruct e
+end; [ f_equal; auto | ]. apply H0; auto; try spawn_call.
+
+
+Ltac low_step :=
+  intros;
+  match goal with
+  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
+    => unfold NonInterferenceSt in *; intros;
+       match goal with
+       | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hlow : _ = false |- _ ]
+         => inversion Hve; destruct_msg; destruct_comp; try discriminate;
+            try solve [unpack; simpl in *; try rewrite Hlow in *;
+            apply IH; auto; try spawn_call]
+       end
+  end.
+low_step.
+Qed.
 
 End Spec.
 

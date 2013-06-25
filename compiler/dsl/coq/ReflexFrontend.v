@@ -21,26 +21,29 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Instance SDenoted_cdesc : SDenoted (cdesc COMPT) := SDenoted_cdesc COMPT COMPS.
   Definition seq {envd term} := Seq PAYD COMPT COMPS KSTD envd term.
   Definition nop {envd term} := Nop PAYD COMPT COMPS KSTD envd term.
-  Definition ite := Ite PAYD COMPT COMPS KSTD.
-  Definition send := Reflex.Send PAYD COMPT COMPS KSTD.
+  Definition ite {envd term} := Ite PAYD COMPT COMPS KSTD envd term.
+  Definition send {envd term ct} := Reflex.Send PAYD COMPT COMPS KSTD envd term ct.
   Definition sendall := SendAll PAYD COMPT COMPS KSTD.
   Definition spawn := Spawn PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
   Definition stvar {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (StVar _ _ _ _ _ _ _ v).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD envd cc m) (StVar _ _ _ _ _ _ _ v).
   Definition envvar {cc m} envd i :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (Var _ envd i)).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD envd cc m)
+         (Base _ _ _ _ _ _ _ (Var _ envd i)).
   Definition slit {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (SLit _ _ v)).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD envd cc m) (Base _ _ _ _ _ _ _ (SLit _ _ v)).
   Definition nlit {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (NLit _ _ v)).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD envd cc m) (Base _ _ _ _ _ _ _ (NLit _ _ v)).
   Definition ccomp {cc envd m} :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (CComp _ _ _ _ _ _ _).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD envd cc m) (CComp _ _ _ _ _ _ _).
   Definition i_slit v := Term COMPT (base_term _ IENVD) (SLit _ _ v).
   Definition i_nlit v := Term COMPT (base_term _ IENVD) (NLit _ _ v).
   Definition mk_comp_pat := Build_comp_pat COMPT COMPS.
-  Definition comp_fd {ct : COMPT} (x : sigT (fun c => comp_type COMPT COMPS c = ct))
-    := comp_fd COMPT COMPS (projT1 x).
+
+(*
+  Definition comp_fd {envd ct} ce (*{ct : COMPT} (x : sigT (fun c => comp_type COMPT COMPS c = ct))*)
+    := CompFd COMPT envd ct ce.*)
   Definition comp_conf {ct : COMPT} (x : sigT (fun c => comp_type COMPT COMPS c = ct))
   : s[[ comp_conf_desc COMPT COMPS ct ]]
     :=
@@ -65,6 +68,24 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
               (kst PAYD COMPT COMPS KSTD s) i.
   Notation "s ## i" := (kst_ith s i) (at level 0) : kst.
   Delimit Scope kst with kst.
+
+  Definition eq {term d} e1 e2 :=
+    BinOp COMPT term
+          (Eq _ d) e1 e2.
+
+  Definition splitfst term c s :=
+    UnOp COMPT term (SplitFst _ c) s.
+
+  Definition splitsnd term c s :=
+    UnOp COMPT term (SplitSnd _ c) s.
+
+  Definition mvar
+  {envd} (t : fin NB_MSG) {ct} i :=
+  (Term COMPT _ (MVar PAYD COMPT COMPS KSTD envd ct t i)).
+
+  Definition cconf
+  {envd} {t : fin NB_MSG} ct i :=
+  (Term COMPT _ (CConf PAYD COMPT COMPS KSTD envd ct t i)).
 
 End MkLanguage.
 
@@ -112,35 +133,10 @@ Notation " [ ] " := nil.
 Notation " [ x ] " := (cons x nil).
 Notation " [ x ; .. ; y ] " := (cons x .. (cons y nil) ..).
 
-Definition cast_cc_expr
-  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc ct cf ccf d}
-  (EQ : Build_comp COMPT COMPS ct cf ccf = cc)
-  (e : expr COMPT (hdlr_term PAYD COMPT COMPS KSTD (Build_comp COMPT COMPS ct cf ccf) m envd) d)
-  : expr COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) d
-  :=
-  match EQ in _ = _cc return expr _ (hdlr_term _ _ _ _ _cc _ _) _ with
-  | Logic.eq_refl => e
-  end.
-
-Definition cast_m_expr
-  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p d}
-  (EQ : Build_msg PAYD t p = m)
-  (e : expr COMPT (hdlr_term PAYD COMPT COMPS KSTD cc (Build_msg PAYD t p) envd) d)
-  : expr COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) d
-  :=
-  match EQ in _ = _m return expr _ (hdlr_term _ _ _ _ _ _m _) _ with
-  | Logic.eq_refl => e
-  end.
-
-Definition mvar
-  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p}
-  (EQ : Build_msg PAYD t p = m) i :=
-  cast_m_expr EQ (Term _ _ (MVar PAYD COMPT COMPS KSTD cc (Build_msg PAYD t p) envd i)).
-
-Definition cconf
-  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc ct cf ccf p}
-  (EQ : Build_comp COMPT COMPS ct cf ccf = cc) i :=
-  cast_m_expr EQ (Term _ _ (CConf PAYD COMPT COMPS KSTD (Build_comp COMPT COMPS ct cf ccf) m envd i)).
+Notation "<< n & e >>" := (existT _ n e)
+ (n at level 59, e at level 39) : hdlr.
+Notation "[[ e : c ]]" := (existT _ e c)
+ (c at level 59, e at level 39) : hdlr.
 
 Delimit Scope fin_scope with fin.
 

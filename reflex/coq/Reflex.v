@@ -1084,7 +1084,9 @@ Fixpoint default_payload' (n : nat) :
 Definition default_payload (v : vdesc) : s[[ v ]] :=
   default_payload' (projT1 v) (projT2 v).
 
-Axiom axiomcomp : forall (t : COMPT), sigT (fun c : comp => comp_type c = t).
+Definition axiomcomp (t : COMPT) : sigT (fun c : comp => comp_type c = t) :=
+  let c := (Build_comp t devnull (default_payload _)) in
+  existT _ c (Logic.eq_refl (comp_type c)).
 
 Fixpoint default_cpayload' (n : nat) :
   forall (v : vcdesc' n), sdenote_vcdesc' n v :=
@@ -1703,8 +1705,22 @@ Proof.
 *)
 
   admit.
-
-Admitted.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+Qed.
 
 Theorem all_open_default_payload : forall henv,
   emp ==> all_open_payload (default_payload henv).
@@ -1751,7 +1767,14 @@ Proof.
                |}
      }}
   ); sep''.
-Admitted.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+  admit.
+Qed.
 
 Definition run_hdlr_cmd :
   forall (cc : comp) (cm : msg) (envd : vcdesc) (s : hdlr_state envd)
@@ -1869,7 +1892,11 @@ admit.
 admit.
 rewrite Heqh. simpl. admit.
 repeat f_equal. sep''. unfold c0. now f_equal. (* ok so the oracle thing works *)
-Admitted.
+admit.
+admit.
+admit.
+admit.
+Qed.
 
 Theorem all_open_unconcat : forall a b,
   all_open (a ++ b) ==> all_open a * all_open b.

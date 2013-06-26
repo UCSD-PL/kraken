@@ -7,6 +7,7 @@ Require Import NPeano.
 Require Import Omega.
 Require Import Orders.
 Require Import String.
+Require Import Arith.Compare.
 
 Notation decide P := ({ P } + { ~ P }).
 
@@ -105,12 +106,23 @@ Module OrderedFd : OrderedType
 
   Parameter lt_compat : Morphisms.Proper (eq ==> eq ==> iff) lt.
 
-  Parameter compare : t -> t -> comparison.
+  Definition compare (f1 : t) (f2 : t) : comparison :=
+    let n1 := nat_of_num f1 in
+    let n2 := nat_of_num f2 in
+    match le_dec n1 n2 with
+    | left H => if le_decide n1 n2 H
+                then Lt
+                else Eq
+    | right H => if le_decide n2 n1 H
+                 then Gt
+                 else Eq
+    end.
 
   Parameter compare_spec :
     forall x y : t, CompSpec eq lt x y (compare x y).
 
-  Parameter eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
+  Definition eq_dec : forall x y : t, {eq x y} + {~ eq x y} :=
+    fd_eq.
 
 End OrderedFd.
 

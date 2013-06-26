@@ -195,6 +195,9 @@ let send cfd s _ =
     ()
   end
 
+let oracle _ =
+  Obj.magic ()
+
 external recv_fd_native : Unix.file_descr -> Unix.file_descr =
   "recv_fd_native"
 

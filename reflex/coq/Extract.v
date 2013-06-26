@@ -12,6 +12,7 @@ Extract Constant ReflexIO.recv     => "ReflexImpl.recv".
 Extract Constant ReflexIO.send     => "ReflexImpl.send".
 Extract Constant ReflexIO.recv_fd  => "ReflexImpl.recv_fd".
 Extract Constant ReflexIO.send_fd  => "ReflexImpl.send_fd".
+Extract Constant ReflexIO.oracle   => "ReflexImpl.oracle".
 
 Cd "../ml".
 Recursive Extraction Library ReflexEcho.

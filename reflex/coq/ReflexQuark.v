@@ -55,12 +55,14 @@ Definition COMPT := COMPT'.
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
 Proof. decide equality. Defined.
 
+Definition test_dir := "../test/quark/".
+
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | UserInput => mk_compd "UserInput" "tab.py"       [] (mk_vdesc [])
-  | Output    => mk_compd "Output"    "output.py"    [] (mk_vdesc [])
-  | Tab       => mk_compd "Tab"       "input.py"     [] (mk_vdesc [str_d])
-  | DomainBar => mk_compd "DomainBar" "domainbar.py" [] (mk_vdesc [])
+  | UserInput => mk_compd "UserInput" (test_dir ++ "user-input.py")       [] (mk_vdesc [])
+  | Output    => mk_compd "Output"    (test_dir ++ "screen.py")    [] (mk_vdesc [])
+  | Tab       => mk_compd "Tab"       (test_dir ++ "tab.py")     [] (mk_vdesc [str_d])
+  | DomainBar => mk_compd "DomainBar" (test_dir ++ "domainbar.py") [] (mk_vdesc [])
   end.
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
@@ -130,6 +132,16 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               nop
             )
     ]]
+  | Tab, Display =>
+      [[ mk_vcdesc [] :
+         ite (eq ccomp (stvar v_curtab))
+             (
+               send (stvar v_output) Display (mvar Display None, tt)
+             )
+             (
+               nop
+             )
+       ]]
   | UserInput, KeyPress =>
       [[ mk_vcdesc [] :
       seq (send (stvar v_curtab) KeyPress (mvar KeyPress None, tt))

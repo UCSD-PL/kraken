@@ -7,8 +7,10 @@ def main():
   try:
     while True:
       url = raw_input("\n")
-      msg.send('Input', url)
+      print url
+      msg.send(msg.KeyPress, url)
   except EOFError:
-    msg.send('Quit')
+    pass
+    #msg.send('Quit')
 
 main()

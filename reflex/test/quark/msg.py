@@ -3,6 +3,17 @@
 import socket, os, os.path, sys, re, time
 import struct, passfd, atexit
 
+Display     = "Display"
+Navigate    = "Navigate"
+ReqResource = "ReqResource"
+ResResource = "ResResource"
+ReqSocket   = "ReqSocket"
+ResSocket   = "ResSocket"
+SetDomain   = "SetDomain"
+KeyPress    = "KeyPress"
+MouseClick  = "MouseClick"
+Go          = "Go"
+
 FD    = None
 KCHAN = None
 PROG  = None
@@ -17,18 +28,18 @@ def init():
 
   # set up logging
   PROG = os.path.basename(sys.argv[0])
-#V  path = os.path.join(os.environ['KROOT'], 'log', '%s-%d-log' % (PROG, FD))
-#V  LOG  = open(path, 'w', 0) # unbuffered
+  path = os.path.join(os.environ['KRAKEN'], 'log', '%s-%d-log' % (PROG, FD))
+  LOG  = open(path, 'w', 0) # unbuffered
 
-# tear down at exit
-atexit.register(lambda: KCHAN.close())
-atexit.register(lambda: LOG.close())
+  # tear down at exit
+  atexit.register(lambda: KCHAN.close())
+  atexit.register(lambda: LOG.close())
 
 def log(msg):
-  return
+  #LOG.write(msg)
   # FD - 1 should be the kernel's pipe for this component
-#V  LOG.write('%15s @ %f || %s\n' %
-#V      ('%s(%d)' % (PROG, FD - 1), time.time(), msg))
+  LOG.write('%15s @ %f || %s\n' %
+     ('%s(%d)' % (PROG, FD - 1), time.time(), msg))
 
 def recv_num():
   s = KCHAN.recv(2)
@@ -74,7 +85,16 @@ def msg_str(m):
 def recv():
   tag = recv_num()
   m = {
-0 : lambda : ['M', recv_str()],
+    0 : lambda : [Display, recv_str()],
+    1 : lambda : [Navigate, recv_str()],
+    2 : lambda : [ReqResource, recv_str()],
+    3 : lambda : [ResResource, recv_str()],
+    4 : lambda : [ReqSocket, recv_str()],
+    5 : lambda : [ResSocket, recv_str()],
+    6 : lambda : [SetDomain, recv_str()],
+    7 : lambda : [KeyPress, recv_str()],
+    8 : lambda : [MouseClick, recv_str()],
+    9 : lambda : [Go, recv_str()]
   }[tag]()
   log('recv : %s' % msg_str(m))
   return m
@@ -82,6 +102,15 @@ def recv():
 def send(*m):
   tag = m[0]
   {
-'M' : lambda : [send_num(0), send_str(m[1])],
+    Display     : lambda : [send_num(0), send_str(m[1])],
+    Navigate    : lambda : [send_num(1), send_str(m[1])],
+    ReqResource : lambda : [send_num(2), send_str(m[1])],
+    ResResource : lambda : [send_num(3), send_str(m[1])],
+    ReqSocket   : lambda : [send_num(4), send_str(m[1])],
+    ResSocket   : lambda : [send_num(5), send_str(m[1])],
+    SetDomain   : lambda : [send_num(6), send_str(m[1])],
+    KeyPress    : lambda : [send_num(7), send_str(m[1])],
+    MouseClick  : lambda : [send_num(8), send_str(m[1])],
+    Go          : lambda : [send_num(9), send_str(m[1])]
   }[tag]()
   log('send : %s' % msg_str(m))

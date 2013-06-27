@@ -334,6 +334,26 @@ Proof.
     subst tr'.
     apply pack_injective in H.
     subst k.
+    match goal with
+    |- exists _, (?act::_) = _ ++ _ /\ _
+      => exists (act::nil)
+    end.
+    split; auto.
+    intros.
+    simpl in *.
+    destruct H.
+      subst act; auto.
+      contradiction.
+
+    intros.
+    destruct hst as [hkst henv];
+    destruct hkst; intros; simpl in *.
+    destruct ktr.
+    simpl in *.
+    apply pack_injective in H0.
+    subst tr'.
+    apply pack_injective in H.
+    subst k.
     exists nil.
     split; auto.
     intros.

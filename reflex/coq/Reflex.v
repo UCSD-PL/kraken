@@ -841,7 +841,7 @@ Definition exists_comp (cp : comp_pat) (comps : list comp) :=
   | None   => false
   | Some _ => true
   end.
-
+Print Call.
 Inductive cmd : Type :=
 | Nop : cmd
 | Seq : cmd -> cmd -> cmd
@@ -851,6 +851,8 @@ Inductive cmd : Type :=
 | Spawn :
     forall (t : COMPT), s[[ comp_conf_desc t ]] ->
     forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = Comp t -> cmd
+| Call : expr (Desc str_d) -> list (expr (Desc str_d)) ->
+    forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = Desc fd_d -> cmd
 | StUpd : forall i, expr (svec_ith (projT2 KSTD) i) -> cmd
 .
 
@@ -899,7 +901,7 @@ Definition sdenote_input := sdenote_bintree (sdenote_option sdenote_cdesc).
 
 End WITH_EVAL_TERM.
 
-Definition shvec_replace_cast {t} {i : fin ENVD_SIZE} (EQ : svec_ith ENVD_DESC i = Comp t) e v
+Definition shvec_replace_cast {d} {i : fin ENVD_SIZE} (EQ : svec_ith ENVD_DESC i = d) e v
   :=
   shvec_replace_ith sdenote_cdesc _ e i
     (match EQ in _ = _d return s[[ _d ]] -> _ with Logic.eq_refl => fun x => x end v).
@@ -975,6 +977,17 @@ Fixpoint init_state_run_cmd (s : init_state) (cmd : cmd base_term) : init_state 
      ; init_fds   := FdSet.add (comp_fd c) fds
      |}
 
+  | Call ce argse i EQ =>
+    let f := oracle fd_d (inhabit_unpack tr expand_ktrace) in
+    let c := eval_base_expr e ce in
+    let args := map (eval_base_expr e) argse in
+    {| init_comps := cs
+     ; init_ktr   := tr ~~~ KCall c args f :: tr
+     ; init_env   := shvec_replace_cast EQ e f
+     ; init_kst   := st
+     ; init_fds   := FdSet.add f fds
+     |}
+
   | StUpd i ve =>
     let v := eval_base_expr e ve in
     {| init_comps := cs
@@ -1047,6 +1060,19 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd (hdlr_term CT CTAG))
           ; kfd := FdSet.add (comp_fd c) fd
           |}
      ; hdlr_env := shvec_replace_cast EQ env (existT _ c (Logic.eq_refl _))
+     |}
+
+  | Call ce argse i EQ =>
+    let f := oracle fd_d (inhabit_unpack tr expand_ktrace) in
+    let c := eval_hdlr_expr env st ce in
+    let args := map (eval_hdlr_expr env st) argse in
+    {| hdlr_kst :=
+         {| kcs := cs
+          ; ktr := tr ~~~ KCall c args f :: tr
+          ; kst := st
+          ; kfd := FdSet.add f fd
+          |}
+     ; hdlr_env := shvec_replace_cast EQ env f
      |}
 
   | StUpd i ve =>
@@ -1646,6 +1672,21 @@ Proof.
                 |}
       }}
 
+    | Call ce argse i EQ =>
+      let c := eval_base_expr envd e ce in
+      let args := map (eval_base_expr envd e) argse in
+      f <- call c args (tr ~~~ expand_ktrace tr)
+           <@> init_invariant s;
+
+      let tr := tr ~~~ KCall c args f :: tr in
+      {{ Return {| init_comps := cs
+                 ; init_ktr   := tr
+                 ; init_env   := shvec_replace_cast _ EQ e f
+                 ; init_kst   := st
+                 ; init_fds   := FdSet.add f fds
+                |}
+      }}
+
     | StUpd i ve =>
       let v := eval_base_expr _ e ve in
       {{ Return {| init_comps := cs
@@ -1704,6 +1745,10 @@ Proof.
   ); try discriminate.
 *)
 
+  admit.
+  admit.
+  admit.
+  admit.
   admit.
   admit.
   admit.
@@ -1864,6 +1909,21 @@ Proof.
                |}
     }}
 
+  | Call ce argse i EQ =>
+    let c := eval_hdlr_expr _ _ _ _ _ ce in
+    let args := map (eval_hdlr_expr _ _ _ _ _) argse in
+    f <- call c args (tr ~~~ expand_ktrace tr)
+    <@> hdlr_invariant cc cm s;
+
+    let tr := tr ~~~ KCall c args f :: tr in
+    {{ Return {| hdlr_kst := {| kcs := cs
+                              ; ktr := tr
+                              ; kst := st
+                              ; kfd := FdSet.add f fds |}
+               ; hdlr_env := shvec_replace_cast _ EQ env f
+               |}
+    }}
+
   | StUpd i ve =>
     let v := eval_hdlr_expr cc cm envd env st ve in
     {{ Return {| hdlr_kst := {| kcs := cs
@@ -1892,6 +1952,8 @@ admit.
 admit.
 rewrite Heqh. simpl. admit.
 repeat f_equal. sep''. unfold c0. now f_equal. (* ok so the oracle thing works *)
+admit.
+admit.
 admit.
 admit.
 admit.

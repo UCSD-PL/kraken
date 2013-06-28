@@ -13,6 +13,7 @@ SetDomain   = "SetDomain"
 KeyPress    = "KeyPress"
 MouseClick  = "MouseClick"
 Go          = "Go"
+NewTab      = "NewTab"
 
 FD    = None
 KCHAN = None
@@ -88,13 +89,14 @@ def recv():
     0 : lambda : [Display, recv_str()],
     1 : lambda : [Navigate, recv_str()],
     2 : lambda : [ReqResource, recv_str()],
-    3 : lambda : [ResResource, recv_str()],
+    3 : lambda : [ResResource, recv_fd()],
     4 : lambda : [ReqSocket, recv_str()],
     5 : lambda : [ResSocket, recv_str()],
     6 : lambda : [SetDomain, recv_str()],
     7 : lambda : [KeyPress, recv_str()],
     8 : lambda : [MouseClick, recv_str()],
-    9 : lambda : [Go, recv_str()]
+    9 : lambda : [Go, recv_str()],
+   10 : lambda : [NewTab]
   }[tag]()
   log('recv : %s' % msg_str(m))
   return m
@@ -105,12 +107,13 @@ def send(*m):
     Display     : lambda : [send_num(0), send_str(m[1])],
     Navigate    : lambda : [send_num(1), send_str(m[1])],
     ReqResource : lambda : [send_num(2), send_str(m[1])],
-    ResResource : lambda : [send_num(3), send_str(m[1])],
+    ResResource : lambda : [send_num(3), send_fd(m[1])],
     ReqSocket   : lambda : [send_num(4), send_str(m[1])],
     ResSocket   : lambda : [send_num(5), send_str(m[1])],
     SetDomain   : lambda : [send_num(6), send_str(m[1])],
     KeyPress    : lambda : [send_num(7), send_str(m[1])],
     MouseClick  : lambda : [send_num(8), send_str(m[1])],
-    Go          : lambda : [send_num(9), send_str(m[1])]
+    Go          : lambda : [send_num(9), send_str(m[1])],
+    NewTab      : lambda : [send_num(10)]
   }[tag]()
   log('send : %s' % msg_str(m))

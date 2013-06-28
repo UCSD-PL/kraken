@@ -22,7 +22,7 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 10.
+Definition NB_MSG : nat := 11.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [ ("Display",     [str_d])
@@ -35,6 +35,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("KeyPress",    [str_d])
   ; ("MouseClick",  [str_d])
   ; ("Go",          [str_d])
+  ; ("NewTab",      [])
   ].
 
 Notation Display     := 0%fin (only parsing).
@@ -47,6 +48,7 @@ Notation SetDomain   := 6%fin (only parsing).
 Notation KeyPress    := 7%fin (only parsing).
 Notation MouseClick  := 8%fin (only parsing).
 Notation Go          := 9%fin (only parsing).
+Notation NewTab      := 10%fin (only parsing).
 
 Inductive COMPT' : Set := UserInput | Output | Tab | DomainBar.
 
@@ -113,7 +115,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   match ct as _ct, t as _t return
     {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD prog_envd _ct _t}
   with
-  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad))))))))) =>
+  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))) =>
     match bad with end
 
   | Tab, ReqSocket =>
@@ -142,6 +144,20 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                nop
              )
        ]]
+  | Tab, ReqResource =>
+      let envd := mk_vcdesc [Desc _ fd_d] in
+      [[ envd :
+         ite (eq (dom (mvar ReqResource None)) (cconf Tab None))
+             (
+               seq (call envd _ (slit (str_of_string (test_dir ++ "wget.py")))
+                                 [mvar ReqResource None] None (Logic.eq_refl _))
+                   (send ccomp ResResource (envvar envd None, tt))
+                  
+             )
+             (
+               nop
+             )
+       ]]
   | UserInput, KeyPress =>
       [[ mk_vcdesc [] :
       seq (send (stvar v_curtab) KeyPress (mvar KeyPress None, tt))
@@ -150,6 +166,14 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       [[ mk_vcdesc [] :
       seq (send (stvar v_curtab) MouseClick (mvar MouseClick None, tt))
       nop ]]
+  | UserInput, NewTab =>
+      let envd := mk_vcdesc [Comp _ Tab] in
+      [[ envd :
+         seq (spawn envd _ Tab (default_domain, tt) None (Logic.eq_refl _)) (
+         seq (stupd envd _ v_curtab (envvar envd None)) (
+         seq (send (stvar v_curtab) Go (slit default_url, tt))
+             nop))
+      ]]
   | _, _ =>
     [[ mk_vcdesc [] : nop ]]
   end.

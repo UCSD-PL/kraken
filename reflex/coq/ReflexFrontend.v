@@ -25,6 +25,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition send {envd term ct} := Reflex.Send PAYD COMPT COMPS KSTD envd term ct.
   Definition sendall := SendAll PAYD COMPT COMPS KSTD.
   Definition spawn := Spawn PAYD COMPT COMPS KSTD.
+  Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
   Definition stvar {cc envd m} v :=
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD envd cc m) (StVar _ _ _ _ _ _ _ v).

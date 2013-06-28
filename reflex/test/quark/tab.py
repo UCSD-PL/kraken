@@ -7,19 +7,34 @@ import gobject
 import webkit
 import gtk
 import time
+import os
+import tempfile
 
 class Tab:
   browser = None
   shm_obj = None
+
+  def req_resource(self, uri):
+    print "Requesting:", uri
+    msg.send(msg.ReqResource, uri)
 
   def handle_msgs(self, source, condition):
     m = msg.recv()
     if m[0] == msg.KeyPress:
       # Should be a url (for now)
       # send to webkit, somehow
-      self.browser.open(m[1])
+      self.req_resource(m[1])
+    elif m[0] == msg.ResResource:
+      print "Resource Response"
+      tf = tempfile.NamedTemporaryFile(delete=False)
+      tf.write(m[1].read())
+      tf_name = tf.name
+      tf.close()
+
+      self.browser.open('file://' + tf_name)
     elif m[0] == msg.Go:
-      self.browser.open(m[1])
+      print "Go"
+      self.req_resource(m[1])
     return True
 
   def render(self, x, y, width, height):

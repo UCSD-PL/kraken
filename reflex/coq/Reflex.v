@@ -830,7 +830,7 @@ Definition match_comp envd env (cp : comp_pat envd) (c : comp) : bool :=
   then true
   else false.
 
-Fixpoint find_comp envd env (cp : comp_pat envd ) (comps : list comp) 
+Fixpoint find_comp envd env (cp : comp_pat envd ) (comps : list comp)
   : option (sigT (fun c : comp => comp_type c = comp_pat_type _ cp)) :=
   match comps with
   | nil => None
@@ -945,7 +945,7 @@ Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd bas
   with
   | Nop _ => fun _ s => s
 
-  | Seq envd c1 c2 => fun _ s => 
+  | Seq envd c1 c2 => fun _ s =>
     let s1 := init_state_run_cmd envd s c1 in
     let s2 := init_state_run_cmd envd s1 c2 in
     s2
@@ -1537,10 +1537,8 @@ Ltac simplr :=
   discharge_pure;
   try opens_packing;
   try misc;
-  repeat match goal with
-       | [ s : init_state _ |- _ ] => 
-         destruct s
-       end.
+  (* only destruct states if it solves the goal, otherwise too much clutter *)
+  try solve [now repeat match goal with [ s : init_state _ |- _ ] => destruct s end].
 
 Ltac sep'' :=
   sep unfoldr simplr.
@@ -1668,51 +1666,30 @@ Proof.
     (fun envd c s (s' : init_state envd) => tr :~~ init_ktr envd s' in
       init_invariant s' * traced (expand_ktrace tr)
       * [s' = init_state_run_cmd envd s c])
-    (fun self envd c s => _) envd cinit sinit
+    (fun self envd0 c0 s0 => _) envd cinit sinit
   ).
-
+  clear cinit sinit envd HANDLERS IPROG IENVD.
   refine (
-    match c as _c in cmd _ _envd return
-      forall (_s : init_state _envd),
-         STsep (tr :~~ init_ktr _envd _s in
-           init_invariant _s
-           * traced (expand_ktrace tr))
-         (fun s' : init_state _envd => tr :~~ init_ktr _envd s' in
-           init_invariant s' * traced (expand_ktrace tr) *
-           [s' = init_state_run_cmd _envd
-             _s _c])
+    match c0 as _c0 in cmd _ _envd0 return
+      forall (_s0 : init_state _envd0),
+         STsep
+           (tr0 :~~ init_ktr _envd0 _s0 in
+               init_invariant _s0 * traced (expand_ktrace tr0))
+         (fun s' : init_state _envd0 => tr' :~~ init_ktr _envd0 s' in
+           init_invariant s' * traced (expand_ktrace tr')
+           * [s' = init_state_run_cmd _envd0 _s0 _c0])
     with
 
     | Nop _ => fun s => {{ Return s }}
 
     | Seq envd c1 c2 => fun s =>
-      s1 <- self envd c1 s;
-      s2 <- self envd c2 s1
-        <@> [s1 = init_state_run_cmd envd s c1];
-      {{ Return s2 }}
+      let case := "Seq envd c1 c2"%string in _
 
     | Ite envd cond c1 c2 => fun s =>
-      if num_eq (eval_base_expr (init_env _ s) cond) FALSE
-      then s' <- self envd c2 s; {{ Return s' }}
-      else s' <- self envd c1 s; {{ Return s' }}
+      let case := "Ite envd cond c1 c2"%string in _
 
     | Send _ ct ce t me => fun s =>
-      let (cs, _, e, st, _) := s in
-      let tr := init_ktr _ s in
-      let fds := init_fds _ s in
-      let c := projT1 (eval_base_expr e ce) in
-      let m := eval_base_payload_expr _ e _ me in
-      let msg := Build_msg t m in
-      send_msg (comp_fd c) msg (tr ~~~ expand_ktrace tr)
-        <@> all_open_set_drop (comp_fd c) fds * [In c cs] * [vcdesc_fds_subset e fds];;
-      let tr := tr ~~~ KSend c msg :: tr in
-      {{ Return {| init_comps := cs
-                 ; init_ktr   := tr
-                 ; init_env   := e
-                 ; init_kst   := st
-                 ; init_fds   := fds
-                |}
-      }}
+      let case := "Send ct ce t me"%string in _
 
     (*| SendAll _ cp t me => fun e _ =>
       let m := eval_base_payload_expr _ e _ me in
@@ -1796,34 +1773,60 @@ Proof.
 
     | _ => _
 
-    end (*(init_env _ s)*) s (*{|init_comps := cs; init_ktr := tr; init_env := e; init_kst := st; init_fds := fds |}*)
+    end (*(init_env _ s)*) s0 (*{|init_comps := cs; init_ktr := tr; init_env := e; init_kst := st; init_fds := fds |}*)
   ); sep''.
 
-(* Ite *)
-  destruct (num_eq (eval_base_expr init_env0 cond) FALSE).
-  reflexivity. contradiction.
-  destruct (num_eq (eval_base_expr init_env0 cond) FALSE).
-  contradiction. reflexivity.
+(* Seq *)
+refine (
+  s1 <- self envd c1 s;
+  s2 <- self envd c2 s1
+    <@> [s1 = init_state_run_cmd envd s c1];
+  {{ Return s2 }}
+); sep''.
 
-unfold fds.
-apply all_open_set_unpack.
+(* Ite *)
+refine (
+  if num_eq (eval_base_expr (init_env _ s) cond) FALSE
+  then s' <- self envd c2 s; {{ Return s' }}
+  else s' <- self envd c1 s; {{ Return s' }}
+); sep''.
+destruct s; simpl.
+destruct (num_eq (eval_base_expr init_env0 cond) FALSE).
+reflexivity. contradiction.
+destruct s; simpl.
+destruct (num_eq (eval_base_expr init_env0 cond) FALSE).
+contradiction. reflexivity.
 
 (* Send *)
-  unfold c0. clear c0.
-
-  dependent inversion ce with (
-    fun _d _ce =>
-    match _d as __d return expr _ _ __d -> _ with
-    | Comp _ => fun ce =>
-      all_open_set fds ==>
-      all_open_set_drop (comp_fd (projT1 (eval_base_expr e ce))) fds *
-      open (comp_fd (projT1 (eval_base_expr e ce)))
-    | _      => fun _ => False
-    end _ce
-  ).
-  simpl. subst.
-
-  assert (FdSet.In (comp_fd (projT1 (eval_base_term envd e b))) fds).
+destruct s as [cs tr e st fds]_eqn; simpl.
+refine (
+  let c := projT1 (eval_base_expr e ce) in
+  let m := eval_base_payload_expr _ e _ me in
+  let msg := Build_msg t m in
+  send_msg (comp_fd c) msg (tr ~~~ expand_ktrace tr)
+    <@> all_open_set_drop (comp_fd c) fds * [In c cs] * [vcdesc_fds_subset e fds];;
+  let tr := tr ~~~ KSend c msg :: tr in
+  {{ Return {| init_comps := cs
+             ; init_ktr   := tr
+             ; init_env   := e
+             ; init_kst   := st
+             ; init_fds   := fds
+             |}
+  }}
+); sep''.
+unfold c. clear c.
+dependent inversion ce with (
+  fun _d _ce =>
+  match _d as __d return expr _ _ __d -> _ with
+  | Comp _ => fun ce =>
+    all_open_set fds ==>
+    all_open_set_drop (comp_fd (projT1 (eval_base_expr e ce))) fds *
+    open (comp_fd (projT1 (eval_base_expr e ce)))
+  | _      => fun _ => False
+  end _ce
+).
+simpl. subst.
+assert (FdSet.In (comp_fd (projT1 (eval_base_term e b))) fds).
 
 (* This one is actually hard to get through! *)
 
@@ -1847,13 +1850,6 @@ apply all_open_set_unpack.
   ); try discriminate.
 *)
 
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
   admit.
   admit.
   admit.

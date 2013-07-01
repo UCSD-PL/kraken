@@ -96,7 +96,7 @@ Instance SDenoted_cdesc : SDenoted cdesc :=
 { sdenote := sdenote_cdesc
 }.
 
-Definition vcdesc' n : Set := svec cdesc n.
+Definition vcdesc' : nat -> Set := svec cdesc.
 
 Definition sdenote_vcdesc' n (pt : vcdesc' n) : Set :=
   shvec sdenote_cdesc pt.
@@ -105,7 +105,8 @@ Instance SDenoted_vcdesc' {n} : SDenoted (vcdesc' n) :=
 { sdenote := sdenote_vcdesc' n
 }.
 
-Definition vcdesc := (sigT (fun (n : nat) => vcdesc' n)).
+Definition vcdesc := (sigT vcdesc').
+(*Definition vcdesc := (sigT (fun (n : nat) => vcdesc' n)).*)
 
 Definition sdenote_vcdesc (v : vcdesc) : Set :=
   sdenote_vcdesc' (projT1 v) (projT2 v).
@@ -657,105 +658,100 @@ Definition vcdesc_fds_in l (envd : vcdesc) (env : s[[ envd ]]) : Prop :=
   | _ => fun _ => True
   end (shvec_ith _ (projT2 envd) env i).
 
-Section WITH_ENVD.
-
-Variable ENVD : vcdesc.
-Notation ENVD_SIZE := (projT1 ENVD).
-Notation ENVD_DESC := (projT2 ENVD).
-
-Inductive base_term : cdesc -> Set :=
-| SLit   : str -> base_term (Desc str_d)
-| NLit   : num -> base_term (Desc num_d)
-| Var    : forall (i : fin ENVD_SIZE), base_term (svec_ith ENVD_DESC i)
-| CompFd : forall ct, base_term (Comp ct) -> base_term (Desc fd_d)
+Inductive base_term envd : cdesc -> Set :=
+| SLit   : str -> base_term envd (Desc str_d)
+| NLit   : num -> base_term envd (Desc num_d)
+| Var    : forall (i : fin (projT1 envd)), base_term envd (svec_ith (projT2 envd) i)
+| CompFd : forall ct, base_term envd (Comp ct) -> base_term envd (Desc fd_d)
 .
 
 (*I only want handler and all things it depends on to
  require a component type and message type. I don't want them
  to require a full message and component. This hopefully will
  eliminate the need to do some casts.*)
-Inductive hdlr_term (ct : COMPT) (tag : fin NB_MSG) : cdesc -> Set :=
-| Base  : forall {d}, base_term d -> hdlr_term ct tag d
-| CComp   : hdlr_term ct tag (Comp ct)
+Inductive hdlr_term (ct : COMPT) (tag : fin NB_MSG) envd : cdesc -> Set :=
+| Base  : forall {d}, base_term envd d -> hdlr_term ct tag envd d
+| CComp   : hdlr_term ct tag envd (Comp ct)
 | CConf : forall (i : fin (projT1 (comp_conf_desc ct))),
-            hdlr_term ct tag (Desc (svec_ith (projT2 (comp_conf_desc ct)) i))
+            hdlr_term ct tag envd (Desc (svec_ith (projT2 (comp_conf_desc ct)) i))
 | MVar  : forall (i : fin (projT1 (lkup_tag tag))),
-            hdlr_term ct tag (Desc (svec_ith (projT2 (lkup_tag tag)) i))
-| StVar : forall (i : fin KSTD_SIZE), hdlr_term ct tag (svec_ith KSTD_DESC i)
+            hdlr_term ct tag envd (Desc (svec_ith (projT2 (lkup_tag tag)) i))
+| StVar : forall (i : fin KSTD_SIZE), hdlr_term ct tag envd (svec_ith KSTD_DESC i)
 .
 
 Section WITH_TERM.
 
-Variable TERM : cdesc -> Set.
+Variable TERM : vcdesc -> cdesc -> Set.
 
-Inductive expr : cdesc -> Set :=
-| Term  : forall {d}, TERM d -> expr d
-| UnOp  : forall {d1 d2}, unop d1 d2 -> expr d1 -> expr d2
-| BinOp : forall {d1 d2 d3}, binop d1 d2 d3 -> expr d1 -> expr d2 -> expr d3
+Inductive expr envd : cdesc -> Set :=
+| Term  : forall {d}, TERM envd d -> expr envd d
+| UnOp  : forall {d1 d2}, unop d1 d2 -> expr envd d1 -> expr envd d2
+| BinOp : forall {d1 d2 d3}, binop d1 d2 d3 -> expr envd d1 -> expr envd d2 -> expr envd d3
 .
 
-Fixpoint payload_cexpr' (n : nat) (pd : vcdesc' n) : Type :=
+Fixpoint payload_cexpr' envd (n : nat) (pd : vcdesc' n) : Type :=
   match n as _n return vcdesc' _n -> Type with
   | O => fun p => unit
   | S n' => fun (pd : vcdesc' (S n')) =>
     match pd with
-    | (d, pd') => expr d * payload_cexpr' n' pd'
+    | (d, pd') => expr envd d * payload_cexpr' envd n' pd'
     end
   end%type pd.
 
-Definition payload_cexpr pd := payload_cexpr' (projT1 pd) (projT2 pd).
+Definition payload_cexpr envd pd := payload_cexpr' envd (projT1 pd) (projT2 pd).
 
-Fixpoint payload_expr' (n : nat) (pd : vdesc' n) : Type :=
+Fixpoint payload_expr' envd (n : nat) (pd : vdesc' n) : Type :=
   match n as _n return vdesc' _n -> Type with
   | O => fun p => unit
   | S n' => fun (pd : vdesc' (S n')) =>
     match pd with
-    | (d, pd') => expr (Desc d) * payload_expr' n' pd'
+    | (d, pd') => expr envd (Desc d) * payload_expr' envd n' pd'
     end
   end%type pd.
 
-Definition payload_expr pd := payload_expr' (projT1 pd) (projT2 pd).
+Definition payload_expr envd pd := payload_expr' envd (projT1 pd) (projT2 pd).
 
-Section WITH_PROG_ENV.
+Section WITH_PROG_KST.
 
-Variable ENV : s[[ ENVD ]].
 Variable KST : s[[ KSTD ]].
 
-Fixpoint eval_base_term {d} (t : base_term d) : s[[ d ]] :=
-  match t with
+Fixpoint eval_base_term {d} {envd : vcdesc} (env : s[[envd]]) (t : base_term envd d) : s[[ d ]] :=
+  match t in base_term _ _d return
+    s[[_d]]
+  with
   | SLit s       => s
   | NLit n       => n
-  | Var i        => shvec_ith _ (projT2 ENVD) ENV i
-  | CompFd ct t' => comp_fd (projT1 (eval_base_term t'))
+  | Var i        => shvec_ith _ (projT2 envd) env i
+  | CompFd ct t' => comp_fd (projT1 (eval_base_term env t'))
   end.
 
-Definition eval_hdlr_term {d} (t : hdlr_term CT CTAG d)
+Definition eval_hdlr_term {d envd} (t : hdlr_term CT CTAG envd d) env
   : s[[ d ]] :=
   match t with
-  | Base _ bt => eval_base_term bt
+  | Base _ bt => eval_base_term env bt
   | CComp       => existT _ CC (Logic.eq_refl CT)
   | CConf i   => shvec_ith _ (projT2 CCONFD) (comp_conf CC) i
   | MVar i    => shvec_ith _ (projT2 CPAY) (pay CMSG) i
   | StVar i   => shvec_ith _ (projT2 KSTD) KST i
   end.
 
-Variable EVAL_TERM : forall (d : cdesc), TERM d -> s[[ d ]].
+Variable EVAL_TERM : forall (d : cdesc) envd, s[[envd]] -> TERM envd d -> s[[ d ]].
 
-Fixpoint eval_expr {d} (e : expr d) : s[[ d ]] :=
+Fixpoint eval_expr {d envd} env (e : expr envd d) : s[[ d ]] :=
   match e with
-  | Term _ t => EVAL_TERM _ t
+  | Term _ t => EVAL_TERM _ _ env t
   | UnOp _ _ op e =>
-    let v := eval_expr e in
+    let v := eval_expr env e in
     eval_unop op v
   | BinOp _ _ _ op e1 e2 =>
-    let v1 := eval_expr e1 in
-    let v2 := eval_expr e2 in
+    let v1 := eval_expr env e1 in
+    let v2 := eval_expr env e2 in
     eval_binop op v1 v2
   end.
 
-Fixpoint eval_payload_cexpr' (n : nat) :
-  forall (pd : vcdesc' n), payload_cexpr' n pd -> s[[ pd ]] :=
-  let res n pd := payload_cexpr' n pd -> s[[ pd ]] in
+Fixpoint eval_payload_cexpr' envd env (n : nat) :
+  forall (pd : vcdesc' n), payload_cexpr' envd n pd -> s[[ pd ]] :=
+  let res n pd := payload_cexpr' envd n pd -> s[[ pd ]] in
   match n as _n return
     forall (pd : vcdesc' _n), res _n pd
   with
@@ -764,12 +760,12 @@ Fixpoint eval_payload_cexpr' (n : nat) :
     let (d, pd') as _pd return res (S n') _pd := pd in
     fun e =>
       let (v, e') := e in
-      (eval_expr v, eval_payload_cexpr' n' pd' e')
+      (eval_expr env v, eval_payload_cexpr' envd env n' pd' e')
   end.
 
-Fixpoint eval_payload_expr' (n : nat) :
-  forall (pd : vdesc' n), payload_expr' n pd -> s[[ pd ]] :=
-  let res n pd := payload_expr' n pd -> s[[ pd ]] in
+Fixpoint eval_payload_expr' envd env (n : nat) :
+  forall (pd : vdesc' n), payload_expr' envd n pd -> s[[ pd ]] :=
+  let res n pd := payload_expr' envd n pd -> s[[ pd ]] in
   match n as _n return
     forall (pd : vdesc' _n), res _n pd
   with
@@ -778,20 +774,20 @@ Fixpoint eval_payload_expr' (n : nat) :
     let (d, pd') as _pd return res (S n') _pd := pd in
     fun e =>
       let (v, e') := e in
-      (eval_expr v, eval_payload_expr' n' pd' e')
+      (eval_expr env v, eval_payload_expr' envd env n' pd' e')
   end.
 
-Definition eval_payload_cexpr (pd : vcdesc) (e : payload_cexpr pd) : s[[ pd ]] :=
-  eval_payload_cexpr' (projT1 pd) (projT2 pd) e.
+Definition eval_payload_cexpr envd env (pd : vcdesc) (e : payload_cexpr envd pd) : s[[ pd ]] :=
+  eval_payload_cexpr' envd env (projT1 pd) (projT2 pd) e.
 
-Definition eval_payload_expr (pd : vdesc) (e : payload_expr pd) : s[[ pd ]] :=
-  eval_payload_expr' (projT1 pd) (projT2 pd) e.
+Definition eval_payload_expr envd env (pd : vdesc) (e : payload_expr envd pd) : s[[ pd ]] :=
+  eval_payload_expr' envd env (projT1 pd) (projT2 pd) e.
 
-Definition sdenote_desc_cfg_pat (d : desc) : Set := option (expr (Desc d)).
+Definition sdenote_desc_cfg_pat envd (d : desc) : Set := option (expr envd (Desc d)).
 
-Record comp_pat : Set :=
+Record comp_pat envd : Set :=
 { comp_pat_type : COMPT
-; comp_pat_conf : shvec sdenote_desc_cfg_pat (projT2 (comp_conf_desc comp_pat_type))
+; comp_pat_conf : shvec (sdenote_desc_cfg_pat envd) (projT2 (comp_conf_desc comp_pat_type))
 }.
 
 Definition sdenote_desc_conc_pat (d : desc) : Set := option (s[[ d ]]).
@@ -801,7 +797,7 @@ Record conc_pat : Set :=
 ; conc_pat_conf : shvec sdenote_desc_conc_pat (projT2 (comp_conf_desc conc_pat_type))
 }.
 
-Definition elt_match (d : desc) (elt : s[[d]]) (elt' : sdenote_desc_cfg_pat d) : bool :=
+Definition elt_match envd env (d : desc) (elt : s[[d]]) (elt' : sdenote_desc_cfg_pat envd d) : bool :=
   match elt' with
   | None   => true
   | Some x =>
@@ -809,62 +805,76 @@ Definition elt_match (d : desc) (elt : s[[d]]) (elt' : sdenote_desc_cfg_pat d) :
     | num_d => fun elt x => if num_eq x elt then true else false
     | str_d => fun elt x => if str_eq x elt then true else false
     | fd_d  => fun elt x => if fd_eq x elt then true else false
-    end elt (eval_expr x)
+    end elt (eval_expr env x)
   end.
 
-Definition match_comp (cp : comp_pat) (c : comp) : bool :=
-  match c, cp with
-  | Build_comp t f cfg, Build_comp_pat t' cfgp =>
-    match COMPTDEC t t' with
-    | left EQ =>
-
-      match EQ in _ = _t return
-        shvec sdenote_desc_cfg_pat (projT2 (comp_conf_desc _t)) -> bool
-      with
-      | Logic.eq_refl => fun cfgp =>
-        shvec_match (projT2 (comp_conf_desc t))
-                    sdenote_desc sdenote_desc_cfg_pat
-                    elt_match cfg cfgp
-      end cfgp
-    | right _ => false
-    end
+Definition match_comp_pf envd env (cp : comp_pat envd) (c : comp)
+  : option (comp_type c = comp_pat_type _ cp) :=
+  match COMPTDEC (comp_type c) (comp_pat_type _ cp) with
+  | left EQ =>
+    match EQ in _ = _t return
+      shvec (sdenote_desc_cfg_pat envd) (projT2 (comp_conf_desc _t)) -> _
+    with
+    | Logic.eq_refl => fun cfgp =>
+      if shvec_match (projT2 (comp_conf_desc (comp_type c)))
+                     sdenote_desc (sdenote_desc_cfg_pat envd)
+                     (elt_match envd env) (comp_conf c) cfgp
+      then Some EQ
+      else None
+    end (comp_pat_conf _ cp)
+  | right _ => None
   end.
 
-Definition find_comp (cp : comp_pat) (comps : list comp) :=
-  find (match_comp cp) comps.
+Definition match_comp envd env (cp : comp_pat envd) (c : comp) : bool :=
+  if match_comp_pf envd env cp c
+  then true
+  else false.
 
-Definition filter_comps (cp : comp_pat) (comps : list comp) :=
-  filter (match_comp cp) comps.
+Fixpoint find_comp envd env (cp : comp_pat envd ) (comps : list comp) 
+  : option (sigT (fun c : comp => comp_type c = comp_pat_type _ cp)) :=
+  match comps with
+  | nil => None
+  | c::comps' => match match_comp_pf envd env cp c with
+                 | Some EQ => Some (existT _ c EQ)
+                 | None    => find_comp envd env cp comps'
+                 end
+  end.
 
-Definition exists_comp (cp : comp_pat) (comps : list comp) :=
-  match find_comp cp comps with
+Definition filter_comps envd env (cp : comp_pat envd) (comps : list comp) :=
+  filter (match_comp envd env cp) comps.
+
+Definition exists_comp envd env (cp : comp_pat envd) (comps : list comp) :=
+  match find_comp envd env cp comps with
   | None   => false
   | Some _ => true
   end.
 
-Inductive cmd : Type :=
-| Nop : cmd
-| Seq : cmd -> cmd -> cmd
-| Ite : expr (Desc num_d) -> cmd -> cmd -> cmd
-| Send : forall ct, expr (Comp ct) -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
-| SendAll : comp_pat -> forall (t : fin NB_MSG), payload_expr (lkup_tag t) -> cmd
+Inductive cmd : vcdesc -> Type :=
+| Nop : forall envd, cmd envd
+| Seq : forall envd, cmd envd -> cmd envd -> cmd envd
+| Ite : forall envd, expr envd (Desc num_d) -> cmd envd -> cmd envd -> cmd envd
+| Send : forall envd ct, expr envd (Comp ct) -> forall (t : fin NB_MSG), payload_expr envd (lkup_tag t) -> cmd envd
+| SendAll : forall envd, comp_pat envd -> forall (t : fin NB_MSG), payload_expr envd (lkup_tag t) -> cmd envd
 | Spawn :
-    forall (t : COMPT), s[[ comp_conf_desc t ]] ->
-    forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = Comp t -> cmd
-| Call : expr (Desc str_d) -> list (expr (Desc str_d)) ->
-    forall (i : fin ENVD_SIZE), svec_ith ENVD_DESC i = Desc fd_d -> cmd
-| StUpd : forall i, expr (svec_ith (projT2 KSTD) i) -> cmd
+    forall (envd : vcdesc) (t : COMPT), s[[ comp_conf_desc t ]] ->
+    forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Comp t -> cmd envd
+| Call : forall (envd : vcdesc), expr envd (Desc str_d) -> list (expr envd (Desc str_d)) ->
+    forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Desc fd_d -> cmd envd
+| StUpd : forall envd i, expr envd (svec_ith (projT2 KSTD) i) -> cmd envd
+| CompLkup : forall (envd : vcdesc) cp,
+  cmd (existT _ (S (projT1 envd)) (svec_shift (Comp (comp_pat_type envd cp)) (projT2 envd))) ->
+  cmd envd -> cmd envd
 .
 
-Record init_state :=
+Record init_state (envd : vcdesc) :=
 { init_comps : list comp
 ; init_ktr   : [KTrace]%type
-; init_env   : s[[ ENVD ]]
+; init_env   : s[[ envd ]]
 ; init_kst   : s[[ KSTD ]]
 ; init_fds   : FdSet.t
 }.
 
-End WITH_PROG_ENV.
+End WITH_PROG_KST.
 
 End WITH_TERM.
 
@@ -901,52 +911,53 @@ Definition sdenote_input := sdenote_bintree (sdenote_option sdenote_cdesc).
 
 End WITH_EVAL_TERM.
 
-Definition shvec_replace_cast {d} {i : fin ENVD_SIZE} (EQ : svec_ith ENVD_DESC i = d) e v
+Definition shvec_replace_cast {d envd} {i : fin (projT1 envd)} (EQ : svec_ith (projT2 envd) i = d) e v
   :=
   shvec_replace_ith sdenote_cdesc _ e i
     (match EQ in _ = _d return s[[ _d ]] -> _ with Logic.eq_refl => fun x => x end v).
 
-Definition eval_base_expr {d} (e : s[[ENVD]]) : expr base_term d -> s[[ d ]] :=
-  eval_expr base_term (@eval_base_term e).
+Definition eval_base_expr {d} {envd : vcdesc} : s[[envd]] -> expr base_term envd d -> s[[ d ]] :=
+  eval_expr base_term (fun d envd e => @eval_base_term d envd e).
 
-Definition eval_base_payload_cexpr e :=
-  eval_payload_cexpr base_term (@eval_base_term e).
+Definition eval_base_payload_cexpr :=
+  eval_payload_cexpr base_term (fun d envd e => @eval_base_term d envd e).
 
-Definition eval_base_payload_expr e :=
-  eval_payload_expr base_term (@eval_base_term e).
+Definition eval_base_payload_expr :=
+  eval_payload_expr base_term (fun d envd e => @eval_base_term d envd e).
 
-Definition eval_hdlr_expr {d} (e : s[[ENVD]]) (s : s[[KSTD]])
-  : expr (hdlr_term CT CTAG) d -> s[[ d ]] :=
-  eval_expr (hdlr_term CT CTAG) (@eval_hdlr_term e s).
+Definition eval_hdlr_expr {d} {envd : vcdesc} (s : s[[KSTD]])
+  : s[[envd]] -> expr (hdlr_term CT CTAG) envd d -> s[[ d ]] :=
+  eval_expr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
 
-Definition eval_hdlr_payload_cexpr e s :=
-  eval_payload_cexpr (hdlr_term CT CTAG) (@eval_hdlr_term s e).
+Definition eval_hdlr_payload_cexpr s :=
+  eval_payload_cexpr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
 
-Definition eval_hdlr_payload_expr e s :=
-  eval_payload_expr (hdlr_term CT CTAG) (@eval_hdlr_term s e).
+Definition eval_hdlr_payload_expr s :=
+  eval_payload_expr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
 
 Definition ktrace_send_msgs (cps : list comp) (m : msg) : KTrace :=
   (map (fun c => KSend c m) cps).
 
-Fixpoint init_state_run_cmd (s : init_state) (cmd : cmd base_term) : init_state :=
+Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd base_term envd) : init_state envd :=
   let (cs, tr, e, st, fds) := s in
-  match cmd with
+  match cmd in cmd _ _envd return
+    s[[_envd]] -> init_state _envd -> init_state _envd
+  with
+  | Nop _ => fun _ s => s
 
-  | Nop => s
-
-  | Seq c1 c2 =>
-    let s1 := init_state_run_cmd s c1 in
-    let s2 := init_state_run_cmd s1 c2 in
+  | Seq envd c1 c2 => fun _ s => 
+    let s1 := init_state_run_cmd envd s c1 in
+    let s2 := init_state_run_cmd envd s1 c2 in
     s2
 
-  | Ite cond c1 c2 =>
-    if num_eq (@eval_base_expr _ e cond) FALSE
-    then init_state_run_cmd s c2
-    else init_state_run_cmd s c1
+  | Ite envd cond c1 c2 => fun e s =>
+    if num_eq (@eval_base_expr (Desc num_d) _ e cond) FALSE
+    then init_state_run_cmd envd s c2
+    else init_state_run_cmd envd s c1
 
-  | Send ct ce t me =>
+  | Send _ ct ce t me => fun e _ =>
     let c := eval_base_expr e ce in
-    let m := eval_base_payload_expr e _ me in
+    let m := eval_base_payload_expr _ e _ me in
     let msg := (Build_msg t m) in
     {| init_comps := cs
      ; init_ktr   := tr ~~~ KSend (projT1 c) msg :: tr
@@ -955,10 +966,10 @@ Fixpoint init_state_run_cmd (s : init_state) (cmd : cmd base_term) : init_state 
      ; init_fds   := fds
      |}
 
-  | SendAll cp t me =>
-    let m := eval_base_payload_expr e _ me in
+  | SendAll _ cp t me => fun e _ =>
+    let m := eval_base_payload_expr _ e _ me in
     let msg := (Build_msg t m) in
-    let comps := filter_comps base_term (@eval_base_term e) cp cs in
+    let comps := filter_comps base_term (fun d envd e => @eval_base_term _ _ e) _ e cp cs in
     {| init_comps := cs
      ; init_ktr   := tr ~~~ ktrace_send_msgs comps msg ++ tr
      ; init_env   := e
@@ -966,7 +977,7 @@ Fixpoint init_state_run_cmd (s : init_state) (cmd : cmd base_term) : init_state 
      ; init_fds   := fds
      |}
 
-  | Spawn ct cfg i EQ =>
+  | Spawn _ ct cfg i EQ => fun e _ =>
     let c_fd := oracle fd_d (inhabit_unpack tr expand_ktrace) in
     let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
     let comp := COMPS ct in
@@ -977,7 +988,7 @@ Fixpoint init_state_run_cmd (s : init_state) (cmd : cmd base_term) : init_state 
      ; init_fds   := FdSet.add (comp_fd c) fds
      |}
 
-  | Call ce argse i EQ =>
+  | Call _ ce argse i EQ => fun e s =>
     let f := oracle fd_d (inhabit_unpack tr expand_ktrace) in
     let c := eval_base_expr e ce in
     let args := map (eval_base_expr e) argse in
@@ -988,7 +999,7 @@ Fixpoint init_state_run_cmd (s : init_state) (cmd : cmd base_term) : init_state 
      ; init_fds   := FdSet.add f fds
      |}
 
-  | StUpd i ve =>
+  | StUpd _ i ve => fun e _ =>
     let v := eval_base_expr e ve in
     {| init_comps := cs
      ; init_ktr   := tr
@@ -997,35 +1008,58 @@ Fixpoint init_state_run_cmd (s : init_state) (cmd : cmd base_term) : init_state 
      ; init_fds   := fds
      |}
 
-  end.
+  | CompLkup envd cp c1 c2 => fun e s =>
+    let ocdp := find_comp base_term (fun d envd e => @eval_base_term _ _ e) _ e cp cs in
+    match ocdp with
+    | Some cdp =>
+      let c := projT1 cdp in
+      let d := Comp (comp_pat_type _ _ cp) in
+      let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
+      let s' := Build_init_state new_envd cs tr
+                                 (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
+                                              (existT _ c (projT2 cdp)) (projT2 envd) e)
+                                 st fds in
+      let s'' := init_state_run_cmd new_envd s' c1 in
+      {| init_comps := init_comps _ s''
+       ; init_ktr   := init_ktr _ s''
+       ; init_env   := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) (init_env _ s'')
+       ; init_kst   := init_kst _ s''
+       ; init_fds   := init_fds _ s''
+       |}
+    | None   =>  init_state_run_cmd envd s c2
+    end
 
-Record hdlr_state :=
+  end e s.
+
+Record hdlr_state (envd : vcdesc) :=
 { hdlr_kst : kstate
-; hdlr_env : s[[ ENVD ]]
+; hdlr_env : s[[ envd ]]
 }.
-
+Print Build_hdlr_state.
+Print kstate.
 (* This should probably move out once the environment can change *)
-Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd (hdlr_term CT CTAG))
-  : hdlr_state :=
+Fixpoint hdlr_state_run_cmd (envd : vcdesc) (s : hdlr_state envd) (cmd : cmd (hdlr_term CT CTAG) envd)
+  : hdlr_state envd :=
   let (s', env) := s in
   let (cs, tr, st, fd) := s' in
-  match cmd with
+  match cmd in cmd _ _envd return
+    s[[_envd]] -> hdlr_state _envd -> hdlr_state _envd
+  with
+  | Nop _ => fun _ s => s
 
-  | Nop => s
-
-  | Seq c1 c2 =>
-    let s1 := hdlr_state_run_cmd s  c1 in
-    let s2 := hdlr_state_run_cmd s1 c2 in
+  | Seq envd c1 c2 => fun _ s =>
+    let s1 := hdlr_state_run_cmd envd s c1 in
+    let s2 := hdlr_state_run_cmd envd s1 c2 in
     s2
 
-  | Ite cond c1 c2 =>
-    if num_eq (@eval_hdlr_expr _ env st cond) FALSE
-    then hdlr_state_run_cmd s c2
-    else hdlr_state_run_cmd s c1
+  | Ite envd cond c1 c2 => fun env s =>
+    if num_eq (@eval_hdlr_expr _ _ st env cond) FALSE
+    then hdlr_state_run_cmd envd s c2
+    else hdlr_state_run_cmd envd s c1
 
-  | Send ct ce t me =>
-    let c := eval_hdlr_expr env st ce in
-    let m := eval_hdlr_payload_expr st env _ me in
+  | Send _ ct ce t me => fun env _ =>
+    let c := eval_hdlr_expr st env ce in
+    let m := eval_hdlr_payload_expr st _ env _ me in
     let msg := (Build_msg t m) in
     {| hdlr_kst :=
          {| kcs := cs
@@ -1036,10 +1070,11 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd (hdlr_term CT CTAG))
      ; hdlr_env := env
     |}
 
-  | SendAll cp t me =>
-    let m := eval_hdlr_payload_expr st env _ me in
+  | SendAll _ cp t me => fun env _ =>
+    let m := eval_hdlr_payload_expr st _ env _ me in
     let msg := (Build_msg t m) in
-    let comps := filter_comps (hdlr_term CT CTAG) (@eval_hdlr_term env st) cp cs in
+    let comps := filter_comps (hdlr_term CT CTAG)
+      (fun d envd e t => @eval_hdlr_term st d envd t e) _ env cp cs in
     {| hdlr_kst :=
          {| kcs := cs
           ; ktr := tr ~~~ ktrace_send_msgs comps msg ++ tr
@@ -1049,7 +1084,7 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd (hdlr_term CT CTAG))
      ; hdlr_env := env
     |}
 
-  | Spawn ct cfg i EQ =>
+  | Spawn _ ct cfg i EQ => fun env _ =>
     let c_fd := oracle fd_d (inhabit_unpack tr expand_ktrace) in
     let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
     let comp := COMPS ct in
@@ -1062,10 +1097,10 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd (hdlr_term CT CTAG))
      ; hdlr_env := shvec_replace_cast EQ env (existT _ c (Logic.eq_refl _))
      |}
 
-  | Call ce argse i EQ =>
+  | Call _ ce argse i EQ => fun env _ =>
     let f := oracle fd_d (inhabit_unpack tr expand_ktrace) in
-    let c := eval_hdlr_expr env st ce in
-    let args := map (eval_hdlr_expr env st) argse in
+    let c := eval_hdlr_expr st env ce in
+    let args := map (eval_hdlr_expr st env) argse in
     {| hdlr_kst :=
          {| kcs := cs
           ; ktr := tr ~~~ KCall c args f :: tr
@@ -1075,8 +1110,8 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd (hdlr_term CT CTAG))
      ; hdlr_env := shvec_replace_cast EQ env f
      |}
 
-  | StUpd i ve =>
-    let v := eval_hdlr_expr env st ve in
+  | StUpd _ i ve => fun env _ =>
+    let v := eval_hdlr_expr st env ve in
     {| hdlr_kst :=
          {| kcs := cs
           ; ktr := tr
@@ -1085,7 +1120,34 @@ Fixpoint hdlr_state_run_cmd (s : hdlr_state) (cmd : cmd (hdlr_term CT CTAG))
           |}
      ; hdlr_env := env
      |}
-  end.
+
+  | CompLkup envd cp c1 c2 => fun env s =>
+    let ocdp := find_comp (hdlr_term CT CTAG)
+      (fun d envd e t => @eval_hdlr_term st d envd t e) _ env cp cs in
+    match ocdp with
+    | Some cdp =>
+      let c := projT1 cdp in
+      let d := Comp (comp_pat_type _ _ cp) in
+      let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
+      let s' := Build_hdlr_state new_envd {| kcs := cs
+                                           ; ktr := tr
+                                           ; kst := st
+                                           ; kfd := fd
+                                           |}
+                                (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
+                                              (existT _ c (projT2 cdp)) (projT2 envd) env) in
+      let (ks'', new_env) := hdlr_state_run_cmd new_envd s' c1 in
+      {| hdlr_kst :=
+           {| kcs := kcs ks''
+            ; ktr := ktr ks''
+            ; kst := kst ks''
+            ; kfd := kfd ks''
+            |}
+       ; hdlr_env := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) new_env
+       |}
+    | None   =>  hdlr_state_run_cmd envd s c2
+    end
+  end env s.
 
 Definition devnull := Num "000" "000".
 
@@ -1134,13 +1196,11 @@ Fixpoint default_cpayload' (n : nat) :
 Definition default_cpayload (v : vcdesc) : s[[ v ]] :=
   default_cpayload' (projT1 v) (projT2 v).
 
-Definition default_hdlr_state s :=
-  {| hdlr_kst := s; hdlr_env := default_cpayload ENVD |}.
+Definition default_hdlr_state s envd :=
+  {| hdlr_kst := s; hdlr_env := default_cpayload envd |}.
 
-Definition kstate_run_prog (s : kstate) (p : hdlr_prog CT CTAG) : kstate :=
-  hdlr_kst (hdlr_state_run_cmd (default_hdlr_state s) p).
-
-End WITH_ENVD.
+Definition kstate_run_prog envd (s : kstate) (p : hdlr_prog CT CTAG envd) : kstate :=
+  hdlr_kst envd (hdlr_state_run_cmd envd (default_hdlr_state s envd) p).
 
 End WITHIN_HANDLER.
 
@@ -1159,7 +1219,7 @@ Definition initial_init_state :=
 Section WITH_HANDLER.
 
 Definition handlers := forall (tag : fin NB_MSG) (ct : COMPT),
-  sigT (fun prog_envd => hdlr_prog prog_envd ct tag).
+  sigT (fun prog_envd => hdlr_prog ct tag prog_envd).
 
 Variable HANDLERS : handlers.
 
@@ -1331,7 +1391,7 @@ Definition open_payload_frame_base {ENVD d}
   end f.
 
 Definition open_payload_frame_hdlr {CC CMSG ENVD d}
-  (s : FdSet.t) (ht : hdlr_term ENVD (comp_type CC) (tag CMSG) d) (f : s[[ d ]])
+  (s : FdSet.t) (ht : hdlr_term (comp_type CC) (tag CMSG) ENVD d) (f : s[[ d ]])
   : hprop
   :=
   match ht in hdlr_term _ _ _ _d return s[[ _d ]] -> hprop with
@@ -1358,23 +1418,23 @@ Definition open_payload_frame_hdlr {CC CMSG ENVD d}
     end f
   end f.
 
-Definition open_payload_frame_expr {term : cdesc -> Set} {d}
-  (opft : term d -> s[[d]] -> hprop) (e : expr term d) (f : s[[d]])
+Definition open_payload_frame_expr {term : vcdesc -> cdesc -> Set} {d envd}
+  (opft : term envd d -> s[[d]] -> hprop) (e : expr term envd d) (f : s[[d]])
   : hprop
   :=
-  match e in expr _ _d return (term _d -> s[[_d]] -> hprop) -> s[[_d]] -> hprop with
+  match e in expr _ _ _d return (term _ _d -> s[[_d]] -> hprop) -> s[[_d]] -> hprop with
   | Term _ t => fun opft f => opft t f
   | UnOp _ _ op e1 => fun _ _ => emp
   | BinOp _ _ _ op e1 e2 => fun _ _ => emp
   end opft f.
 
 Definition open_payload_frame_base_expr' {ENVD d} (s : FdSet.t)
-  : expr (base_term ENVD) d -> s[[d]] -> hprop
+  : expr base_term ENVD d -> s[[d]] -> hprop
   := open_payload_frame_expr (open_payload_frame_base s)
 .
 
 Definition open_payload_frame_base_expr {ENVD : vcdesc} {d}
-  (e : s[[ENVD]]) cs (fds : FdSet.t) (exp : expr (base_term ENVD) d) (res : s[[d]]) : hprop
+  (e : s[[ENVD]]) cs (fds : FdSet.t) (exp : expr base_term ENVD d) (res : s[[d]]) : hprop
   :=
   open_payload_frame_base_expr' fds exp res
   * [all_fds_in cs fds]
@@ -1382,12 +1442,12 @@ Definition open_payload_frame_base_expr {ENVD : vcdesc} {d}
 .
 
 Definition open_payload_frame_hdlr_expr' {CC CMSG ENVD d} (s : FdSet.t)
-  : expr (hdlr_term ENVD (comp_type CC) (tag CMSG)) d -> s[[d]] -> hprop
+  : expr (hdlr_term (comp_type CC) (tag CMSG)) ENVD d -> s[[d]] -> hprop
   := open_payload_frame_expr (open_payload_frame_hdlr s).
 
 Definition open_payload_frame_hdlr_expr {CC CMSG} {ENVD : vcdesc} {d}
   (e : s[[ENVD]]) cs cm (fds : FdSet.t)
-  (exp : expr (hdlr_term ENVD (comp_type CC) (tag CMSG)) d)
+  (exp : expr (hdlr_term (comp_type CC) (tag CMSG)) ENVD d)
   (res : s[[d]]) : hprop
   :=
   open_payload_frame_hdlr_expr' fds exp res
@@ -1476,7 +1536,11 @@ Ltac simplr :=
   try uninhabit;
   discharge_pure;
   try opens_packing;
-  try misc.
+  try misc;
+  repeat match goal with
+       | [ s : init_state _ |- _ ] => 
+         destruct s
+       end.
 
 Ltac sep'' :=
   sep unfoldr simplr.
@@ -1590,7 +1654,7 @@ Qed.
 
 Definition run_init_cmd :
   forall (envd : vcdesc) (s : init_state envd)
-         (c : cmd envd (base_term envd)),
+         (c : cmd base_term envd),
   STsep (tr :~~ init_ktr envd s in
           init_invariant s * traced (expand_ktrace tr))
         (fun s' : init_state envd => tr :~~ init_ktr envd s' in
@@ -1598,39 +1662,49 @@ Definition run_init_cmd :
           [s' = init_state_run_cmd envd s c]).
 Proof.
   intros envd sinit cinit;
-  refine (Fix2
-    (fun c s => tr :~~ init_ktr envd s in
+  refine (Fix3
+    (fun envd c s => tr :~~ init_ktr envd s in
       init_invariant s * traced (expand_ktrace tr))
-    (fun c s (s' : init_state envd) => tr :~~ init_ktr envd s' in
+    (fun envd c s (s' : init_state envd) => tr :~~ init_ktr envd s' in
       init_invariant s' * traced (expand_ktrace tr)
       * [s' = init_state_run_cmd envd s c])
-    (fun self c s => _) cinit sinit
+    (fun self envd c s => _) envd cinit sinit
   ).
-  destruct s as [cs tr e st fds]_eqn.
 
   refine (
-    match c with
+    match c as _c in cmd _ _envd return
+      forall (_s : init_state _envd),
+         STsep (tr :~~ init_ktr _envd _s in
+           init_invariant _s
+           * traced (expand_ktrace tr))
+         (fun s' : init_state _envd => tr :~~ init_ktr _envd s' in
+           init_invariant s' * traced (expand_ktrace tr) *
+           [s' = init_state_run_cmd _envd
+             _s _c])
+    with
 
-    | Nop => {{ Return s }}
+    | Nop _ => fun s => {{ Return s }}
 
-    | Seq c1 c2 =>
-      s1 <- self c1 s;
-      s2 <- self c2 s1
+    | Seq envd c1 c2 => fun s =>
+      s1 <- self envd c1 s;
+      s2 <- self envd c2 s1
         <@> [s1 = init_state_run_cmd envd s c1];
       {{ Return s2 }}
 
-    | Ite cond c1 c2 =>
-      if num_eq (eval_base_expr envd e cond) FALSE
-      then s' <- self c2 s; {{ Return s' }}
-      else s' <- self c1 s; {{ Return s' }}
+    | Ite envd cond c1 c2 => fun s =>
+      if num_eq (eval_base_expr (init_env _ s) cond) FALSE
+      then s' <- self envd c2 s; {{ Return s' }}
+      else s' <- self envd c1 s; {{ Return s' }}
 
-    | Send ct ce t me =>
-      let c := projT1 (eval_base_expr envd e ce) in
+    | Send _ ct ce t me => fun s =>
+      let (cs, _, e, st, _) := s in
+      let tr := init_ktr _ s in
+      let fds := init_fds _ s in
+      let c := projT1 (eval_base_expr e ce) in
       let m := eval_base_payload_expr _ e _ me in
       let msg := Build_msg t m in
       send_msg (comp_fd c) msg (tr ~~~ expand_ktrace tr)
         <@> all_open_set_drop (comp_fd c) fds * [In c cs] * [vcdesc_fds_subset e fds];;
-
       let tr := tr ~~~ KSend c msg :: tr in
       {{ Return {| init_comps := cs
                  ; init_ktr   := tr
@@ -1640,9 +1714,9 @@ Proof.
                 |}
       }}
 
-    | SendAll cp t me =>
+    (*| SendAll _ cp t me => fun e _ =>
       let m := eval_base_payload_expr _ e _ me in
-      let comps := filter_comps (base_term _) (@eval_base_term _ e) cp cs in
+      let comps := filter_comps base_term (fun d envd e => @eval_base_term _ _ e) _ _ cp cs in
       let msg := Build_msg t m in
       send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
         <@> [all_fds_in cs fds] * [vcdesc_fds_subset e fds];;
@@ -1656,7 +1730,7 @@ Proof.
                 |}
       }}
 
-    | Spawn ct cfg i EQ =>
+    | Spawn _ ct cfg i EQ => fun e _ =>
       let c_cmd := compd_cmd (COMPS ct) in
       let c_args := compd_args (COMPS ct) in
       c_fd <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
@@ -1666,29 +1740,29 @@ Proof.
       let tr := tr ~~~ KExec c_cmd c_args c :: tr in
       {{ Return {| init_comps := c :: cs
                  ; init_ktr   := tr
-                 ; init_env   := shvec_replace_cast _ EQ e (existT _ c (Logic.eq_refl ct))
+                 ; init_env   := shvec_replace_cast EQ e (existT _ c (Logic.eq_refl ct))
                  ; init_kst   := st
                  ; init_fds   := FdSet.add c_fd fds
                 |}
       }}
 
-    | Call ce argse i EQ =>
-      let c := eval_base_expr envd e ce in
-      let args := map (eval_base_expr envd e) argse in
+    | Call _ ce argse i EQ => fun e _ =>
+      let c := eval_base_expr e ce in
+      let args := map (eval_base_expr e) argse in
       f <- call c args (tr ~~~ expand_ktrace tr)
            <@> init_invariant s;
 
       let tr := tr ~~~ KCall c args f :: tr in
       {{ Return {| init_comps := cs
                  ; init_ktr   := tr
-                 ; init_env   := shvec_replace_cast _ EQ e f
+                 ; init_env   := shvec_replace_cast EQ e f
                  ; init_kst   := st
                  ; init_fds   := FdSet.add f fds
                 |}
       }}
 
-    | StUpd i ve =>
-      let v := eval_base_expr _ e ve in
+    | StUpd _ i ve => fun e _ =>
+      let v := eval_base_expr e ve in
       {{ Return {| init_comps := cs
                  ; init_ktr   := tr
                  ; init_env   := e
@@ -1697,25 +1771,53 @@ Proof.
                 |}
       }}
 
-    end
+    | CompLkup envd cp c1 c2 => fun e s =>
+      let ocdp := find_comp base_term (fun d envd e => @eval_base_term _ _ e) _ e cp cs in
+        match ocdp with
+        | Some cdp =>
+          let c := projT1 cdp in
+          let d := Comp (comp_pat_type _ _ cp) in
+          let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
+          let s' := Build_init_state new_envd cs tr
+            (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
+              (existT _ c (projT2 cdp)) (projT2 envd) e)
+            st fds in
+          s'' <- self new_envd c1 s';
+          {{ Return {| init_comps := init_comps _ s''
+                     ; init_ktr   := init_ktr _ s''
+                     ; init_env   := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) (init_env _ s'')
+                     ; init_kst   := init_kst _ s''
+                     ; init_fds   := init_fds _ s''
+                     |}
+          }}
+      | None   =>  s' <- self envd c2 s;
+                   {{ Return s' }}
+      end*)
+
+    | _ => _
+
+    end (*(init_env _ s)*) s (*{|init_comps := cs; init_ktr := tr; init_env := e; init_kst := st; init_fds := fds |}*)
   ); sep''.
 
 (* Ite *)
-  destruct (num_eq (eval_base_expr envd e cond) FALSE).
+  destruct (num_eq (eval_base_expr init_env0 cond) FALSE).
   reflexivity. contradiction.
-  destruct (num_eq (eval_base_expr envd e cond) FALSE).
+  destruct (num_eq (eval_base_expr init_env0 cond) FALSE).
   contradiction. reflexivity.
+
+unfold fds.
+apply all_open_set_unpack.
 
 (* Send *)
   unfold c0. clear c0.
 
   dependent inversion ce with (
     fun _d _ce =>
-    match _d as __d return expr _ __d -> _ with
+    match _d as __d return expr _ _ __d -> _ with
     | Comp _ => fun ce =>
       all_open_set fds ==>
-      all_open_set_drop (comp_fd (projT1 (eval_base_expr envd e ce))) fds *
-      open (comp_fd (projT1 (eval_base_expr envd e ce)))
+      all_open_set_drop (comp_fd (projT1 (eval_base_expr e ce))) fds *
+      open (comp_fd (projT1 (eval_base_expr e ce)))
     | _      => fun _ => False
     end _ce
   ).

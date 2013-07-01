@@ -20,9 +20,17 @@ Fixpoint svec_ith (n : nat) : svec n -> fin n -> T :=
     end
   end.
 
+Fixpoint svec_shift (n : nat) (e : T) : svec n -> svec (S n) :=
+  match n with
+  | O    => fun _ => (e, tt)
+  | S n' => fun v =>
+    (fst v, svec_shift n' e (snd v))
+  end.
+
 End SVector.
 
 Implicit Arguments svec_ith [T n].
+Implicit Arguments svec_shift [T n].
 
 Section Vector.
 

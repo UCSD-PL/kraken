@@ -35,6 +35,31 @@ Fixpoint shvec_ith (n : nat) :
     end
   end.
 
+Fixpoint shvec_shift (n : nat) (d : desc) (e : s[[d]]) :
+  forall (v_d : svec desc n), shvec n v_d -> shvec (S n) (svec_shift d v_d) :=
+  match n
+  with
+  | O => fun _ _ => (e, tt)
+  | S n' => fun v_d =>
+    match v_d with
+    | (_, _) => fun v =>
+      (fst v, shvec_shift n' d e _ (snd v))
+    end
+  end.
+
+Fixpoint shvec_unshift (n : nat) (d : desc) :
+  forall (v_d : svec desc n), shvec (S n) (svec_shift d v_d) -> shvec n v_d :=
+  match n as _n return
+    forall (v_d : svec desc _n), shvec (S _n) (svec_shift d v_d) -> shvec _n v_d
+  with
+  | O => fun _ _ => tt
+  | S n' => fun v_d =>
+    match v_d with
+    | (_, _) => fun v =>
+      (fst v, shvec_unshift n' d _ (snd v))
+    end
+  end.
+
 Variable desc_eqdec : forall (x y : desc), decide (x = y).
 Variable d : desc.
 Variable x : s[[ d ]].
@@ -95,6 +120,8 @@ End SHeterogeneousVector.
 Implicit Arguments shvec [desc n].
 
 Implicit Arguments shvec_ith [desc n].
+
+Implicit Arguments shvec_shift [desc n].
 
 Implicit Arguments shvec_in [desc n].
 

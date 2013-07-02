@@ -1691,89 +1691,22 @@ Proof.
     | Send _ ct ce t me => fun s =>
       let case := "Send ct ce t me"%string in _
 
-    (*| SendAll _ cp t me => fun e _ =>
-      let m := eval_base_payload_expr _ e _ me in
-      let comps := filter_comps base_term (fun d envd e => @eval_base_term _ _ e) _ _ cp cs in
-      let msg := Build_msg t m in
-      send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
-        <@> [all_fds_in cs fds] * [vcdesc_fds_subset e fds];;
+    | SendAll _ cp t me => fun s =>
+      let case := "SendAll _ cp t me"%string in _
 
-      let tr := tr ~~~ ktrace_send_msgs comps msg ++ tr in
-      {{ Return {| init_comps := cs
-                 ; init_ktr   := tr
-                 ; init_env   := e
-                 ; init_kst   := st
-                 ; init_fds   := fds
-                |}
-      }}
+    | Spawn _ ct cfg i EQ => fun s =>
+      let case := "Spawn _ ct cfg i EQ"%string in _
 
-    | Spawn _ ct cfg i EQ => fun e _ =>
-      let c_cmd := compd_cmd (COMPS ct) in
-      let c_args := compd_args (COMPS ct) in
-      c_fd <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
-           <@> init_invariant s;
+    | Call _ ce argse i EQ => fun s =>
+      let case := "Call _ ce argse i EQ"%string in _
 
-      let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
-      let tr := tr ~~~ KExec c_cmd c_args c :: tr in
-      {{ Return {| init_comps := c :: cs
-                 ; init_ktr   := tr
-                 ; init_env   := shvec_replace_cast EQ e (existT _ c (Logic.eq_refl ct))
-                 ; init_kst   := st
-                 ; init_fds   := FdSet.add c_fd fds
-                |}
-      }}
+    | StUpd _ i ve => fun s =>
+      let case := "StUpd _ i ve"%string in _
 
-    | Call _ ce argse i EQ => fun e _ =>
-      let c := eval_base_expr e ce in
-      let args := map (eval_base_expr e) argse in
-      f <- call c args (tr ~~~ expand_ktrace tr)
-           <@> init_invariant s;
+    | CompLkup envd cp c1 c2 => fun s =>
+      let case := "CompLkup envd cp c1 c2"%string in _
 
-      let tr := tr ~~~ KCall c args f :: tr in
-      {{ Return {| init_comps := cs
-                 ; init_ktr   := tr
-                 ; init_env   := shvec_replace_cast EQ e f
-                 ; init_kst   := st
-                 ; init_fds   := FdSet.add f fds
-                |}
-      }}
-
-    | StUpd _ i ve => fun e _ =>
-      let v := eval_base_expr e ve in
-      {{ Return {| init_comps := cs
-                 ; init_ktr   := tr
-                 ; init_env   := e
-                 ; init_kst   := shvec_replace_ith _ _ st i v
-                 ; init_fds   := fds
-                |}
-      }}
-
-    | CompLkup envd cp c1 c2 => fun e s =>
-      let ocdp := find_comp base_term (fun d envd e => @eval_base_term _ _ e) _ e cp cs in
-        match ocdp with
-        | Some cdp =>
-          let c := projT1 cdp in
-          let d := Comp (comp_pat_type _ _ cp) in
-          let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
-          let s' := Build_init_state new_envd cs tr
-            (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
-              (existT _ c (projT2 cdp)) (projT2 envd) e)
-            st fds in
-          s'' <- self new_envd c1 s';
-          {{ Return {| init_comps := init_comps _ s''
-                     ; init_ktr   := init_ktr _ s''
-                     ; init_env   := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) (init_env _ s'')
-                     ; init_kst   := init_kst _ s''
-                     ; init_fds   := init_fds _ s''
-                     |}
-          }}
-      | None   =>  s' <- self envd c2 s;
-                   {{ Return s' }}
-      end*)
-
-    | _ => _
-
-    end (*(init_env _ s)*) s0 (*{|init_comps := cs; init_ktr := tr; init_env := e; init_kst := st; init_fds := fds |}*)
+    end s0
   ); sep''.
 
 (* Seq *)
@@ -1827,10 +1760,9 @@ dependent inversion ce with (
 ).
 simpl. subst.
 assert (FdSet.In (comp_fd (projT1 (eval_base_term e b))) fds).
+  (* This one is actually hard to get through! *)
 
-(* This one is actually hard to get through! *)
-
-(*
+  (*
   refine (
     match b as _b in base_term _ _d return
       forall (EQ : _d = Comp ct),
@@ -1849,20 +1781,129 @@ assert (FdSet.In (comp_fd (projT1 (eval_base_term e b))) fds).
     end (Logic.eq_refl (Comp ct))
   ); try discriminate.
 *)
+  admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
+admit.
 
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
-  admit.
+(*SendAll*)
+destruct s as [cs tr e st fds]_eqn; simpl.
+refine (
+  let m := eval_base_payload_expr _ e _ me in
+  let comps := filter_comps base_term (fun d envd e => @eval_base_term _ _ e) _ _ cp cs in
+  let msg := Build_msg t m in
+  send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
+    <@> [all_fds_in cs fds] * [vcdesc_fds_subset e fds];;
+
+  let tr := tr ~~~ ktrace_send_msgs comps msg ++ tr in
+  {{ Return {| init_comps := cs
+             ; init_ktr   := tr
+             ; init_env   := e
+             ; init_kst   := st
+             ; init_fds   := fds
+             |}
+  }}
+); sep''.
+admit.
+admit.
+admit.
+admit.
+admit.
+
+destruct s as [cs tr e st fds]_eqn; simpl.
+refine (
+  let c_cmd := compd_cmd (COMPS ct) in
+      let c_args := compd_args (COMPS ct) in
+      c_fd <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
+           <@> init_invariant s;
+
+      let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
+      let tr := tr ~~~ KExec c_cmd c_args c :: tr in
+      {{ Return {| init_comps := c :: cs
+                 ; init_ktr   := tr
+                 ; init_env   := shvec_replace_cast EQ e (existT _ c (Logic.eq_refl ct))
+                 ; init_kst   := st
+                 ; init_fds   := FdSet.add c_fd fds
+                |}
+      }}
+); sep''.
+admit.
+admit.
+admit.
+admit.
+
+destruct s as [cs tr e st fds]_eqn; simpl.
+refine (
+  let c := eval_base_expr e ce in
+      let args := map (eval_base_expr e) argse in
+      f <- call c args (tr ~~~ expand_ktrace tr)
+           <@> init_invariant s;
+
+      let tr := tr ~~~ KCall c args f :: tr in
+      {{ Return {| init_comps := cs
+                 ; init_ktr   := tr
+                 ; init_env   := shvec_replace_cast EQ e f
+                 ; init_kst   := st
+                 ; init_fds   := FdSet.add f fds
+                |}
+      }}
+); sep''.
+admit.
+admit.
+admit.
+admit.
+
+destruct s as [cs tr e st fds]_eqn; simpl.
+refine (
+  let v := eval_base_expr e ve in
+      {{ Return {| init_comps := cs
+                 ; init_ktr   := tr
+                 ; init_env   := e
+                 ; init_kst   := shvec_replace_ith _ _ st i v
+                 ; init_fds   := fds
+                |}
+      }}
+); sep''.
+
+destruct s as [cs tr e st fds]_eqn; simpl.
+pose (ocdp := find_comp base_term (fun d envd e => eval_base_term e) envd e cp cs).
+destruct ocdp as [ cdp | ]_eqn.
+(*Component found*)
+refine (
+  let c := projT1 cdp in
+  let d := Comp (comp_pat_type _ _ cp) in
+  let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
+  let s' := Build_init_state new_envd cs tr
+    (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
+      (existT _ c (projT2 cdp)) (projT2 envd) e)
+  st fds in
+  s'' <- self new_envd c1 s';
+  {{ Return {| init_comps := init_comps _ s''
+             ; init_ktr   := init_ktr _ s''
+             ; init_env   := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) (init_env _ s'')
+             ; init_kst   := init_kst _ s''
+             ; init_fds   := init_fds _ s''
+             |}
+  }}
+); sep''.
+admit.
+admit.
+admit.
+admit.
+admit.
+
+(*Component not found*)
+refine (
+  s' <- self envd c2 s;
+  {{ Return s' }}
+); sep''.
+simpl.
+rewrite Heqo.
+reflexivity.
 Qed.
 
 Theorem all_open_default_payload : forall henv,
@@ -1921,7 +1962,7 @@ Qed.
 
 Definition run_hdlr_cmd :
   forall (cc : comp) (cm : msg) (envd : vcdesc) (s : hdlr_state envd)
-         (c : cmd envd (hdlr_term envd (comp_type cc) (tag cm))),
+         (c : cmd (hdlr_term (comp_type cc) (tag cm)) envd),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
           hdlr_invariant cc cm s * traced (expand_ktrace tr))
         (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in

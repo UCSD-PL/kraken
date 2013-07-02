@@ -1510,6 +1510,11 @@ end.
 
 Ltac uninhabit :=
   match goal with
+  (* unfold let-bound traces *)
+  | [ name := ?value |- _ ] =>
+    match type of value with [list KAction]%type =>
+      unfold name in *; clear name; simpl in *
+    end
   | [ H1: ?tr = [_]%inhabited, H2: context[inhabit_unpack ?tr _] |- _ ] =>
     rewrite H1 in H2; simpl in H2
   | [ H: ?tr = [_]%inhabited |- context[inhabit_unpack ?tr _] ] =>
@@ -1656,16 +1661,14 @@ Definition run_init_cmd :
   STsep (tr :~~ init_ktr envd s in
           init_invariant s * traced (expand_ktrace tr))
         (fun s' : init_state envd => tr :~~ init_ktr envd s' in
-          init_invariant s' * traced (expand_ktrace tr) *
-          [s' = init_state_run_cmd envd s c]).
+          init_invariant s' * traced (expand_ktrace tr)).
 Proof.
   intros envd sinit cinit;
   refine (Fix3
     (fun envd c s => tr :~~ init_ktr envd s in
       init_invariant s * traced (expand_ktrace tr))
     (fun envd c s (s' : init_state envd) => tr :~~ init_ktr envd s' in
-      init_invariant s' * traced (expand_ktrace tr)
-      * [s' = init_state_run_cmd envd s c])
+      init_invariant s' * traced (expand_ktrace tr))
     (fun self envd0 c0 s0 => _) envd cinit sinit
   ).
   clear cinit sinit envd HANDLERS IPROG IENVD.
@@ -1676,8 +1679,7 @@ Proof.
            (tr0 :~~ init_ktr _envd0 _s0 in
                init_invariant _s0 * traced (expand_ktrace tr0))
          (fun s' : init_state _envd0 => tr' :~~ init_ktr _envd0 s' in
-           init_invariant s' * traced (expand_ktrace tr')
-           * [s' = init_state_run_cmd _envd0 _s0 _c0])
+           init_invariant s' * traced (expand_ktrace tr'))
     with
 
     | Nop _ => fun s => {{ Return s }}
@@ -1689,7 +1691,7 @@ Proof.
       let case := "Ite envd cond c1 c2"%string in _
 
     | Send _ ct ce t me => fun s =>
-      let case := "Send ct ce t me"%string in _
+      let case := "Send _ ct ce t me"%string in _
 
     | SendAll _ cp t me => fun s =>
       let case := "SendAll _ cp t me"%string in _
@@ -1712,8 +1714,7 @@ Proof.
 (* Seq *)
 refine (
   s1 <- self envd c1 s;
-  s2 <- self envd c2 s1
-    <@> [s1 = init_state_run_cmd envd s c1];
+  s2 <- self envd c2 s1;
   {{ Return s2 }}
 ); sep''.
 
@@ -1723,12 +1724,6 @@ refine (
   then s' <- self envd c2 s; {{ Return s' }}
   else s' <- self envd c1 s; {{ Return s' }}
 ); sep''.
-destruct s; simpl.
-destruct (num_eq (eval_base_expr init_env0 cond) FALSE).
-reflexivity. contradiction.
-destruct s; simpl.
-destruct (num_eq (eval_base_expr init_env0 cond) FALSE).
-contradiction. reflexivity.
 
 (* Send *)
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -1737,7 +1732,10 @@ refine (
   let m := eval_base_payload_expr _ e _ me in
   let msg := Build_msg t m in
   send_msg (comp_fd c) msg (tr ~~~ expand_ktrace tr)
-    <@> all_open_set_drop (comp_fd c) fds * [In c cs] * [vcdesc_fds_subset e fds];;
+    <@> all_open_set_drop (comp_fd c) fds
+    * [In c cs]
+    * [all_fds_in cs fds]
+    * [vcdesc_fds_subset e fds];;
   let tr := tr ~~~ KSend c msg :: tr in
   {{ Return {| init_comps := cs
              ; init_ktr   := tr
@@ -1747,48 +1745,12 @@ refine (
              |}
   }}
 ); sep''.
-unfold c. clear c.
-dependent inversion ce with (
-  fun _d _ce =>
-  match _d as __d return expr _ _ __d -> _ with
-  | Comp _ => fun ce =>
-    all_open_set fds ==>
-    all_open_set_drop (comp_fd (projT1 (eval_base_expr e ce))) fds *
-    open (comp_fd (projT1 (eval_base_expr e ce)))
-  | _      => fun _ => False
-  end _ce
-).
-simpl. subst.
-assert (FdSet.In (comp_fd (projT1 (eval_base_term e b))) fds).
-  (* This one is actually hard to get through! *)
-
-  (*
-  refine (
-    match b as _b in base_term _ _d return
-      forall (EQ : _d = Comp ct),
-      match _d with
-      | Comp _ =>
-        FdSet.In (comp_fd (projT1 (
-          match EQ in _ = _e return s[[ _e ]] with
-          | Logic.eq_refl => eval_base_term envd e _b
-          end
-        ))) fds
-      | _      => False
-      end
-    with
-    | Var i => fun EQ => _
-    | _     => fun EQ => _
-    end (Logic.eq_refl (Comp ct))
-  ); try discriminate.
-*)
-  admit.
-admit.
-admit.
-admit.
-admit.
-admit.
-admit.
-admit.
+etransitivity.
+apply all_open_set_unpack with (x := comp_fd c). admit.
+sep''.
+admit. (* might be hard *)
+apply all_open_set_pack.
+admit. (* I think this will need [In c cs], otherwise remove it from the frame. *)
 
 (*SendAll*)
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -1810,28 +1772,24 @@ refine (
 ); sep''.
 admit.
 admit.
-admit.
-admit.
-admit.
 
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let c_cmd := compd_cmd (COMPS ct) in
-      let c_args := compd_args (COMPS ct) in
-      c_fd <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
-           <@> init_invariant s;
+  let c_args := compd_args (COMPS ct) in
+  c_fd <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
+      <@> init_invariant s;
 
-      let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
-      let tr := tr ~~~ KExec c_cmd c_args c :: tr in
-      {{ Return {| init_comps := c :: cs
-                 ; init_ktr   := tr
-                 ; init_env   := shvec_replace_cast EQ e (existT _ c (Logic.eq_refl ct))
-                 ; init_kst   := st
-                 ; init_fds   := FdSet.add c_fd fds
-                |}
-      }}
+  let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
+  let tr := tr ~~~ KExec c_cmd c_args c :: tr in
+  {{ Return {| init_comps := c :: cs
+             ; init_ktr   := tr
+             ; init_env   := shvec_replace_cast EQ e (existT _ c (Logic.eq_refl ct))
+             ; init_kst   := st
+             ; init_fds   := FdSet.add c_fd fds
+             |}
+  }}
 ); sep''.
-admit.
 admit.
 admit.
 admit.
@@ -1839,20 +1797,19 @@ admit.
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let c := eval_base_expr e ce in
-      let args := map (eval_base_expr e) argse in
-      f <- call c args (tr ~~~ expand_ktrace tr)
-           <@> init_invariant s;
+  let args := map (eval_base_expr e) argse in
+  f <- call c args (tr ~~~ expand_ktrace tr)
+   <@> init_invariant s;
 
-      let tr := tr ~~~ KCall c args f :: tr in
-      {{ Return {| init_comps := cs
-                 ; init_ktr   := tr
-                 ; init_env   := shvec_replace_cast EQ e f
-                 ; init_kst   := st
-                 ; init_fds   := FdSet.add f fds
-                |}
-      }}
+  let tr := tr ~~~ KCall c args f :: tr in
+  {{ Return {| init_comps := cs
+             ; init_ktr   := tr
+             ; init_env   := shvec_replace_cast EQ e f
+             ; init_kst   := st
+             ; init_fds   := FdSet.add f fds
+             |}
+  }}
 ); sep''.
-admit.
 admit.
 admit.
 admit.
@@ -1860,13 +1817,13 @@ admit.
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let v := eval_base_expr e ve in
-      {{ Return {| init_comps := cs
-                 ; init_ktr   := tr
-                 ; init_env   := e
-                 ; init_kst   := shvec_replace_ith _ _ st i v
-                 ; init_fds   := fds
-                |}
-      }}
+  {{ Return {| init_comps := cs
+             ; init_ktr   := tr
+             ; init_env   := e
+             ; init_kst   := shvec_replace_ith _ _ st i v
+             ; init_fds   := fds
+             |}
+  }}
 ); sep''.
 
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -1892,18 +1849,12 @@ refine (
 ); sep''.
 admit.
 admit.
-admit.
-admit.
-admit.
 
 (*Component not found*)
 refine (
   s' <- self envd c2 s;
   {{ Return s' }}
 ); sep''.
-simpl.
-rewrite Heqo.
-reflexivity.
 Qed.
 
 Theorem all_open_default_payload : forall henv,

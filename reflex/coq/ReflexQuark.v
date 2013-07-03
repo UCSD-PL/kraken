@@ -96,24 +96,24 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Open Scope char_scope.
-Definition dom {term} s :=
-  (splitfst term "/" (splitsnd term "." s)).
+Definition dom {envd term} s :=
+  (splitfst envd term "/" (splitsnd envd term "." s)).
 Close Scope char_scope.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  seq (spawn IENVD _ Output    tt                   i_output    (Logic.eq_refl _)) (
-  seq (spawn IENVD _ Tab       (default_domain, tt) i_curtab    (Logic.eq_refl _)) (
-  seq (spawn IENVD _ UserInput tt                   i_userinput (Logic.eq_refl _)) (
-  seq (sendall IENVD _ (mk_comp_pat _ Tab (None, tt)) Go (i_slit default_url, tt)) (
-  seq (stupd IENVD _ v_output (Term _ (base_term _ IENVD) (Var _ IENVD i_output))) (
-  seq (stupd IENVD _ v_curtab (Term _ (base_term _ IENVD) (Var _ IENVD i_curtab))
+  seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
+  seq (spawn _ IENVD Tab       (default_domain, tt) i_curtab    (Logic.eq_refl _)) (
+  seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
+  seq (sendall _ IENVD (mk_comp_pat _ _ Tab (None, tt)) Go (i_slit default_url, tt)) (
+  seq (stupd _ IENVD v_output (Term _ (base_term _ ) _ (Var _ IENVD i_output))) (
+  seq (stupd _ IENVD v_curtab (Term _ (base_term _ ) _ (Var _ IENVD i_curtab))
   ) nop))))).
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun t ct =>
   match ct as _ct, t as _t return
-    {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD prog_envd _ct _t}
+    {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
   with
   | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))) =>
     match bad with end
@@ -149,7 +149,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       [[ envd :
          ite (eq (dom (mvar ReqResource None)) (cconf Tab None))
              (
-               seq (call envd _ (slit (str_of_string (test_dir ++ "wget.py")))
+               seq (call _ envd (slit (str_of_string (test_dir ++ "wget.py")))
                                  [mvar ReqResource None] None (Logic.eq_refl _))
                    (send ccomp ResResource (envvar envd None, tt))
                   
@@ -169,8 +169,8 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | UserInput, NewTab =>
       let envd := mk_vcdesc [Comp _ Tab] in
       [[ envd :
-         seq (spawn envd _ Tab (default_domain, tt) None (Logic.eq_refl _)) (
-         seq (stupd envd _ v_curtab (envvar envd None)) (
+         seq (spawn _ envd Tab (default_domain, tt) None (Logic.eq_refl _)) (
+         seq (stupd _ envd v_curtab (envvar envd None)) (
          seq (send (stvar v_curtab) Go (slit default_url, tt))
              nop))
       ]]

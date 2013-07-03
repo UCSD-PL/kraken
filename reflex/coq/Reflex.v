@@ -1673,14 +1673,16 @@ Definition run_init_cmd :
   STsep (tr :~~ init_ktr envd s in
           init_invariant s * traced (expand_ktrace tr))
         (fun s' : init_state envd => tr :~~ init_ktr envd s' in
-          init_invariant s' * traced (expand_ktrace tr)).
+          init_invariant s' * traced (expand_ktrace tr) *
+          [s' = init_state_run_cmd envd s c]).
 Proof.
   intros envd sinit cinit;
   refine (Fix3
     (fun envd c s => tr :~~ init_ktr envd s in
       init_invariant s * traced (expand_ktrace tr))
     (fun envd c s (s' : init_state envd) => tr :~~ init_ktr envd s' in
-      init_invariant s' * traced (expand_ktrace tr))
+      init_invariant s' * traced (expand_ktrace tr) *
+      [s' = init_state_run_cmd envd s c])
     (fun self envd0 c0 s0 => _) envd cinit sinit
   ).
   clear cinit sinit envd HANDLERS IPROG IENVD.
@@ -1691,7 +1693,8 @@ Proof.
            (tr0 :~~ init_ktr _envd0 _s0 in
                init_invariant _s0 * traced (expand_ktrace tr0))
          (fun s' : init_state _envd0 => tr' :~~ init_ktr _envd0 s' in
-           init_invariant s' * traced (expand_ktrace tr'))
+           init_invariant s' * traced (expand_ktrace tr') *
+           [s' = init_state_run_cmd _envd0 _s0 _c0])
     with
 
     | Nop _ => fun s => {{ Return s }}
@@ -1726,7 +1729,8 @@ Proof.
 (* Seq *)
 refine (
   s1 <- self envd c1 s;
-  s2 <- self envd c2 s1;
+  s2 <- self envd c2 s1
+    <@> [s1 = init_state_run_cmd envd s c1];
   {{ Return s2 }}
 ); sep''.
 
@@ -1736,6 +1740,10 @@ refine (
   then s' <- self envd c2 s; {{ Return s' }}
   else s' <- self envd c1 s; {{ Return s' }}
 ); sep''.
+destruct (num_eq (eval_base_expr (init_env envd s) cond) FALSE).
+reflexivity. contradiction.
+destruct (num_eq (eval_base_expr (init_env envd s) cond) FALSE).
+contradiction. reflexivity.
 
 (* Send *)
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -1784,6 +1792,7 @@ refine (
 ); sep''.
 admit.
 admit.
+admit.
 
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
@@ -1805,6 +1814,7 @@ refine (
 admit.
 admit.
 admit.
+admit.
 
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
@@ -1822,6 +1832,7 @@ refine (
              |}
   }}
 ); sep''.
+admit.
 admit.
 admit.
 admit.
@@ -1861,12 +1872,17 @@ refine (
 ); sep''.
 admit.
 admit.
+admit.
+admit.
+admit.
 
 (*Component not found*)
 refine (
   s' <- self envd c2 s;
   {{ Return s' }}
 ); sep''.
+rewrite Heqo.
+reflexivity.
 Qed.
 
 Theorem all_open_default_payload : forall henv,
@@ -1954,8 +1970,8 @@ Proof.
          hdlr_invariant cc cm s * traced (expand_ktrace tr))
      (fun s' : hdlr_state _envd =>
       tr :~~ ktr (hdlr_kst _envd s') in
-         hdlr_invariant cc cm s' * traced (expand_ktrace tr) *
-         [s' = hdlr_state_run_cmd cc cm _envd s _c])
+         hdlr_invariant cc cm s' * traced (expand_ktrace tr)
+         * [s' = hdlr_state_run_cmd cc cm _envd s _c])
   with
 
   | Nop _ => fun s => {{ Return s }}
@@ -1985,95 +2001,6 @@ Proof.
     let case := "CompLkup _ cp c1 c2"%string in _
 
   end s0
-  (*| Nop => {{ Return s }}
-
-  | Seq c1 c2 =>
-    s1 <- self c1 s;
-    s2 <- self c2 s1
-       <@> [s1 = hdlr_state_run_cmd _ _ envd s c1];
-    {{ Return s2 }}
-
-  | Ite cond c1 c2 =>
-    if num_eq (eval_hdlr_expr _ _ envd env st cond) FALSE
-    then s' <- self c2 s; {{ Return s' }}
-    else s' <- self c1 s; {{ Return s' }}
-
-  | Send ct ce t me =>
-    let (c, _) := eval_hdlr_expr _ _ _ _ _ ce in
-    let m := eval_hdlr_payload_expr cc cm envd st env _ me in
-    let msg := Build_msg t m in
-    send_msg (comp_fd c) msg (tr ~~~ expand_ktrace tr)
-    <@> [In c cs]
-      * [all_fds_in cs fds]
-      * [vcdesc_fds_subset env fds]
-      * [vdesc_fds_subset (pay cm) fds];;
-
-    let tr := tr ~~~ KSend c msg :: tr in
-    {{ Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := st ; kfd := fds |}
-               ; hdlr_env := env
-               |}
-    }}
-
-  | SendAll cp t me =>
-    let m := eval_hdlr_payload_expr cc cm envd st env _ me in
-    let comps := filter_comps (hdlr_term envd _ (tag cm))
-                              (@eval_hdlr_term _ cm envd env st) cp cs in
-    let msg := Build_msg t m in
-    send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
-    <@> [FdSet.In (comp_fd cc) fds]
-      * [all_fds_in cs fds]
-      * [vcdesc_fds_subset env fds]
-      * [vdesc_fds_subset (pay cm) fds];;
-
-    let tr := tr ~~~ ktrace_send_msgs comps msg ++ tr in
-    {{ Return {| hdlr_kst := {| kcs := cs ; ktr := tr ; kst := st ; kfd := fds |}
-               ; hdlr_env := env
-               |}
-    }}
-
-  | Spawn ct cfg i EQ =>
-    let c_cmd := compd_cmd (COMPS ct) in
-    let c_args := compd_args (COMPS ct) in
-    c_fd <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
-    <@> hdlr_invariant cc cm s;
-
-    let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
-    let tr := tr ~~~ KExec c_cmd c_args c :: tr in
-    {{ Return {| hdlr_kst := {| kcs := c :: cs
-                              ; ktr := tr
-                              ; kst := st
-                              ; kfd := FdSet.add c_fd fds |}
-               ; hdlr_env := shvec_replace_cast _ EQ env (existT _ c (Logic.eq_refl ct))
-               |}
-    }}
-
-  | Call ce argse i EQ =>
-    let c := eval_hdlr_expr _ _ _ _ _ ce in
-    let args := map (eval_hdlr_expr _ _ _ _ _) argse in
-    f <- call c args (tr ~~~ expand_ktrace tr)
-    <@> hdlr_invariant cc cm s;
-
-    let tr := tr ~~~ KCall c args f :: tr in
-    {{ Return {| hdlr_kst := {| kcs := cs
-                              ; ktr := tr
-                              ; kst := st
-                              ; kfd := FdSet.add f fds |}
-               ; hdlr_env := shvec_replace_cast _ EQ env f
-               |}
-    }}
-
-  | StUpd i ve =>
-    let v := eval_hdlr_expr cc cm envd env st ve in
-    {{ Return {| hdlr_kst := {| kcs := cs
-                              ; ktr := tr
-                              ; kst := shvec_replace_ith _ _ st i v
-                              ; kfd := fds
-                              |}
-               ; hdlr_env := env
-               |}
-    }}
-
-  end*)
   ); sep''; try subst v; sep'; simpl in *.
 
 (* Seq *)
@@ -2091,10 +2018,10 @@ refine (
   then s' <- self _ c2 s; {{ Return s' }}
   else s' <- self _ c1 s; {{ Return s' }}
 ); sep''.
-  destruct (num_eq (eval_hdlr_expr cc cm (kst ks) env cond) FALSE).
-  reflexivity. contradiction.
-  destruct (num_eq (eval_hdlr_expr cc cm (kst ks) env cond) FALSE).
- contradiction. reflexivity.
+destruct (num_eq (eval_hdlr_expr cc cm (kst ks) env cond) FALSE).
+reflexivity. contradiction.
+destruct (num_eq (eval_hdlr_expr cc cm (kst ks) env cond) FALSE).
+contradiction. reflexivity.
 
 (*Send*)
 destruct s as [ [cs tr st fds] env]_eqn.
@@ -2164,11 +2091,9 @@ refine (
              |}
   }}
 ); sep''.
-rewrite Heqh. subst v. simpl. admit.
-subst v. repeat f_equal; sep''; unfold c0 in *; unfold tr0. now f_equal.
-rewrite H0. simpl. rewrite H3. reflexivity.
-rewrite H3. reflexivity.
-rewrite H3. reflexivity.
+subst v. simpl. admit.
+subst v. unfold c0. repeat f_equal; auto.
+rewrite H. auto.
 
 (*Call*)
 destruct s as [ [cs tr st fds] env]_eqn.
@@ -2187,6 +2112,10 @@ refine (
              |}
   }}
 ); sep''.
+admit.
+admit.
+admit.
+admit.
 admit.
 admit.
 
@@ -2233,6 +2162,7 @@ refine (
              |}
   }}
 ); sep''.
+subst s'. simpl.
 admit.
 admit.
 admit.
@@ -2242,10 +2172,8 @@ refine (
   s' <- self envd c2 s;
   {{ Return s' }}
 ); sep''.
-unfold CT.
-unfold CTAG.
-rewrite Heqo.
-reflexivity.
+unfold CT. unfold CTAG.
+rewrite Heqo. auto.
 Qed.
 
 Theorem all_open_unconcat : forall a b,
@@ -2298,40 +2226,30 @@ Proof.
 
   ); sep''; try subst v; sep'; simpl in *.
 
-  isolate (
-    traced (Select (proj_fds cs) (comp_fd c) :: expand_ktrace x0) ==>
-    traced (expand_ktrace x)
-  ).
+  apply himp_comm_conc.
+  apply all_open_set_unpack; auto.
   admit.
-  admit. (* easy *)
+  admit. (* easy. Same as the previous one. *)
 
   admit. (* combine 'In c (proj_fds cs)' and 'all_fds_in cs fds' *)
 
-  (*unfold s'. simpl.*)
-  isolate (
-    traced (trace_recv_msg (comp_fd c) m ++ expand_ktrace x0) ==>
-    traced (expand_ktrace x3)
-  ).
   admit.
-  discharge_pure.
+  admit.
+  admit.
+  apply FdSet.union_spec; auto.
+  destruct s'' as [kst'' env'']; destruct kst''; sep''.
   admit. (* TODO *)
   admit.
-  admit.
-  admit.
-  admit.
+  apply Reach_valid with (s:=s) (c:=c) (m:=m); auto.
+  subst s''.
+  subst s.
+  apply C_ve with (tr:=x1); auto.
+  rewrite H1.
+  auto.
+  apply all_open_set_pack; auto.
 
-  destruct s'' as [kst'' env'']_eqn. simpl in *.
-  discharge_pure.
-  admit.
-
-  admit.
-
-  admit.
-  admit.
-  admit.
-
-  unfold tr1, tr0 in *.
-  eapply Reach_bogus with (s := s); sep''.
+  eapply Reach_bogus; eauto.
+  reflexivity.
 Qed.
 
 Definition kloop:

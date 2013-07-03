@@ -139,12 +139,12 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma init_inputs_nil : forall s tr lblr,
-  InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT s ->
+Lemma init_inputs_nil : forall init s tr lblr,
+  InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init s ->
   ktr _ _ _ _ s = [tr]%inhabited ->
   inputs lblr tr = nil.
 Proof.
-  intros s tr lblr HInit Htr;
+  intros init s tr lblr HInit Htr.
   destruct HInit; subst s;
   generalize dependent tr.
   case_eq (init_ktr _ _ _ _ _ (initial_init_state PAYD COMPT COMPS KSTD IENVD)).
@@ -153,32 +153,47 @@ Proof.
       (simpl in Htri; apply pack_injective in Htri; rewrite <- Htri; auto).
   generalize dependent k.
   generalize dependent (initial_init_state PAYD COMPT COMPS KSTD IENVD).
-  induction INIT; intros ist k Htri H tr Htr; simpl in *;
+  induction init; intros ist k Htri H tr Htr; simpl in *;
     try (destruct ist; destruct init_ktr as [k']; simpl in *;
     apply pack_injective in Htr; subst tr; apply pack_injective in Htri;
     subst k'; auto).
 
     case_eq (init_ktr _ _ _ _ _
-               (init_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD IENVD ist i1));
+               (init_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD envd ist init1));
     intros.
-    apply IHi2 with
-      (i:=(init_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD IENVD ist i1))
+    apply IHinit2 with
+      (i:=(init_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD envd ist init1))
       (k:=k0); auto.
-    apply IHi1 with (i:=ist) (k:=k); auto.
+    apply IHinit1 with (i:=ist) (k:=k); auto.
     destruct ist; auto.
 
-    destruct ist;
     match goal with
     | [ _ : context[if ?e then _ else _] |- _ ]
-        => destruct e
-    end; eauto.
+        => destruct e;
+           match goal with
+           | [ _ : Reflex.init_ktr _ _ _ _ _ (init_state_run_cmd _ _ _ _ _ _ ?s _) = _ |- _ ]
+             => solve [eapply IHinit2 with (i:=s); eauto |
+                       eapply IHinit1 with (i:=s); eauto]
+           end
+    end. 
 
     (*Send all*)
-    induction init_comps; auto; simpl;
+    induction init_comps; auto; simpl in *.
       match goal with
       |- context[ if ?e then _ else _ ]
          => destruct e
       end; auto.
+
+    (*CompLkup*)
+    match goal with
+    | [ _ : context [ match ?e with | Some _ => _ | None => _ end ] |- _ ]
+      => destruct e
+    end; simpl in *; eauto.
+    (*component found case*)
+    match goal with
+    | [ _ : context [ init_state_run_cmd _ _ _ _ _ _ ?s _ ] |- _ ]
+      => eapply IHinit1 with (i:=s); eauto
+    end.
 Qed.
 
 Lemma hdlr_no_recv :
@@ -292,7 +307,7 @@ Proof.
       exists (KSend PAYD COMPT COMPS a
        {|
        tag := t;
-       pay := eval_hdlr_payload_expr PAYD COMPT COMPS KSTD c m envd kst henv
+       pay := eval_hdlr_payload_expr PAYD COMPT COMPS KSTD c m kst envd henv
                 (lkup_tag PAYD t) p |}::x).
       destruct H0.
       split.
@@ -359,7 +374,23 @@ Proof.
     intros.
     simpl in *.
     contradiction.
-Qed.      
+
+    intros.
+    destruct hst as [hkst henv];
+    destruct hkst; intros; simpl in *.
+    match goal with
+    | [ _ : context [ match ?e with | Some _ => _ | None => _ end ] |- _ ]
+      => destruct e
+    end; simpl in *.
+      match goal with
+      | [ _ : context [ hdlr_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?s ?j ] |- _ ]
+        => destruct (hdlr_state_run_cmd a b c d e f g h s j) as [ks'' new_env]_eqn;
+           apply IHstmt1 with (hst:=s); eauto
+      end. rewrite Heqh. auto.
+
+      eapply IHstmt2; eauto.
+      simpl; assumption.
+Qed.
 
 
 Lemma ve_inputs_high : forall c m s s' tr tr' lblr,
@@ -519,7 +550,7 @@ Proof.
         unfold NonInterferenceSt.
         intros.
         assert (inputs lblr tr1 = nil) as Heq by
-          (apply init_inputs_nil with (s:=s); auto).
+          (apply init_inputs_nil with (s:=s) (init:=INIT); auto).
         rewrite Heq in H9.
         high_ins.
         discriminate.
@@ -539,7 +570,7 @@ Proof.
       simpl in IHReach.
       destruct (lblr f).
         assert (inputs lblr tr1 = nil) as Heq by
-          (apply init_inputs_nil with (s:=s); auto).
+          (apply init_inputs_nil with (s:=s) (init:=INIT); auto).
         rewrite Heq in H9.
         discriminate.
       
@@ -551,7 +582,7 @@ Proof.
       induction H3.
         unfold NonInterferenceSt; intros.
         assert (inputs lblr tr2 = nil) as Heq by
-          (apply init_inputs_nil with (s:=s0); auto).
+          (apply init_inputs_nil with (s:=s0) (init:=INIT); auto).
         rewrite Heq in H9.
         high_ins.
         discriminate.
@@ -601,7 +632,7 @@ Proof.
       generalize dependent tr2.
       induction H4; intros.
         assert (inputs lblr tr2 = nil) as Heq by
-          (apply init_inputs_nil with (s:=s0); auto).
+          (apply init_inputs_nil with (s:=s0) (init:=INIT); auto).
         rewrite Heq in H9.
         discriminate.
 

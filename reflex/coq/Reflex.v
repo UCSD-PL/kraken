@@ -1316,6 +1316,18 @@ Inductive ValidExchange (c:comp) (m:msg) : kstate -> kstate -> Prop :=
            ValidExchange c m s (kstate_run_prog c m (projT1 hdlrs) s'
                                                 (projT2 hdlrs)).
 
+Inductive BogusExchange (c:comp) (bmsg:bogus_msg)
+  : kstate -> kstate -> Prop :=
+| C_be : forall s tr,
+  let cs := kcs s in
+  ktr s = [tr]%inhabited ->
+  BogusExchange c bmsg s
+                {| kcs := cs
+                 ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
+                 ; kst := kst s
+                 ; kfd := kfd s
+                 |}.
+
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
   forall s,
@@ -1327,18 +1339,10 @@ Inductive Reach : kstate -> Prop :=
   ValidExchange c m s s' ->
   Reach s'
 | Reach_bogus :
-  forall s s' f bmsg tr,
-  let cs := kcs s in
-  ktr s = [tr]%inhabited ->
+  forall s s' c bmsg,
   Reach s ->
-  (* introducing s' makes it easier to eapply Reach_bogus *)
-  s' = {| kcs := cs
-        ; ktr := [KBogus f bmsg :: KSelect cs f :: tr]
-        ; kst := kst s
-        ; kfd := kfd s
-        |} ->
-  Reach s'
-.
+  BogusExchange c bmsg s s' ->
+  Reach s'.
 
 Definition all_open_set s := all_open (FdSet.elements s).
 
@@ -2249,7 +2253,7 @@ Proof.
   apply all_open_set_pack; auto.
 
   eapply Reach_bogus; eauto.
-  reflexivity.
+  eapply C_be; eauto.
 Qed.
 
 Definition kloop:

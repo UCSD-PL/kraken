@@ -115,6 +115,65 @@ Fixpoint shvec_replace_ith (n : nat) : forall (v_d : svec desc n),
     end
   end.
 
+Fixpoint shvec_eq (n:nat):
+  forall (vd:svec desc n) (v1:shvec n vd) (v2:shvec n vd)
+    (lblr:fin n -> bool), bool :=
+  match n as _n return
+    forall (vd:svec desc _n) (v1:shvec _n vd) (v2:shvec _n vd)
+      (lblr:fin _n -> bool), bool
+  with
+  | O => fun _ _ _ _ => true
+  | S n' => fun (vd:svec desc (S n')) =>
+    match vd as _vd return
+      forall (v1:shvec (S n') _vd) (v2:shvec (S n') _vd)
+        (lblr:fin (S n') -> bool), bool
+    with
+    | (h, vd') => fun v1 v2 lblr =>
+      let lblr' := fun (f:fin n') => lblr (shift_fin f) in
+      let rest_eq := shvec_eq n' vd' (snd v1) (snd v2) lblr' in
+      if lblr None
+      then if repr_eqdec h (fst v1) (fst v2)
+           then rest_eq
+           else false
+      else rest_eq
+    end
+  end.
+
+Lemma shvec_eq_sym : forall n vd v1 v2 lblr,
+  shvec_eq n vd v1 v2 lblr =
+  shvec_eq n vd v2 v1 lblr.
+Proof.
+  intros.
+  induction n.
+    auto.
+
+    simpl in *.
+    destruct vd as [h vd'].
+    repeat match goal with
+           | [ |- (if ?e1 then _ else _) = (if ?e2 then _ else _)]
+             => destruct e1; destruct e2
+           end; auto;
+           try match goal with
+               | [ H : ?x = ?y, H' : ?y <> ?x |- _ ]
+                 => symmetry in H; contradiction
+               end.
+Qed.
+
+Lemma shvec_eq_refl : forall n vd v lblr,
+  shvec_eq n vd v v lblr = true.
+Proof.
+  intros.
+  induction n.
+    auto.
+
+    simpl in *.
+    destruct vd as [h vd'].
+    repeat match goal with
+           | [ |- (if ?e then _ else _) = _]
+             => destruct e
+           end; auto.
+Qed.
+
 End SHeterogeneousVector.
 
 Implicit Arguments shvec [desc n].
@@ -126,6 +185,8 @@ Implicit Arguments shvec_shift [desc n].
 Implicit Arguments shvec_in [desc n].
 
 Implicit Arguments shvec_replace_ith [desc n].
+
+Implicit Arguments shvec_eq [desc n].
 
 Fixpoint shvec_match {desc:Set} {n:nat} (vd:svec desc n)
   (sdenote_desc:desc->Set) (sdenote_desc':desc->Set)

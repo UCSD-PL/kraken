@@ -75,16 +75,56 @@ Require Import NonInterference.
 Require Import Ynot.
 Require Import NITactics.
 
-Definition labeler (c : comp COMPT COMPS) :=
+Definition clblr (c : comp COMPT COMPS) :=
   match comp_type _ _ c with
   | Echo1 => true
   | Echo2 => false
   end.
 
+Definition vlblr (f : fin (projT1 KSTD)) : bool :=
+  match f with end.
+
 Theorem ni : NonInterference PAYD COMPT COMPTDEC COMPS
                              IENVD KSTD INIT HANDLERS
-                             (nd_strong PAYD COMPT COMPS) labeler.
+                             (nd_strong PAYD COMPT COMPS) clblr vlblr.
 Proof.
+  apply ni_suf.
+Ltac high_steps :=
+  intros;
+  match goal with
+  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ _ _ |- _ ]
+    => unfold NonInterferenceSt in *; intros;
+       match goal with
+       | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hins : inputs _ _ _ _ _ = inputs _ _ _ _ _,
+           Hhigh : _ _ = true |- _ ]
+         => inversion Hve1; inversion Hve2;
+            destruct_msg; destruct_comp; repeat unpack;
+             simpl in *; rewrite Hhigh in *; inversion Hins;
+            split; [f_equal; auto; apply IH; auto; try spawn_call | ]
+       end
+  end.
+high_steps.
+Set Ltac Debug.
+match goal with
+|- vars_eq _ _ _ _ _ ?s1' ?s2' _ = true
+  => rewrite vars_eq_kst with (s1':=s1') (s2':=s2')
+end.
+rewrite vars_eq_kst. vars_eq_kst. apply H0; auto; try spawn_call.
+
+Ltac low_step :=
+  intros;
+  match goal with
+  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
+    => unfold NonInterferenceSt in *; intros;
+       match goal with
+       | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _,
+           Hlow : _ _ = false |- _ ]
+         => inversion Hve; destruct_msg; destruct_comp; repeat unpack;
+            simpl in *; rewrite Hlow in *; apply IH; auto; try spawn_call
+       end
+  end.
   ni.
 Qed.
 (*

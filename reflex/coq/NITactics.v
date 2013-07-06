@@ -1,4 +1,4 @@
-Require Import NonInterference.
+Require Import NonInterference2.
 Require Import Reflex.
 
 Require Import Ynot.
@@ -61,7 +61,11 @@ Ltac unpack_inhabited :=
 Ltac destruct_comp :=
   match goal with
   | [ c : Reflex.comp _ _ |- _ ]
-      => destruct c
+      => let ct := fresh "ct" in
+         let cfd := fresh "cfd" in
+         let cfg := fresh "cfg" in
+         destruct c as [ct cfd cfg];
+         destruct ct
   end.
 
 Ltac unpack :=
@@ -95,7 +99,26 @@ Ltac spawn_call :=
              apply spawn_ok_sym; try assumption
       end.
 
+Ltac remove_redundant_ktr :=
+  match goal with
+  | [ H : ktr _ _ _ _ ?s = inhabits ?tr,
+      H' : ktr _ _ _ _ ?s = inhabits ?tr' |- _ ]
+    => rewrite H' in H; apply pack_injective in H; subst tr
+  end.
+
 Ltac high_steps :=
+  unfold high_ok; intros;
+  match goal with
+  | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+      Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+      Hhigh : _ = true |- _ ]
+    => inversion Hve1; inversion Hve2; repeat remove_redundant_ktr;
+       destruct_msg; destruct_comp; try discriminate; repeat unpack;
+       simpl in *; try rewrite Hhigh in *; split;
+       [f_equal; auto | unfold vars_eq; simpl; auto]
+  end.
+
+(*Ltac high_steps :=
   intros;
   match goal with
   | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
@@ -110,9 +133,20 @@ Ltac high_steps :=
              simpl in *; rewrite Hhigh in *; inversion Hins;
             f_equal; auto; apply IH; auto; try spawn_call
        end
-  end.
+  end.*)
 
 Ltac low_step :=
+  unfold low_ok; intros;
+  match goal with
+  | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _,
+      Hlow : _ = false |- _ ]
+    => inversion Hve; repeat remove_redundant_ktr;
+       destruct_msg; destruct_comp; try discriminate;
+       repeat unpack; simpl in *; try rewrite Hlow in *;
+       split; [ auto | unfold vars_eq; simpl; auto ]
+  end.
+
+(*Ltac low_step :=
   intros;
   match goal with
   | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
@@ -123,7 +157,7 @@ Ltac low_step :=
          => inversion Hve; destruct_msg; destruct_comp; repeat unpack;
             simpl in *; rewrite Hlow in *; apply IH; auto; try spawn_call
        end
-  end.
+  end.*)
 
 Ltac ni :=
   apply ni_suf; [high_steps | low_step].

@@ -255,7 +255,7 @@ Close Scope hdlr.
 *)
 
 
-Require Import NonInterference.
+Require Import NonInterference2.
 Require Import NITactics.
 
 Open Scope char_scope.
@@ -264,7 +264,7 @@ Definition dom' s :=
   fst (splitAt "/" url_end).
 Close Scope char_scope.
 
-Definition labeler d (c : comp COMPT COMPS) :=
+Definition clblr d (c : comp COMPT COMPS) :=
   match c
   with
   | Build_comp Tab _ cfg =>
@@ -276,13 +276,48 @@ Definition labeler d (c : comp COMPT COMPS) :=
   | Build_comp UserInput _ _ => true
   | _ => false
   end.
-(*
+
+Definition vlblr (f : fin (projT1 KSTD)) := true.
+
+Local Opaque str_of_string.
+
 Theorem ni : forall d, NonInterference PAYD COMPT COMPTDEC COMPS
                                        IENVD KSTD INIT HANDLERS
-                                       (nd_strong PAYD COMPT COMPS) (labeler d).
+                                       (nd_strong PAYD COMPT COMPS)
+                                       (clblr d) vlblr.
 Proof.
   intro d.
-  apply ni_suf.  
+  apply ni_suf.
+Ltac destruct_ite :=
+match goal with
+|- context[ if ?e then _ else _ ] => destruct e
+end.
+
+Ltac high_steps :=
+  unfold high_ok; intros;
+  match goal with
+  | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+      Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+      Hhigh : _ = true |- _ ]
+    => inversion Hve1; inversion Hve2; repeat remove_redundant_ktr;
+       destruct_msg; destruct_comp; try discriminate; repeat unpack;
+       simpl in *; try rewrite Hhigh in *; repeat destruct_ite; split;
+       match goal with
+       | [ |- _::_ = _::_ ]
+         => f_equal; auto
+       | [ |- vars_eq _ _ _ _ _ _ _ ]
+         => unfold vars_eq in *; simpl in *; auto
+       | [ |- _ ]
+         => auto
+       end
+  end.
+high_steps.
+Focus 6.
+destruct_ite.
+admit.
+unfold vars_eq in *. simpl in *.
+auto.
+
     Ltac high_steps :=
   intros;
   match goal with

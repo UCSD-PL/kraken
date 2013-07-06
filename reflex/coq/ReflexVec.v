@@ -29,8 +29,27 @@ Fixpoint svec_shift (n : nat) (e : T) : svec n -> svec (S n) :=
 
 End SVector.
 
+Fixpoint svec_erase (desc : Set) (n : nat) :
+  (fin n -> bool) -> svec desc n -> svec (desc + unit) n :=
+  match n as _n return
+    (fin _n -> bool) -> svec desc _n -> svec (desc + unit) _n
+  with
+  | O => fun _ _ => tt
+  | S n' => fun lblr vd =>
+    match vd with
+    | (h, vd') =>
+      let lblr' := fun (f:fin n') => lblr (shift_fin f) in
+      let rest := svec_erase desc n' lblr' vd' in
+      match lblr None with
+      | true => (inl _ h, rest)
+      | false => (inr _ tt, rest)
+      end
+    end
+  end.
+
 Implicit Arguments svec_ith [T n].
 Implicit Arguments svec_shift [T n].
+Implicit Arguments svec_erase [desc n].
 
 Section Vector.
 

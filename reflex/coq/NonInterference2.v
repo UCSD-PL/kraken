@@ -130,28 +130,15 @@ Definition vars_eq (s1 s2 : kstate)
   (lblr : fin (projT1 KSTD) -> bool) :=  
   shvec_erase _ lblr _ (kst _ _ _ _ s1) = shvec_erase _ lblr _ (kst _ _ _ _ s2).
 
-Definition NonInterferenceStComps nd_filt clblr
-  (s1 s2:kstate) : Prop :=
-  forall tr1 tr2, ktr _ _ _ _ s1 = [tr1]%inhabited ->
-                  ktr _ _ _ _ s2 = [tr2]%inhabited ->
-                  call_ok nd_filt tr1 tr2 ->
-                  spawn_ok nd_filt tr1 tr2 ->
-                  inputs clblr tr1 = inputs clblr tr2 ->
-                  outputs clblr tr1 = outputs clblr tr2.
-
-Definition NonInterferenceStVars nd_filt clblr vlblr
-  (s1 s2:kstate) : Prop :=
-  forall tr1 tr2, ktr _ _ _ _ s1 = [tr1]%inhabited ->
-                  ktr _ _ _ _ s2 = [tr2]%inhabited ->
-                  call_ok nd_filt tr1 tr2 ->
-                  spawn_ok nd_filt tr1 tr2 ->
-                  inputs clblr tr1 = inputs clblr tr2 ->
-                  vars_eq s1 s2 vlblr.
-
 Definition NonInterferenceSt nd_filt clblr vlblr
   (s1 s2:kstate) : Prop :=
-  NonInterferenceStComps nd_filt clblr s1 s2 /\
-  NonInterferenceStVars nd_filt clblr vlblr s1 s2.
+  forall tr1 tr2, ktr _ _ _ _ s1 = [tr1]%inhabited ->
+                  ktr _ _ _ _ s2 = [tr2]%inhabited ->
+                  call_ok nd_filt tr1 tr2 ->
+                  spawn_ok nd_filt tr1 tr2 ->
+                  inputs clblr tr1 = inputs clblr tr2 ->
+                  outputs clblr tr1 = outputs clblr tr2 /\
+                  vars_eq s1 s2 vlblr.
 
 Definition NonInterference nd_filt clblr vlblr : Prop :=
   forall s1 s2, Reach s1 -> Reach s2 ->
@@ -196,20 +183,6 @@ Proof.
   eauto.
 Qed.
 
-(*Lemma vars_eq_sym : forall s1 s2 vlblr,
-  vars_eq s1 s2 vlblr = vars_eq s2 s1 vlblr.
-Proof.
-  intros.
-  unfold vars_eq.
-  apply shvec_eq_sym.
-Qed.
-
-Lemma vars_eq_refl : forall s lblr,
-  vars_eq s s lblr = true.
-Proof.
-  intros. unfold vars_eq. apply shvec_eq_refl.
-Qed.*)
-
 Hint Resolve call_ok_sub spawn_ok_sub call_ok_sym spawn_ok_sym.
 
 Lemma nist_sym : forall s1 s2 nd_filt clblr vlblr,
@@ -217,13 +190,12 @@ Lemma nist_sym : forall s1 s2 nd_filt clblr vlblr,
   NonInterferenceSt nd_filt clblr vlblr s2 s1.
 Proof.
   intros s1 s2 nd_filt clblr vlblr H.
-  unfold NonInterferenceSt in *.
-  unfold NonInterferenceStComps in *.
-  unfold NonInterferenceStVars in *.
-  destruct H as [Hcomps Hvars].
-  split; intros.
-    symmetry; apply Hcomps; auto.
-    unfold vars_eq in *; symmetry; eapply Hvars; eauto.
+  unfold NonInterferenceSt in *. intros.
+  split.
+    symmetry; apply H; auto.
+
+    unfold vars_eq in *. symmetry.
+    eapply H; eauto.
 Qed.
 
 Lemma init_st_same : forall s1 s2,
@@ -661,21 +633,6 @@ Ltac spawn_call :=
              apply spawn_ok_sym; try assumption
       end.
 
-Definition high_ok clblr vlblr nd_filt :=
-  forall c m s1 s1' s2 s2',
-  clblr c = true ->
-  NonInterferenceSt nd_filt clblr vlblr s1 s2 ->
-  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
-  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s2 s2' ->
-  NonInterferenceSt nd_filt clblr vlblr s1' s2'.
-
-Definition low_ok clblr vlblr nd_filt :=
-  forall c m s1 s1' s2,
-  clblr c = false ->
-  NonInterferenceSt nd_filt clblr vlblr s1 s2 ->
-  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
-  NonInterferenceSt nd_filt clblr vlblr s1' s2.
-
 Lemma vars_eq_kst : forall s1 s1' s2 s2' vlblr,
   kst _ _ _ _ s1 = kst _ _ _ _ s1' ->
   kst _ _ _ _ s2 = kst _ _ _ _ s2' ->
@@ -685,223 +642,47 @@ Proof.
   rewrite <- Hks1. rewrite <- Hks2. assumption.
 Qed.
 
-Theorem ni_bogus : forall clblr vlblr nd_filt c bmsg sb sa,
-  low_ok clblr vlblr nd_filt ->
-  (forall s, Reach s ->
-    NonInterferenceSt nd_filt clblr vlblr s sb) ->
-  BogusExchange PAYD COMPT COMPS KSTD c bmsg sb sa ->
-  (forall s, Reach s ->
-    NonInterferenceSt nd_filt clblr vlblr s sa).
+Ltac uninhabit :=
+  match goal with
+  | [ H : [?tr1]%inhabited = [?tr2]%inhabited |- _ ]
+    => apply pack_injective in H;
+       (subst tr1 || subst tr2)
+  end.
+
+Ltac unpack_bogus :=
+  match goal with
+  | [ HBE : BogusExchange _ _ _ _ _ _ _ ?sa |- _ ]
+    => inversion HBE;
+       match goal with
+       | [ H : _ = sa |- _ ]
+         => rewrite <- H in *; simpl in *;
+            uninhabit; simpl in *
+       end
+  end.
+
+Lemma ve_tr_sub : forall c m s s' tr tr',
+  ktr _ _ _ _ s = [tr]%inhabited ->
+  ktr _ _ _ _ s' = [tr']%inhabited ->
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s s' ->
+  exists tr'', tr' = tr'' ++ tr.
 Proof.
-  intros clblr vlblr nd_filt c bmsg sb sa Hlow HNI HBE.
-  case_eq (clblr c); intros Hlblr s HReach.
-    induction HReach.
-      unfold NonInterferenceSt.
-      unfold NonInterferenceStComps.
-      unfold NonInterferenceStVars.
-      split; intros;
-      assert (inputs clblr tr1 = nil) as Heq by
-        (apply init_inputs_nil with (s:=s) (init:=INIT); auto);
-      inversion HBE; subst sa; simpl in *;
-      apply pack_injective in H1; subst tr2;
-      rewrite Heq in *; simpl in *;
-      rewrite Hlblr in *; discriminate.
-
-      case_eq (clblr c0); intro Hlblr'.
-        unfold NonInterferenceSt.
-        unfold NonInterferenceStComps.
-        unfold NonInterferenceStVars.
-        split; intros;
-        high_ins; inversion HBE; subst sa; simpl in *;
-        apply pack_injective in H1; subst tr2;
-        simpl in *; rewrite Hlblr in *; discriminate.
-
-        unfold low_ok in Hlow.
-        apply Hlow with (c:=c0) (m:=m) (s1:=s); auto.
-      
-      case_eq (clblr c0); intro Hlblr';
-      inversion H; inversion HBE;
-      unfold NonInterferenceSt;
-      unfold NonInterferenceStComps;
-      unfold NonInterferenceStVars;
-      split; intros;
-      apply pack_injective in H6; apply pack_injective in H7;
-      subst tr1; rewrite <- H7 in *; simpl in *;
-      rewrite Hlblr in *; rewrite Hlblr' in *;
-      inversion H10.
-        eapply HNI; eauto; try spawn_call.
-
-        apply vars_eq_kst with (s1:=s) (s2:=sb); auto.
-        eapply HNI; eauto; try spawn_call.
-
-        unfold NonInterferenceSt in IHHReach;
-        unfold NonInterferenceStComps in IHHReach;
-        unfold NonInterferenceStVars in IHHReach.
-        assert (outputs clblr tr0 = outputs clblr tr2) as Heq.
-          subst tr2; auto.
-        rewrite Heq.
-        rewrite H7 in *.
-        eapply IHHReach; eauto; try spawn_call.
-        apply f_equal with (f:=ktr _ _ _ _) in H5.
-        auto. rewrite <- H7. simpl in *. rewrite Hlblr.
-        auto.
-
-        rewrite H5.
-        apply vars_eq_kst with (s1:=s) (s2:=sa); auto.
-        eapply IHHReach; eauto; try spawn_call.
-        apply f_equal with (f:=ktr _ _ _ _) in H5.
-        simpl in *. auto. simpl in *. rewrite Hlblr.
-        auto.
-    
-    unfold NonInterferenceSt in *.
-    unfold NonInterferenceStComps in *.
-    unfold NonInterferenceStVars in *.
-    split; intros;
-    inversion HBE; subst sa; simpl in *;
-    apply pack_injective in H0; subst tr2;
-    simpl in *; rewrite Hlblr in *;
-    eapply HNI; eauto; try spawn_call.      
-Qed.
-
-Theorem ni_init : forall clblr vlblr nd_filt sinit,
-  low_ok clblr vlblr nd_filt ->
-  InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT sinit ->
-  forall s, Reach s -> NonInterferenceSt nd_filt clblr vlblr sinit s.
-Proof.
-  intros clblr vlblr nd_filt sinit Hlow Hinit s HReach.
-  induction HReach.
-     unfold NonInterferenceSt.
-      unfold NonInterferenceStComps.
-      unfold NonInterferenceStVars.
-      split; intros;
-      assert (tr1 = tr2) as Heq by
-        (apply init_tr_same with (s1:=sinit) (s2:=s); auto).
-        rewrite Heq; reflexivity.
-
-        apply init_vars_eq; auto.
-
-      case_eq (clblr c); intros.
-        unfold NonInterferenceSt.
-        unfold NonInterferenceStComps.
-        unfold NonInterferenceStVars.
-        split; intros;
-        assert (inputs clblr tr1 = nil) as Heq by
-          (apply init_inputs_nil with (s:=sinit) (init:=INIT); auto);
-        rewrite Heq in *;
-        high_ins;
-        discriminate.
-
-        apply nist_sym.
-        apply nist_sym in IHHReach.
-        unfold low_ok in Hlow.
-        apply Hlow with (c:=c) (m:=m) (s1:=s); auto.
-
-      match goal with
-      | [ Hbogus : BogusExchange _ _ _ _ _ _ _ _ |- _ ]
-        => inversion Hbogus
-      end.
-      unfold NonInterferenceSt.
-      unfold NonInterferenceStComps.
-      unfold NonInterferenceStVars.
-      split; intros;
-      simpl in *;
-      match goal with
-      | [ Hpacked : [_]%inhabited = [?trpacked]%inhabited |- _ ]
-        => apply pack_injective in Hpacked; subst trpacked
-      end;
-      simpl in *;
-      unfold NonInterferenceSt in IHHReach;
-      unfold NonInterferenceStComps in IHHReach;
-      unfold NonInterferenceStVars in IHHReach;
-      destruct (clblr c);
-        try (assert (inputs clblr tr1 = nil) as Heq by
-          (apply init_inputs_nil with (s:=sinit) (init:=INIT); auto);
-        rewrite Heq in *;
-        discriminate).
-      
-        apply IHHReach; auto; try spawn_call.
-        unfold vars_eq in *.
-        simpl. destruct IHHReach as [ _ IHHReach].
-        eapply IHHReach; eauto; try spawn_call.
-Qed.
-  
-Theorem ni_suf : forall clblr vlblr nd_filt,
-  (forall c m s1 s1' s2 s2',
-   clblr c = true ->
-   NonInterferenceSt nd_filt clblr vlblr s1 s2 ->
-   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
-   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s2 s2' ->
-   NonInterferenceSt nd_filt clblr vlblr s1' s2') ->
-  (forall c m s1 s1' s2,
-   clblr c = false ->
-   NonInterferenceSt nd_filt clblr vlblr s1 s2 ->
-   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
-   NonInterferenceSt nd_filt clblr vlblr s1' s2) ->
-  NonInterference nd_filt clblr vlblr.
-Proof.
-  unfold NonInterference.
   intros.
-  generalize dependent s2.
-  induction H1; intros.
-    apply ni_init; auto.
-
-    case_eq (clblr c); intros.    
-      induction H3.
-        unfold NonInterferenceSt; unfold NonInterferenceStComps;
-        unfold NonInterferenceStVars; split; intros;
-        assert (inputs clblr tr2 = nil) as Heq by
-          (apply init_inputs_nil with (s:=s0) (init:=INIT); auto);
-        rewrite Heq in H9;
-        high_ins;
-        discriminate.
-
-        case_eq (clblr c0); intros.
-          unfold NonInterferenceSt; unfold NonInterferenceStComps;
-          unfold NonInterferenceStVars; split; intros; inversion H11; repeat high_ins;
-          inversion H13; subst c0; subst m0;
-          unfold NonInterferenceSt at 2 in H; unfold NonInterferenceStComps in H;
-          unfold NonInterferenceStVars in H;
-          pose proof (H c m {| kcs := cs0; ktr := [tr0]; kst := st0; kfd := fd0 |}
-            s' {| kcs := cs; ktr := [tr]; kst := st; kfd := fd |} s'0 H6
-            (IHReach {| kcs := cs; ktr := [tr]; kst := st; kfd := fd |} H3) H2 H5) as Hhigh;
-          eapply Hhigh; eauto.
-
-          apply nist_sym.
-          apply nist_sym in IHReach0.
-          apply H0 with (c:=c0) (m:=m0) (s1:=s0) (s1':=s'0) (s2:=s');
-            auto.
-          
-        match goal with
-        | [ Hbogus : BogusExchange _ _ _ _ _ _ _ _ |- _ ]
-          => inversion Hbogus
-        end.
-        unfold NonInterferenceSt.
-        unfold NonInterferenceStComps.
-        unfold NonInterferenceStVars.
-        split; simpl; intros;
-        match goal with
-        | [ Hpacked : [_]%inhabited = [?trpacked]%inhabited |- _ ]
-          => apply pack_injective in Hpacked; subst trpacked
-        end;
-        simpl in *;
-        unfold NonInterferenceSt in IHReach0;
-        unfold NonInterferenceStComps in IHReach0;
-        unfold NonInterferenceStVars in IHReach0;
-        simpl in IHReach0;
-        destruct (clblr c0);
-          try (high_ins; discriminate).
-
-          apply IHReach0; auto; try spawn_call.
-          unfold vars_eq in *. simpl in *.
-          eapply IHReach0; eauto; try spawn_call.
-          
-      apply H0 with (c:=c) (m:=m) (s1:=s); auto.
-
-    apply nist_sym.
-    apply ni_bogus with (c:=c) (bmsg:=bmsg) (sb:=s) (sa:=s'); auto.
-      intros. apply nist_sym. apply IHReach; auto.
+  inversion H1.
+  unfold kstate_run_prog in *.
+  apply f_equal with (f:=ktr _ _ _ _) in H3; simpl in H3.
+  subst s'.
+  pose proof (hdlr_no_recv _ _ _ (default_hdlr_state PAYD COMPT COMPS KSTD s'0 (projT1 hdlrs))
+    (projT2 hdlrs) _ _ (fun _ => true) H3 H0).
+  destruct H5.
+  exists (x ++ (Reflex.KRecv PAYD COMPT COMPS c m
+        :: KSelect PAYD COMPT COMPS cs c :: nil)).
+  rewrite H2 in H. apply pack_injective in H. subst tr.
+  destruct H5.
+  subst tr'.
+  rewrite app_ass.
+  auto.
 Qed.
-(*
+
 Lemma call_ok_ve : forall nd_filt c m (s1 s1' s2:kstate) tr1 tr1' tr2,
   ktr _ _ _ _ s1 = [tr1]%inhabited ->
   ktr _ _ _ _ s1' = [tr1']%inhabited ->
@@ -909,7 +690,35 @@ Lemma call_ok_ve : forall nd_filt c m (s1 s1' s2:kstate) tr1 tr1' tr2,
   call_ok nd_filt tr1' tr2 ->
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
   call_ok nd_filt tr1 tr2.
-Admitted.
+Proof.
+  unfold call_ok. intros.
+  pose proof (ve_tr_sub c m s1 s1' tr1 tr1' H H0 H3).
+  destruct H7.
+  eapply H2 with (tr1aft:=x++tr1aft); eauto.
+  rewrite app_ass.
+  rewrite <- H4.
+  auto.
+Qed.
+
+Lemma call_ok_bogus : forall nd_filt c m (s1 s1' s2:kstate) tr1 tr1' tr2,
+  ktr _ _ _ _ s1 = [tr1]%inhabited ->
+  ktr _ _ _ _ s1' = [tr1']%inhabited ->
+  ktr _ _ _ _ s2 = [tr2]%inhabited ->
+  call_ok nd_filt tr1' tr2 ->
+  BogusExchange PAYD COMPT COMPS KSTD c m s1 s1' ->
+  call_ok nd_filt tr1 tr2.
+Proof.
+  unfold call_ok. intros.
+  unpack_bogus.
+  eapply H2 with
+    (tr1aft:=KBogus PAYD COMPT COMPS c m :: KSelect PAYD COMPT COMPS cs c :: tr1aft);
+    eauto.
+  rewrite H7 in H.
+  apply pack_injective in H.
+  subst tr.
+  subst tr1.
+  auto.
+Qed.
 
 Lemma spawn_ok_ve : forall nd_filt c m (s1 s1' s2:kstate) tr1 tr1' tr2,
   ktr _ _ _ _ s1 = [tr1]%inhabited ->
@@ -918,93 +727,318 @@ Lemma spawn_ok_ve : forall nd_filt c m (s1 s1' s2:kstate) tr1 tr1' tr2,
   spawn_ok nd_filt tr1' tr2 ->
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
   spawn_ok nd_filt tr1 tr2.
-Admitted.
-
-Theorem ni_suf_high' : forall clblr vlblr nd_filt,
-  (forall c m s1 s1' s2 s2' tr1 tr1' tr2 tr2',
-   clblr c = true ->
-   ktr _ _ _ _ s1 = [tr1]%inhabited ->
-   ktr _ _ _ _ s1' = [tr1']%inhabited ->
-   ktr _ _ _ _ s2 = [tr2]%inhabited ->
-   ktr _ _ _ _ s2' = [tr2']%inhabited ->
-   outputs clblr tr1 = outputs clblr tr2 ->
-   vars_eq s1 s2 vlblr ->
-   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
-   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s2 s2' ->
-   call_ok nd_filt tr1' tr2' -> spawn_ok nd_filt tr1' tr2' ->
-   outputs clblr tr1' = outputs clblr tr2' /\ vars_eq s1' s2' vlblr) <->
-(forall c m s1 s1' s2 s2',
-   clblr c = true ->
-   NonInterferenceSt nd_filt clblr vlblr s1 s2 ->
-   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
-   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s2 s2' ->
-   NonInterferenceSt nd_filt clblr vlblr s1' s2').
 Proof.
-  split; intros.
-    unfold NonInterferenceSt in *;
-    unfold NonInterferenceStComps in *;
-    unfold NonInterferenceStVars in *;
-    split; intros; destruct H1; repeat high_ins;
-    inversion H8.
-      assert (outputs clblr tr = outputs clblr tr0).
-        eapply H1; eauto;
-        apply call_ok_ve with (c:=c) (m:=m)
-          (s1:={| kcs := cs; ktr := [tr]; kst := st; kfd := fd |}) (s1':=s1') (s2:=s2')
-          (tr1:=tr) (tr1':=tr1) (tr2:=tr2) in H6; auto;
-        apply call_ok_sym in H6;
-        apply call_ok_ve with (c:=c) (m:=m)
-          (s1:={| kcs := cs0; ktr := [tr0]; kst := st0; kfd := fd0 |}) (s1':=s2')
-          (s2:={| kcs := cs; ktr := [tr]; kst := st; kfd := fd |})
-          (tr1:=tr0) (tr1':=tr2) (tr2:=tr) in H6; auto;
-        apply spawn_ok_ve with (c:=c) (m:=m)
-          (s1:={| kcs := cs; ktr := [tr]; kst := st; kfd := fd |}) (s1':=s1') (s2:=s2')
-          (tr1:=tr) (tr1':=tr1) (tr2:=tr2) in H7; auto;
-        apply spawn_ok_sym in H7;
-        apply spawn_ok_ve with (c:=c) (m:=m)
-          (s1:={| kcs := cs0; ktr := [tr0]; kst := st0; kfd := fd0 |}) (s1':=s2')
-          (s2:={| kcs := cs; ktr := [tr]; kst := st; kfd := fd |})
-          (tr1:=tr0) (tr1':=tr2) (tr2:=tr) in H7; auto.
+  unfold spawn_ok. intros.
+  pose proof (ve_tr_sub c m s1 s1' tr1 tr1' H H0 H3).
+  destruct H7.
+  eapply H2 with (tr1aft:=x++tr1aft); eauto.
+  rewrite app_ass.
+  rewrite <- H4.
+  auto.
+Qed.
 
-      admit.
-      admit.
+Lemma spawn_ok_bogus : forall nd_filt c m (s1 s1' s2:kstate) tr1 tr1' tr2,
+  ktr _ _ _ _ s1 = [tr1]%inhabited ->
+  ktr _ _ _ _ s1' = [tr1']%inhabited ->
+  ktr _ _ _ _ s2 = [tr2]%inhabited ->
+  spawn_ok nd_filt tr1' tr2 ->
+  BogusExchange PAYD COMPT COMPS KSTD c m s1 s1' ->
+  spawn_ok nd_filt tr1 tr2.
+Proof.
+  unfold spawn_ok. intros.
+  unpack_bogus.
+  eapply H2 with
+    (tr1aft:=KBogus PAYD COMPT COMPS c m :: KSelect PAYD COMPT COMPS cs c :: tr1aft);
+    eauto.
+  rewrite H7 in H.
+  apply pack_injective in H.
+  subst tr.
+  subst tr1.
+  auto.
+Qed.
 
-    assert (NonInterferenceSt nd_filt clblr vlblr s1 s2).
-      unfold NonInterferenceSt; unfold NonInterferenceStComps; unfold NonInterferenceStVars.
-      split; intros; auto.
-      rewrite H11 in *; rewrite H12 in *.
-      repeat match goal with
-             | [ Hpacked : [?trp]%inhabited = [_]%inhabited |- _ ]
-               => apply pack_injective in Hpacked; subst trp
-             end; assumption.
-    pose proof (H c m s1 s1' s2 s2' H0 H11 H7 H8).
-    unfold NonInterferenceSt in H12.
-    unfold NonInterferenceStComps in H12.
-    unfold NonInterferenceStVars in H12.
-    destruct H12.
-    split.
-      apply H12; auto.
-    
+Definition low_ok clblr vlblr := forall c m s s' tr tr',
+  ktr _ _ _ _ s = [tr]%inhabited ->
+  ktr _ _ _ _ s' = [tr']%inhabited ->
+  clblr c = false ->
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s s' ->
+  outputs clblr tr = outputs clblr tr' /\
+  vars_eq s s' vlblr.
 
+Definition high_ok clblr vlblr nd_filt :=
+  forall c m s1 s1' s2 s2' tr1 tr1' tr2 tr2',
+    clblr c = true ->
+    ktr _ _ _ _ s1 = [tr1]%inhabited ->
+    ktr _ _ _ _ s1' = [tr1']%inhabited ->
+    ktr _ _ _ _ s2 = [tr2]%inhabited ->
+    ktr _ _ _ _ s2' = [tr2']%inhabited ->
+    outputs clblr tr1 = outputs clblr tr2 ->
+    vars_eq s1 s2 vlblr ->
+    ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
+    ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s2 s2' ->
+    call_ok nd_filt tr1' tr2' -> spawn_ok nd_filt tr1' tr2' ->
+    outputs clblr tr1' = outputs clblr tr2' /\ vars_eq s1' s2' vlblr.
 
+Lemma low_ok_ve : forall clblr vlblr nd_filt c m sb sa,
+  low_ok clblr vlblr ->
+  clblr c = false ->
+  (forall s : Reflex.kstate PAYD COMPT COMPS KSTD,
+    Reach s -> NonInterferenceSt nd_filt clblr vlblr sb s) ->
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m sb sa ->
+  (forall s, Reach s ->
+    NonInterferenceSt nd_filt clblr vlblr sa s).
+Proof.
+  intros clblr vlblr nd_filt c m sb sa Hlow Hlblr HNI Hve s HReach.
+    unfold low_ok in Hlow.
+    unfold NonInterferenceSt; intros.
+    assert (vars_eq sb sa vlblr) as Hvars_eq.
+      destruct sb; destruct ktr; eapply Hlow; eauto.
+    destruct sb as [css ktrs sts fds]_eqn; destruct ktrs as [trs].
+    assert (outputs clblr trs = outputs clblr tr1) as Houts_eq.
+      eapply Hlow; eauto. simpl. auto.
+    unfold vars_eq in *.
+    rewrite <- Hvars_eq.
+    rewrite <- Houts_eq.
+    eapply HNI; eauto.
+    eapply call_ok_ve with (s1:=sb) (s1':=sa) (c:=c) (m:=m);
+      subst sb; eauto.
+    eapply spawn_ok_ve with (s1:=sb) (s1':=sa) (c:=c) (m:=m);
+      subst sb; eauto.
+    match goal with
+    | [ Hin : inputs _ _ = _ |- _ ]
+      => erewrite ve_inputs_low in Hin; eauto
+    end. simpl. auto.
+Qed.
+
+Theorem ni_bogus : forall clblr vlblr nd_filt c bmsg sb sa,
+  low_ok clblr vlblr ->
+  (forall s, Reach s ->
+    NonInterferenceSt nd_filt clblr vlblr s sb) ->
+  BogusExchange PAYD COMPT COMPS KSTD c bmsg sb sa ->
+  (forall s, Reach s ->
+    NonInterferenceSt nd_filt clblr vlblr s sa).
+Proof.
+  intros clblr vlblr nd_filt c bmsg sb sa Hlow HNI HBE s HReach.
+  unfold NonInterferenceSt. intros.
+  unpack_bogus.
+  destruct (clblr c).
+    generalize dependent tr1.
+    induction HReach; intros.
+      match goal with
+      | [ Hin : inputs _ _ = _ |- _ ]
+        => erewrite init_inputs_nil in Hin; eauto
+      end.
+      discriminate.
+
+      case_eq (clblr c0); intros.
+        high_ins. discriminate.
+
+        assert (vars_eq s s' vlblr) as Hvars_eq.
+          destruct s; destruct ktr; eapply Hlow; eauto.
+        destruct s as [css ktrs sts fds]_eqn; destruct ktrs as [trs].
+        assert (outputs clblr trs = outputs clblr tr1) as Houts_eq.
+          eapply Hlow; eauto. simpl. auto.
+        unfold vars_eq in *.
+        rewrite <- Hvars_eq.
+        rewrite <- Houts_eq.
+        eapply IHHReach; eauto.
+        eapply call_ok_ve with (s2:=sa); eauto;
+        subst sa; simpl; auto.
+        eapply spawn_ok_ve with (s2:=sa); eauto;
+        subst sa; simpl; auto.
+        match goal with
+        | [ Hin : inputs _ _ = _ |- _ ]
+          => erewrite ve_inputs_low in Hin; eauto
+        end. simpl. auto.
       
-  
+      unpack_bogus.
+      destruct (clblr c0).
+        match goal with
+        | [ Hin : context[inputs _ _] |- _ ]
+          => inversion Hin
+        end.
+        inversion H3.
+        unfold NonInterferenceSt in HNI.
+        unfold vars_eq in *.
+        simpl in *.
+        eapply HNI; eauto; try spawn_call.
 
-  (forall c m s1 s1' s2 tr1 tr1' tr2,
-   clblr c = false ->
-   ktr _ _ _ _ s1 = [tr1]%inhabited ->
-   ktr _ _ _ _ s1' = [tr1']%inhabited ->
-   ktr _ _ _ _ s2 = [tr2]%inhabited ->
-   outputs clblr tr1 = outputs clblr tr2 ->
-   vars_eq s1 s2 vlblr ->
-   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m s1 s1' ->
-   outputs clblr tr1' = outputs clblr tr2 /\ vars_eq s1' s2 vlblr) ->
+        eapply IHHReach; eauto; try spawn_call.
+
+    unfold NonInterferenceSt in *.
+    unfold vars_eq in *.
+    simpl in *.
+    eapply HNI; eauto.
+Qed.
+
+Theorem ni_init : forall clblr vlblr nd_filt sinit,
+  low_ok clblr vlblr ->
+  InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT sinit ->
+  forall s, Reach s -> NonInterferenceSt nd_filt clblr vlblr sinit s.
+Proof.
+  intros clblr vlblr nd_filt sinit Hlow Hinit s HReach.
+  induction HReach; intros.
+    unfold NonInterferenceSt. intros.
+    split.
+      erewrite init_tr_same with (tr1:=tr1) (tr2:=tr2) (s1:=sinit); eauto.
+
+      apply init_vars_eq; auto.
+
+    case_eq (clblr c); intros.
+      unfold NonInterferenceSt. intros.
+      match goal with
+      | [ Hin : inputs _ _ = _ |- _ ]
+        => erewrite init_inputs_nil in Hin; eauto
+      end.
+      high_ins. discriminate.
+
+      apply nist_sym.
+      apply nist_sym in IHHReach.
+      unfold low_ok in Hlow.
+      unfold NonInterferenceSt in *. intros.
+      assert (vars_eq s s' vlblr) as Hvars_eq.
+        destruct s; destruct ktr; eapply Hlow; eauto.
+      destruct s as [css ktrs sts fds]_eqn; destruct ktrs as [trs].
+      assert (outputs clblr trs = outputs clblr tr1) as Houts_eq.
+        eapply Hlow; eauto. simpl. auto.
+      unfold vars_eq in *.
+      rewrite <- Hvars_eq.
+      rewrite <- Houts_eq.
+      eapply IHHReach; eauto.
+      eapply call_ok_ve with (s1:=s) (s1':=s') (c:=c) (m:=m);
+        subst s; eauto.
+      eapply spawn_ok_ve with (s1:=s) (s1':=s') (c:=c) (m:=m);
+        subst s; eauto.
+      match goal with
+      | [ Hin : inputs _ _ = _ |- _ ]
+        => erewrite ve_inputs_low in Hin; eauto
+      end. simpl. auto.
+
+      match goal with
+      | [ Hbogus : BogusExchange _ _ _ _ _ _ _ _ |- _ ]
+        => inversion Hbogus
+      end.
+      unfold NonInterferenceSt.
+      split; intros;
+      simpl in *;
+      match goal with
+      | [ Hpacked : [_]%inhabited = [?trpacked]%inhabited |- _ ]
+        => apply pack_injective in Hpacked; subst trpacked
+      end;
+      simpl in *;
+      unfold NonInterferenceSt in IHHReach;
+      destruct (clblr c);
+        try (assert (inputs clblr tr1 = nil) as Heq by
+          (apply init_inputs_nil with (s:=sinit) (init:=INIT); auto);
+        rewrite Heq in *;
+        discriminate).
+      
+        apply IHHReach; auto; try spawn_call.
+        unfold vars_eq in *. simpl. 
+        eapply IHHReach; eauto; try spawn_call.
+Qed.
+
+
+
+Theorem ni_ve :  forall clblr vlblr nd_filt c m sb sa,
+  high_ok clblr vlblr nd_filt ->
+  low_ok clblr vlblr ->
+  (forall s, Reach s ->
+    NonInterferenceSt nd_filt clblr vlblr sb s) ->
+  Reach sb ->
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m sb sa ->
+  (forall s, Reach s ->
+    NonInterferenceSt nd_filt clblr vlblr sa s).
+Proof.
+  intros clblr vlblr nd_filt c m sb sa Hhigh Hlow HNI HReachb Hve s HReach.
+  case_eq (clblr c); intro Hlblr.
+    induction HReach.
+      apply nist_sym; eapply ni_init; eauto.
+      eapply Reach_valid; eauto.
+
+      case_eq (clblr c0); intros.
+        unfold NonInterferenceSt. intros.
+        repeat high_ins. simpl. 
+        match goal with
+        | [ Hin : context[inputs _ _] |- _ ]
+          => inversion Hin
+        end. subst c; subst m.
+        eapply Hhigh with (s1':=sa) (s2':=s')
+          (s1:={| kcs := cs0; ktr := [tr0]; kst := st0; kfd := fd0 |})
+          (s2:={| kcs := cs; ktr := [tr]; kst := st; kfd := fd |}); eauto;
+        eapply HNI; eauto;
+        try (assert (call_ok nd_filt tr0 tr2) as Hcall_ok;
+          [ eapply call_ok_ve with
+            (s1:={| kcs := cs0; ktr := [tr0]; kst := st0; kfd := fd0 |})
+            (s1':=sa); eauto
+          | apply call_ok_sym; apply call_ok_sym in Hcall_ok;
+            eapply call_ok_ve with
+              (s1:={| kcs := cs; ktr := [tr]; kst := st; kfd := fd |})
+              (s2:={| kcs := cs0; ktr := [tr0]; kst := st0; kfd := fd0 |})
+              (s1':=s'); eauto ]);
+        try (assert (spawn_ok nd_filt tr0 tr2) as Hspawn_ok;
+          [eapply spawn_ok_ve with
+            (s1:={| kcs := cs0; ktr := [tr0]; kst := st0; kfd := fd0 |})
+            (s1':=sa); eauto
+          | apply spawn_ok_sym; apply spawn_ok_sym in Hspawn_ok;
+            eapply spawn_ok_ve with
+              (s1:={| kcs := cs; ktr := [tr]; kst := st; kfd := fd |})
+              (s2:={| kcs := cs0; ktr := [tr0]; kst := st0; kfd := fd0 |})
+              (s1':=s'); eauto ]).
+
+        apply nist_sym; apply nist_sym in IHHReach.
+        unfold low_ok in Hlow.
+        unfold NonInterferenceSt. intros.
+        assert (vars_eq s s' vlblr) as Hvars_eq.
+          destruct s; destruct ktr; eapply Hlow; eauto.
+        destruct s as [css ktrs sts fds]_eqn; destruct ktrs as [trs].
+        assert (outputs clblr trs = outputs clblr tr1) as Houts_eq.
+          eapply Hlow; eauto. simpl. auto.
+        unfold vars_eq in *.
+        rewrite <- Hvars_eq.
+        rewrite <- Houts_eq.
+        eapply IHHReach; eauto.
+        eapply call_ok_ve with (tr1:=trs) (tr1':=tr1) (s2:=sa) (tr2:=tr2); eauto;
+         simpl; auto.
+        eapply spawn_ok_ve with (tr1:=trs) (tr1':=tr1) (s2:=sa) (tr2:=tr2); eauto;
+         simpl; auto.
+        match goal with
+        | [ Hin : inputs _ _ = _ |- _ ]
+          => erewrite ve_inputs_low in Hin; eauto
+        end. simpl. auto.
+
+      match goal with
+      | [ Hbogus : BogusExchange _ _ _ _ _ _ _ _ |- _ ]
+        => inversion Hbogus
+      end.
+      unfold NonInterferenceSt. intros. simpl in *.
+      match goal with
+      | [ Hpacked : [_]%inhabited = [?trpacked]%inhabited |- _ ]
+        => apply pack_injective in Hpacked; subst trpacked
+      end. simpl in *.
+      destruct (clblr c0).
+        high_ins; discriminate.
+
+        eapply IHHReach; eauto; try spawn_call.
+
+    eapply low_ok_ve; eauto.
+Qed.
+
+Theorem ni_suf : forall clblr vlblr nd_filt,
+  high_ok clblr vlblr nd_filt ->
+  low_ok clblr vlblr ->
   NonInterference nd_filt clblr vlblr.
 Proof.
-  intros; apply ni_suf.
-    clear H0.
-    unfold NonInterferenceSt; unfold NonInterferenceStComps; unfold NonInterferenceStVars.
-    split; intros; repeat high_ins; inversion H8.
-      pose proof (H c m s1 s1' s2 s2 
-        (tr1':=tr1) (tr2':=tr2). ; eauto.
-*)
+  intros clblr vlblr nd_filt Hlow Hhigh.
+  unfold NonInterference. intros s1 s2 HReach1 HReach2.
+  generalize dependent s2.
+  induction HReach1; intros s2 HReach2.
+    apply ni_init; auto.
+
+    eapply ni_ve; eauto.
+
+    apply nist_sym; eapply ni_bogus; eauto.
+    intros. apply nist_sym; auto.
+Qed.
+
 End NI.

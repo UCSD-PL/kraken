@@ -70,7 +70,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   end.
 Close Scope hdlr.
 
-Require Import NonInterference.
+Require Import NonInterference2.
 
 Require Import Ynot.
 Require Import NITactics.
@@ -89,11 +89,38 @@ Theorem ni : NonInterference PAYD COMPT COMPTDEC COMPS
                              (nd_strong PAYD COMPT COMPS) clblr vlblr.
 Proof.
   apply ni_suf.
-Ltac high_steps :=
+    unfold high_ok. intros.
+    inversion H6; inversion H7.
+Ltac remove_redundant_ktr :=
+  match goal with
+  | [ H : ktr _ _ _ _ ?s = inhabits ?tr,
+      H' : ktr _ _ _ _ ?s = inhabits ?tr' |- _ ]
+    => rewrite H' in H; apply pack_injective in H; subst tr
+  end.
+repeat remove_redundant_ktr.
+    destruct_msg; destruct_comp. repeat unpack;
+    simpl in *; rewrite H in *.
+    split.
+      f_equal; auto.
+     
+      unfold vars_eq.
+      simpl. auto.
+
+    unfold low_ok. intros.
+    inversion H2.
+    repeat remove_redundant_ktr.
+    destruct_msg; destruct_comp; repeat unpack;
+    simpl in *; rewrite H1 in *.
+    split.
+      auto.
+
+      unfold vars_eq. simpl. auto.
+Qed.
+(*Ltac high_steps :=
   intros;
   match goal with
-  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ _ _ |- _ ]
-    => unfold NonInterferenceSt in *; intros;
+  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ _ |- _ ]
+    => unfold NonInterferenceSt in *; unfold NonInterferenceStintros;
        match goal with
        | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
            Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
@@ -101,8 +128,8 @@ Ltac high_steps :=
            Hhigh : _ _ = true |- _ ]
          => inversion Hve1; inversion Hve2;
             destruct_msg; destruct_comp; repeat unpack;
-             simpl in *; rewrite Hhigh in *; inversion Hins;
-            split; [f_equal; auto; apply IH; auto; try spawn_call | ]
+             simpl in *; rewrite Hhigh in *; inversion Hins(*;
+            split; [f_equal; auto; apply IH; auto; try spawn_call | ]*)
        end
   end.
 high_steps.
@@ -126,7 +153,7 @@ Ltac low_step :=
        end
   end.
   ni.
-Qed.
+Qed.*)
 (*
 unfold NIWeak'.
 unfold NonInterference'.

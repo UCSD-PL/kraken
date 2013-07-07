@@ -86,7 +86,7 @@ Definition vlblr (f : fin (projT1 KSTD)) : bool :=
 
 Theorem ni : NonInterference PAYD COMPT COMPTDEC COMPS
                              IENVD KSTD INIT HANDLERS
-                             (nd_strong PAYD COMPT COMPS) clblr vlblr.
+                             nd_strong clblr vlblr.
 Proof.
   ni.
 Qed.

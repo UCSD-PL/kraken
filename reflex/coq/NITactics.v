@@ -84,7 +84,7 @@ Ltac unpack :=
        end
   (*Bogus msg*)
   end; unpack_inhabited.
-
+(*
 Ltac spawn_call :=
       match goal with
       | [ Hcall : call_ok _ _ _ _ _ _ |- call_ok _ _ _ _ _ _ ]
@@ -98,7 +98,7 @@ Ltac spawn_call :=
              repeat apply spawn_ok_sub in Hspawn; try assumption;
              apply spawn_ok_sym; try assumption
       end.
-
+*)
 Ltac remove_redundant_ktr :=
   match goal with
   | [ H : ktr _ _ _ _ ?s = inhabits ?tr,

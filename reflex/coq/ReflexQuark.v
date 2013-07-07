@@ -281,10 +281,10 @@ Definition vlblr (f : fin (projT1 KSTD)) := true.
 
 Local Opaque str_of_string.
 
+(*TODO: Change nd_filt to something reasonable.*)
 Theorem ni : forall d, NonInterference PAYD COMPT COMPTDEC COMPS
                                        IENVD KSTD INIT HANDLERS
-                                       (nd_strong PAYD COMPT COMPS)
-                                       (clblr d) vlblr.
+                                       nd_weak (clblr d) vlblr.
 Proof.
   intro d.
   apply ni_suf.

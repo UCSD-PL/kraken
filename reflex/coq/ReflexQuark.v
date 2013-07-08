@@ -312,6 +312,15 @@ Ltac high_steps :=
        end
   end.
 high_steps.
+f_equal.
+f_equal.
+  match goal with
+  |- oracle fd_d (inhabits ?trl) = oracle fd_d (inhabits ?trr)
+         
+rewrite H8.
+rewrite H8.
+
+unfold nd_ok in H8.
 Focus 6.
 destruct_ite.
 admit.

@@ -63,13 +63,14 @@ Instance SDenoted_desc : SDenoted desc :=
 { sdenote := sdenote_desc
 }.
 
+(*
 Axiom oracle : forall (d : desc) (tr : [Trace]), s[[ d ]].
+*)
 
 Axiom exec :
   forall (prog : str) (args : list str) (tr : [Trace]),
     STsep (tr ~~ traced tr)
-          (fun f : fd => [f = oracle fd_d tr]
-                         * (tr ~~ open f * traced (Exec prog args f :: tr))).
+          (fun f : fd => (tr ~~ open f * traced (Exec prog args f :: tr))).
 (*
 Definition vdesc' n : Set := svec desc n.
 

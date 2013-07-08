@@ -28,6 +28,9 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
 
+  Definition i_envvar envd i :=
+    Term COMPT _ envd
+         (Var _ envd i).
   Definition stvar {cc envd m} v :=
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (StVar _ _ _ _ _ _ _ v).
   Definition envvar {cc m} envd i :=

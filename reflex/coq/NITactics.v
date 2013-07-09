@@ -109,8 +109,8 @@ Ltac remove_redundant_ktr :=
 Ltac high_steps :=
   unfold high_ok; intros;
   match goal with
-  | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
-      Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
+  | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+      Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _ _,
       Hhigh : _ = true |- _ ]
     => inversion Hve1; inversion Hve2; repeat remove_redundant_ktr;
        destruct_msg; destruct_comp; try discriminate; repeat unpack;
@@ -138,7 +138,7 @@ Ltac high_steps :=
 Ltac low_step :=
   unfold low_ok; intros;
   match goal with
-  | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _,
+  | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _ _,
       Hlow : _ = false |- _ ]
     => inversion Hve; repeat remove_redundant_ktr;
        destruct_msg; destruct_comp; try discriminate;
@@ -160,4 +160,4 @@ Ltac low_step :=
   end.*)
 
 Ltac ni :=
-  apply ni_suf; [high_steps | low_step].
+  apply ni_suf; [low_step | high_steps].

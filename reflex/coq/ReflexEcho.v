@@ -70,7 +70,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   end.
 Close Scope hdlr.
 
-Require Import NonInterference2.
+Require Import NIExists.
 
 Require Import Ynot.
 Require Import NITactics.
@@ -84,10 +84,26 @@ Definition clblr (c : comp COMPT COMPS) :=
 Definition vlblr (f : fin (projT1 KSTD)) : bool :=
   match f with end.
 
-Theorem ni : NonInterference PAYD COMPT COMPTDEC COMPS
-                             IENVD KSTD INIT HANDLERS
-                             nd_strong clblr vlblr.
+Theorem ni : NI PAYD COMPT COMPTDEC COMPS
+  IENVD KSTD INIT HANDLERS clblr vlblr.
 Proof.
+  apply ni_suf.
+  Ltac low_step :=
+  unfold low_ok; intros;
+  match goal with
+  | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+      Hlow : _ = false |- _ ]
+    => inversion Hve; repeat remove_redundant_ktr;
+       destruct_msg; destruct_comp; try discriminate(*;
+       unpack; simpl in *; try rewrite Hlow in *;
+       repeat split; try solve [ auto | unfold vars_eq; simpl; auto ]*)
+  end.
+low_step.
+split.
+unfold high_out_eq. intros.
+subst s'0.
+simpl in *.
+
   ni.
 Qed.
 

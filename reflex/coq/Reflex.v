@@ -1334,51 +1334,61 @@ Fixpoint payload_fds' (n : nat) :
 Definition payload_fds (v : vdesc) : s[[ v ]] -> list fd :=
   payload_fds' (projT1 v) (projT2 v).
 
-Inductive InitialState : kstate -> Prop :=
-| C_is : forall s input,
+Inductive InitialState input : kstate -> Prop :=
+| C_is : forall s,
            s = init_state_run_cmd IENVD initial_init_state IPROG input ->
-           InitialState {| kcs := init_comps _ s
-                           ; ktr := init_ktr _ s
-                           ; kst := init_kst _ s
-                           ; kfd := FdSet.union
+           InitialState input {| kcs := init_comps _ s
+                               ; ktr := init_ktr _ s
+                               ; kst := init_kst _ s
+                               ; kfd := FdSet.union
                                       (vcdesc_fds_set _ (init_kst _ s))
                                       (vcdesc_fds_set _ (init_env _ s))
-                        |}.
+                               |}.
 
-Inductive ValidExchange (c:comp) (m:msg) : kstate -> kstate -> Prop :=
-| C_ve : let hdlrs := HANDLERS (tag m) (comp_type c) in
-         forall s tr s' input,
+Definition mk_inter_ve_st c m s tr :=
+  let cs := kcs s in
+  {| kcs := cs
+   ; ktr := [KRecv c m :: KSelect cs c :: tr]
+   ; kst := kst s
+   ; kfd := FdSet.union (vdesc_fds_set _ (pay m)) (kfd s)
+   |}.
+
+Inductive ValidExchange (c:comp) (m:msg)
+  (input:sdenote_itt (run_cmd_it (projT2 ((HANDLERS (tag m) (comp_type c))))))
+  : kstate -> kstate -> Prop :=
+| C_ve : forall s tr s',
            let cs := kcs s in
            ktr s = [tr]%inhabited ->
-           s' = {| kcs := cs
-                   ; ktr := [KRecv c m :: KSelect cs c :: tr]
-                   ; kst := kst s
-                   ; kfd := FdSet.union (vdesc_fds_set _ (pay m)) (kfd s)
-                |} ->
-           ValidExchange c m s (kstate_run_prog c m (projT1 hdlrs) s'
-                                                (projT2 hdlrs) input).
+           s' = mk_inter_ve_st c m s tr ->
+           let hdlrs := HANDLERS (tag m) (comp_type c) in
+           ValidExchange c m input s
+             (kstate_run_prog c m (projT1 hdlrs) s'
+               (projT2 hdlrs) input).
+
+Definition mk_bogus_st c bmsg s tr :=
+  let cs := kcs s in
+  {| kcs := cs
+   ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
+   ; kst := kst s
+   ; kfd := kfd s
+   |}.
 
 Inductive BogusExchange (c:comp) (bmsg:bogus_msg)
   : kstate -> kstate -> Prop :=
 | C_be : forall s tr,
   let cs := kcs s in
   ktr s = [tr]%inhabited ->
-  BogusExchange c bmsg s
-                {| kcs := cs
-                 ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
-                 ; kst := kst s
-                 ; kfd := kfd s
-                 |}.
+  BogusExchange c bmsg s (mk_bogus_st c bmsg s tr).
 
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
-  forall s,
-  InitialState s ->
+  forall s input,
+  InitialState input s ->
   Reach s
 | Reach_valid :
-  forall c m s s',
+  forall c m input s s',
   Reach s ->
-  ValidExchange c m s s' ->
+  ValidExchange c m input s s' ->
   Reach s'
 | Reach_bogus :
   forall s s' c bmsg,
@@ -2014,10 +2024,13 @@ Proof.
   admit.
   admit.
   admit.
-  apply Reach_init.
   match goal with
   | [ H : exists i : _, _ = _ |- _ ]
-    => destruct H
+    => let i := fresh "i" in
+       let Hin := fresh "Hin" in
+       destruct H as [i Hin];
+       eapply Reach_init with (input:=i);
+       eauto
   end.
   econstructor; eauto.
   admit.
@@ -2340,10 +2353,14 @@ Proof.
   destruct s'' as [kst'' env'']; destruct kst''; sep''.
   admit. (* TODO *)
   admit.
-  apply Reach_valid with (s:=s) (c:=c) (m:=m); auto.
   match goal with
   | [ H : exists i : _, _ = _ |- _ ]
-    => destruct H
+    => let i := fresh "i" in
+       let Hin := fresh "Hin" in
+       destruct H as [i Hin];
+       apply Reach_valid with (s:=s) (c:=c) (m:=m)
+         (input:=i);
+       auto
   end.
   subst s''.
   subst s.

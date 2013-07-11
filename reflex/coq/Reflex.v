@@ -1747,6 +1747,41 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma vcdesc_fds_subset_rest :
+  forall fds RESTSIZE
+         (PAY0: cdesc) (PAYREST: vcdesc' RESTSIZE) (e0: s[[PAY0]]) (erest: s[[PAYREST]]),
+  vcdesc_fds_subset (envd := existT vcdesc' (S RESTSIZE) (PAY0, PAYREST)) (e0, erest) fds ->
+  vcdesc_fds_subset (envd := existT vcdesc' _ PAYREST) erest fds.
+Proof.
+  intros until 0. intros SUB.
+  unfold vcdesc_fds_subset, vcdesc_fds_set in *.
+  simpl. simpl in SUB.
+  destruct PAY0 as []_eqn.
+  destruct d as []_eqn; try easy.
+  intros ? IN. apply SUB. apply FdSet.add_spec. now right.
+  assumption.
+Qed.
+
+Lemma send_lemma: forall envd (e : s[[envd]]) fds i,
+  vcdesc_fds_subset e fds ->
+  match svec_ith (projT2 envd) i as __d return (base_term envd __d -> Prop) with
+  | Desc d => fun _ => True
+  | Comp c => fun b => FdSet.In (comp_fd (projT1 (eval_base_term e b))) fds
+  end (Var envd i).
+Proof.
+  intros [ENVD_SIZE ENVD_PAY]. revert ENVD_PAY. induction ENVD_SIZE.
+  intros. now exfalso.
+  intros ENVD_PAY e fds i SUB.
+  simpl in i. destruct i as [i|].
+  simpl in ENVD_PAY. destruct ENVD_PAY as [PAY0 PAYREST].
+  simpl in e. unfold sdenote_vcdesc, sdenote_vcdesc' in e.
+  simpl in e. destruct e as [e0 erest].
+  specialize (IHENVD_SIZE PAYREST erest fds i (vcdesc_fds_subset_rest _ _ _ _ _ _ SUB)).
+  simpl in *. revert IHENVD_SIZE.
+  admit.
+  admit.
+Qed.
+
 Definition run_init_cmd :
   forall (envd : vcdesc) (s : init_state envd)
          (c : cmd base_term envd),
@@ -1852,13 +1887,33 @@ refine (
   }}
 ); sep''.
 etransitivity.
-apply all_open_set_unpack with (x := comp_fd c). admit.
+apply all_open_set_unpack with (x := comp_fd c).
+unfold c. clear c.
+dependent inversion_clear ce with (
+  fun _d _ce =>
+  match _d as __d return expr _ _ __d -> _ with
+  | Comp _ => fun ce =>
+    FdSet.In (comp_fd (projT1 (eval_base_expr e ce))) fds
+  | _      => fun _ => False
+  end _ce
+); simpl.
+dependent inversion_clear b with (
+  fun _d _b =>
+  match _d as __d return base_term _ __d -> Prop with
+  | Comp _ => fun b =>
+    FdSet.In (comp_fd (projT1 (eval_base_term e b))) fds
+  | _      => fun _ => True
+  end _b
+).
+now apply send_lemma.
+inversion u.
+inversion b.
 sep''.
-admit. (* might be hard *)
+admit.
 apply all_open_set_pack.
 admit. (* I think this will need [In c cs], otherwise remove it from the frame. *)
 
-(*SendAll*)
+(* SendAll *)
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let m := eval_base_payload_expr _ e _ me in
@@ -1880,7 +1935,7 @@ admit.
 admit.
 exists tt. admit.
 
-(*Spawn*)
+(* Spawn *)
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let c_cmd := compd_cmd (COMPS ct) in
@@ -1903,7 +1958,7 @@ admit.
 admit.
 exists c_fd. sep''.
 
-(*Call*)
+(* Call *)
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let c := eval_base_expr e ce in
@@ -1925,7 +1980,7 @@ admit.
 admit.
 exists f. sep''.
 
-(*StUpd*)
+(* StUpd *)
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let v := eval_base_expr e ve in
@@ -1938,7 +1993,7 @@ refine (
   }}
 ); sep''.
 
-(*CompLkup*)
+(* CompLkup *)
 destruct s as [cs tr e st fds]_eqn; simpl.
 pose (ocdp := find_comp base_term (fun d envd e => eval_base_term e) envd e cp cs).
 destruct ocdp as [ cdp | ]_eqn.
@@ -1965,7 +2020,6 @@ admit.
 get_input. admit.
 admit.
 admit.
-
 (*Component not found*)
 refine (
   s' <- self envd c2 s;

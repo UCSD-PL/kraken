@@ -9,6 +9,10 @@ Require Import ReflexIO.
 Require Import NIExists.
 Require Import Ynot.
 Require Import PruneFacts.
+Require Import Decidable.
+Require Import List.
+Require Import ActionMatch.
+Require Import PolLang.
 
 Module Type SystemFeaturesInterface.
   Parameter NB_MSG   : nat.
@@ -262,6 +266,261 @@ Ltac high_steps :=
 
 Ltac ni :=
   intros; apply ni_suf; [low_step | high_steps].
+
+(*Policy language tactics*)
+
+Ltac destruct_ite_pol :=
+  match goal with
+  |- context[ ite _ _ _ ]
+    => unfold kstate_run_prog in *;
+       unfold hdlr_state_run_cmd in *; simpl in *;
+       repeat destruct_cond
+  end.
+
+Ltac unpack :=
+  match goal with
+  | [ H : Reflex.InitialState _ _ _ _ _ _ _ _ ?s |- _ ]
+    => inversion H;
+       match goal with
+       | [ _ : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _ |- _ ]
+         => subst s'; subst s
+       end
+  | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
+    => destruct_msg; destruct_comp; inversion H;
+       match goal with
+       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _ |- _ ]
+         => subst s'; subst s
+       end
+  | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
+    => inversion H; subst s
+  end; simpl; try destruct_ite_pol; simpl; intros; uninhabit.
+
+Ltac clear_useless_hyps :=
+  repeat match goal with
+         | [ s : Reflex.kstate _ _ _ _ |- _ ]
+           => match goal with
+              | [ H : s = _ |- _ ]
+                => clear H
+              | [ H : _ = s |- _ ]
+                => clear H
+              end
+         | [ H : _ = _ |- _ ]
+           => revert H
+         | [ H : _ <> _ |- _ ]
+           => revert H
+         | [ H : Reflex.Reach _ _ _ _ _ _ _ _ _ |- _ ]
+           => revert H
+         | [ H : In _ _ |- _ ]
+           => revert H
+         | _
+           => idtac
+         end; clear; intros.
+
+Ltac destruct_unpack :=
+  match goal with
+  | [ m : msg _ |- _ ]
+      => destruct_msg; unpack
+  | _
+      => unpack
+  end.
+
+Ltac subst_states :=
+  repeat match goal with
+         | [ s : kstate _ _ _ _ |- _ ]
+             => match goal with
+                | [ _ : s = _ |- _ ]
+                    => subst s
+                end
+         | [ s : init_state _ _ _ _ _ |- _ ]
+             => match goal with
+                | [ _ : s = _ |- _ ]
+                    => subst s
+                end
+         end.
+
+Ltac subst_assignments :=
+  repeat match goal with
+         | [ a := _ |- _ ]
+           => subst a
+         end.
+
+Lemma and_not_decide : forall P Q, decide P -> ~(P /\ Q) -> ~P \/ ~Q.
+intros P Q dP H.
+apply not_and in H.
+auto.
+unfold decidable; destruct dP; auto.
+Qed.
+
+Ltac get_decide P :=
+  match P with
+  | ?a = _ => match type of a with
+             | str => apply str_eq
+             | num => apply num_eq
+             | fd => apply fd_eq
+             end
+  | _ => auto
+  end.
+
+Ltac destruct_neg_conjuncts H :=
+  match type of H with
+  | ~(?P /\ _) => let R := fresh "R" in
+                  apply and_not_decide in H;
+                  [ destruct H as [ | R ];
+                    [ | destruct_neg_conjuncts R ] | get_decide P ]
+  | _ => idtac
+  end.
+
+Ltac destruct_action_matches :=
+  repeat match goal with
+         | [ H : ActionMatch.AMatch _ _ _ _ ?future ?act |- _ ]
+           => compute in H (*maybe produces a conjunction of Props*);
+              decompose [and] H
+         | [ H : ~ActionMatch.AMatch _ _ _ _ ?future ?act |- _ ]
+           => compute in H
+              (*maybe produces a negated conjunction of decidable Props*);
+              destruct_neg_conjuncts H
+         end.
+
+Lemma cut_exists : forall nb_msg plt compt comps act disj_R conj_R,
+  (exists past : @Reflex.KAction nb_msg plt compt comps, (disj_R past) /\ (conj_R past)) ->
+  exists past, (act = past \/ disj_R past) /\ (conj_R past).
+Proof.
+  intros nb_msg plt compt comps act disj_R conj_R H.
+  destruct H.
+  exists x.
+  destruct H.
+  auto.
+Qed.
+
+Ltac releaser_match :=
+  simpl;
+  repeat match goal with
+         | [ |- exists past : Reflex.KAction _ _ _, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
+           => (exists act; compute; tauto) ||
+              apply cut_exists
+         end.
+
+Ltac use_IH_releases :=
+  match goal with
+  | [ IHReach : context[ exists past : Reflex.KAction _ _ _, _ ] |- _ ]
+    => repeat apply cut_exists; apply IHReach; auto
+  end.
+
+Ltac reach_induction :=
+  intros;
+  match goal with
+  | [ _ : Reflex.ktr _ _ _ _ _ = inhabits ?tr, H : Reflex.Reach _ _ _ _ _ _ _ _ _ |- _ ]
+      => generalize dependent tr; induction H; unpack
+         (*Do not put simpl anywhere in here. It breaks destruct_unpack.*)
+  end.
+
+Ltac impossible :=
+  try discriminate; try contradiction;
+  match goal with
+  | [ H : _ = _ |- _ ] => contradict H; solve [auto]
+  | [ H : _ <> _ |- _ ] => contradict H; solve [auto]
+  end.
+
+Ltac exists_past :=
+  destruct_action_matches;
+  (*There may be conditions on s' (the intermediate state). We want
+    to use these conditions to derive conditions on s.*)
+  (*subst_states;*)
+  (*Try to match stuff at head of trace.*)
+  releaser_match;
+  (*This may not clear the old induction hypothesis. Does it matter?*)
+  clear_useless_hyps;
+  (*Should this take s as an argument?*)
+  reach_induction;
+  match goal with
+  | [ _ : Reflex.InitialState _ _ _ _ _ _ _ _ _ |- _ ]
+    => try subst; simpl in *;
+       try solve [ impossible
+                 | releaser_match ]
+  | [ _ : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
+    => try subst; simpl in *;
+       try solve [ impossible
+                 | use_IH_releases
+                 | releaser_match
+                 | exists_past]
+        (*destruct_eq might have created contradictions
+           with previous calls of destruct_eq*)
+  | [ _ : Reflex.BogusExchange _ _ _ _ _ _ _ _ |- _ ]
+    => try subst; simpl in *; use_IH_releases
+  | _ => idtac
+  end.
+
+Ltac match_releases :=
+  match goal with
+  | [ |- Enables _ _ _ _ _ _ nil ]
+      => constructor
+  (* Induction hypothesis.*)
+  | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
+      IH : forall tr', Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
+                       Enables _ _ _ _ ?past ?future tr'
+                       |- Enables _ _ _ _ ?past ?future ?tr ]
+      => auto
+  (*Branch on whether the head of the trace matches.*)
+  | [ |- Enables ?pdv ?compt ?comps ?comptdec _ ?future (?act::_) ]
+      => (*let s := match goal with
+                  | [ _ : ktr _ _ _ _ ?s = inhabits _ |- _ ]
+                      => s
+                  | [ s : init_state _ _ _ _ _ |- _ ]
+                      => s
+                  end in*)
+         let H := fresh "H" in
+         pose proof (decide_act pdv compt comps comptdec future act) as H;
+         destruct H;
+         [ contradiction ||
+           (apply E_future; [ match_releases | try exists_past ])
+         | contradiction ||
+           (apply E_not_future; [ match_releases | assumption ]) ]
+         (*In some cases, one branch is impossible, so contradiction
+           solves the goal immediately.
+           In other cases, there are variables in the message payloads,
+           so both branches are possible.*)
+  end.
+
+Ltac act_match :=
+  match goal with
+  | [ |- AMatch ?pdv ?compt ?comps ?comptdec ?oact ?act ]
+      => let H := fresh "H" in
+         pose proof (decide_act pdv compt comps comptdec oact act) as H;
+         destruct H; [ assumption | contradiction ]
+  end.
+
+Ltac match_immbefore :=
+  match goal with
+  | [ |- ImmBefore _ _ _ _ _ _ nil ]
+      => constructor
+  (*Induction hypothesis*)
+  | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
+      IH : forall tr', Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
+                       ImmBefore _ _ _ _ ?oact_b ?oact_a tr'
+                       |- ImmBefore _ _ _ _ ?oact_b ?oact_a ?tr ]
+      => auto
+  | [ |- ImmBefore ?pdv ?compt ?comps ?comptdec _ ?oact_a (?act::_) ]
+     => let H := fresh "H" in
+        pose proof (decide_act pdv compt comps comptdec oact_a act) as H;
+        destruct H;
+        [ contradiction ||
+          (apply IB_A; [ match_immbefore | act_match ])
+        | contradiction ||
+          (apply IB_nA; [ match_immbefore | assumption ]) ]
+         (*In some cases, one branch is impossible, so contradiction
+           solves the goal immediately.
+           In other cases, there are variables in the message payloads,
+           so both branches are possible.*)
+  end.
+
+Ltac crush :=
+  reach_induction;
+  match goal with
+  | [ |- ImmBefore _ _ _ _ _ _ _ ]
+     => match_immbefore
+  | [ |- Enables _ _ _ _ _ _ _ ]
+     => match_releases
+  end.
 
 End MkLanguage.
 

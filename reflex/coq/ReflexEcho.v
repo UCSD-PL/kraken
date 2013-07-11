@@ -70,6 +70,27 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   end.
 Close Scope hdlr.
 
+Require Import ActionMatch.
+Require Import PolLang.
+Require Import Ynot.
+
+Local Opaque str_of_string.
+
+Theorem recv_before : forall st tr m,
+  Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
+  ktr _ _ _ _ st = inhabits tr ->
+  ImmBefore PAYD COMPT COMPS COMPTDEC
+            (KORecv PAYD COMPT COMPS None
+                     (Some (Build_opt_msg PAYD
+                                          None (Some m, tt))))
+            (KOSend PAYD COMPT COMPS None
+                     (Some (Build_opt_msg PAYD
+                                          None (Some m, tt))))
+            tr.
+Proof.
+  crush.
+Qed.
+
 Require Import NIExists.
 
 Require Import Ynot.

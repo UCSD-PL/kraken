@@ -255,8 +255,7 @@ Close Scope hdlr.
 *)
 
 
-Require Import NonInterference2.
-Require Import NITactics.
+Require Import NIExists.
 
 Open Scope char_scope.
 Definition dom' s :=
@@ -281,104 +280,12 @@ Definition vlblr (f : fin (projT1 KSTD)) := true.
 
 Local Opaque str_of_string.
 
-(*TODO: Change nd_filt to something reasonable.*)
-Theorem ni : forall d, NonInterference PAYD COMPT COMPTDEC COMPS
-                                       IENVD KSTD INIT HANDLERS
-                                       nd_weak (clblr d) vlblr.
+Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
+  IENVD KSTD INIT HANDLERS (clblr d) vlblr.
 Proof.
-  intro d.
-  apply ni_suf.
-Ltac destruct_ite :=
-match goal with
-|- context[ if ?e then _ else _ ] => destruct e
-end.
-
-Ltac high_steps :=
-  unfold high_ok; intros;
-  match goal with
-  | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
-      Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
-      Hhigh : _ = true |- _ ]
-    => inversion Hve1; inversion Hve2; repeat remove_redundant_ktr;
-       destruct_msg; destruct_comp; try discriminate; repeat unpack;
-       simpl in *; try rewrite Hhigh in *; repeat destruct_ite; split;
-       match goal with
-       | [ |- _::_ = _::_ ]
-         => f_equal; auto
-       | [ |- vars_eq _ _ _ _ _ _ _ ]
-         => unfold vars_eq in *; simpl in *; auto
-       | [ |- _ ]
-         => auto
-       end
-  end.
-high_steps.
-f_equal.
-f_equal.
-  match goal with
-  |- oracle fd_d (inhabits ?trl) = oracle fd_d (inhabits ?trr)
-         
-rewrite H8.
-rewrite H8.
-
-unfold nd_ok in H8.
-Focus 6.
-destruct_ite.
-admit.
-unfold vars_eq in *. simpl in *.
-auto.
-
-    Ltac high_steps :=
-  intros;
-  match goal with
-  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
-    => unfold NonInterferenceSt in *; intros;
-       match goal with
-       | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
-           Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
-           Hins : inputs _ _ _ _ _ = inputs _ _ _ _ _,
-           Hhigh : _ = true |- _ ]
-         => inversion Hve1; inversion Hve2;
-            destruct_msg; destruct_comp; try discriminate;
-            repeat unpack; simpl in *; try rewrite Hhigh in *;
-            inversion Hins;
-            repeat match goal with
-                   | [ |- _::_ = _::_ ]
-                      => f_equal; auto
-                   | [ |- _ ]
-                      => apply IH; auto; try spawn_call
-                   end
-       end
-  end.
-high_steps.
-match goal with
-| [ |- ?l = ?r ]
-  => match type of l with
-     | context
-end.
-admit.
-rewrite H3.
-match goal with
-| [ |- (if ?e then _ else _) = (if ?e then _ else _) ]
-  => destruct e
-end; [ f_equal; auto | ]. apply H0; auto; try spawn_call.
-
-
-Ltac low_step :=
-  intros;
-  match goal with
-  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
-    => unfold NonInterferenceSt in *; intros;
-       match goal with
-       | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _,
-           Hlow : _ = false |- _ ]
-         => inversion Hve; destruct_msg; destruct_comp; try discriminate;
-            try solve [unpack; simpl in *; try rewrite Hlow in *;
-            apply IH; auto; try spawn_call]
-       end
-  end.
-low_step.
+  ni.
 Qed.
-*)
+
 End Spec.
 
 Module Main := MkMain(Spec).

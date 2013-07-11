@@ -1,7 +1,8 @@
-Require Import NonInterference2.
+Require Import NIExists.
 Require Import Reflex.
 
 Require Import Ynot.
+Require Import PruneFacts.
 
 Ltac destruct_fin f :=
   match type of f with
@@ -28,35 +29,6 @@ Ltac destruct_msg :=
          destruct_pay pay
   end.
 
-(*Destructs num, str, or fd equalities in the context.*)
-Ltac destruct_eq H :=
-  repeat match type of H with
-         | context[if ?x then _ else _ ]
-           => destruct x
-         end.
- (* repeat match type of H with
-         | context[num_eq ?a ?b]
-           => destruct (num_eq a b); simpl in *
-         | context[str_eq ?a ?b]
-           => destruct (str_eq a b); simpl in *
-         | context[fd_eq ?a ?b]
-           => destruct (fd_eq a b); simpl in *
-         end.*)
-
-Ltac destruct_input input :=
-  simpl in input; (*compute in input;*)
-  match type of input with
-  | unit => idtac
-  | _ => let x := fresh "x" in
-         let input' := fresh "input'" in
-         destruct input as [x input']; destruct_input input'
-  end.
-
-Ltac unpack_inhabited :=
-  repeat match goal with
-         | [ H : ktr _ _ _ _ _ = inhabits ?tr |- _ ]
-           => simpl in H; apply pack_injective in H; subst tr
-         end.
 
 Ltac destruct_comp :=
   match goal with
@@ -68,96 +40,135 @@ Ltac destruct_comp :=
          destruct ct
   end.
 
-Ltac unpack :=
-  match goal with
-  (*Valid exchange.*)
-  | [ s : Reflex.kstate _ _ _ _, s' : Reflex.kstate _ _ _ _ |- _ ]
-    => match goal with
-       | [ _ : kstate_run_prog _ _ _ _ _ _ _ _ s _ = s' |- _ ]
-         => subst s; subst s'
-       end
-  (*Initialization.*)
-  | [ s : Reflex.init_state _ _ _ _ _ |- _ ]
-    => match goal with
-         | [ H : s = Reflex.init_state_run_cmd _ _ _ _ _ _ _ _ |- _ ]
-           => subst s
-       end
-  (*Bogus msg*)
-  end; unpack_inhabited.
-(*
-Ltac spawn_call :=
-      match goal with
-      | [ Hcall : call_ok _ _ _ _ _ _ |- call_ok _ _ _ _ _ _ ]
-          => repeat apply call_ok_sub in Hcall; try assumption;
-             apply call_ok_sym in Hcall; try assumption;
-             repeat apply call_ok_sub in Hcall; try assumption;
-             apply call_ok_sym; try assumption
-      | [ Hspawn : spawn_ok _ _ _ _ _ _ |- spawn_ok _ _ _ _ _ _ ]
-          => repeat apply spawn_ok_sub in Hspawn; try assumption;
-             apply spawn_ok_sym in Hspawn; try assumption;
-             repeat apply spawn_ok_sub in Hspawn; try assumption;
-             apply spawn_ok_sym; try assumption
-      end.
-*)
 Ltac remove_redundant_ktr :=
+  unfold NIExists.ktr in *;
   match goal with
-  | [ H : ktr _ _ _ _ ?s = inhabits ?tr,
-      H' : ktr _ _ _ _ ?s = inhabits ?tr' |- _ ]
+  | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
+      H' : Reflex.ktr _ _ _ _ ?s = inhabits ?tr' |- _ ]
     => rewrite H' in H; apply pack_injective in H; subst tr
   end.
 
-Ltac high_steps :=
-  unfold high_ok; intros;
+Ltac uninhabit :=
   match goal with
-  | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _ _,
-      Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _ _,
-      Hhigh : _ = true |- _ ]
-    => inversion Hve1; inversion Hve2; repeat remove_redundant_ktr;
-       destruct_msg; destruct_comp; try discriminate; repeat unpack;
-       simpl in *; try rewrite Hhigh in *; split;
-       [f_equal; auto | unfold vars_eq; simpl; auto]
+  | [ H : inhabits _ = inhabits ?tr |- _ ]
+    => apply pack_injective in H; subst tr
   end.
 
-(*Ltac high_steps :=
-  intros;
+Ltac subst_inter_st :=
   match goal with
-  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
-    => unfold NonInterferenceSt in *; intros;
-       match goal with
-       | [ Hve1 : ValidExchange _ _ _ _ _ _ _ _ _ _,
-           Hve2 : ValidExchange _ _ _ _ _ _ _ _ _ _,
-           Hins : inputs _ _ _ _ _ = inputs _ _ _ _ _,
-           Hhigh : _ _ = true |- _ ]
-         => inversion Hve1; inversion Hve2;
-            destruct_msg; destruct_comp; repeat unpack;
-             simpl in *; rewrite Hhigh in *; inversion Hins;
-            f_equal; auto; apply IH; auto; try spawn_call
+  | [ _ : ?s = mk_inter_ve_st _ _ _ _ _ _ _ _ |- _ ]
+    => subst s
+  end.
+
+Ltac destruct_comp_var :=
+  match goal with
+  | [ cp : sigT (fun (c : Reflex.comp _ _) => _) |- _ ]
+    => let pf := fresh "pf" in
+       let ct := fresh "ct" in
+       let f := fresh "f" in
+       let cfg := fresh "cfg" in
+       destruct cp as [ [ct f cfg] pf];
+       destruct ct; try discriminate
+       (*discriminate prunes impossible ctypes*)
+  end.
+
+Ltac destruct_state :=
+  match goal with
+  |- context[kst _ _ _ _ ?s]
+    => let kvars := fresh "kvars" in
+       set (kvars:=kst _ _ _ _ s);
+       destruct_pay kvars;
+       repeat destruct_comp_var; simpl
+  end.
+
+Ltac destruct_cond :=
+match goal with
+|- context[ if ?e then _ else _ ] => destruct e
+end.
+
+Ltac vars_eq_tac :=
+  match goal with
+  | [ Hvars :  vars_eq _ _ _ _ _ _ _ |- _ ]
+    => solve [ unfold vars_eq; simpl; auto
+      | inversion Hvars; auto ]
+  end.
+
+Ltac state_var_branch :=
+  match goal with
+  | [ Hout : high_out_eq _ _ _ _ ?s1 ?s2 _,
+      Hvars : vars_eq _ _ _ _ ?s1 ?s2 _ |- _ ]
+    => match goal with
+       | [ _ : Reflex.ktr _ _ _ _ s1 = inhabits ?tr1,
+           _ : Reflex.ktr _ _ _ _ s2 = inhabits ?tr2 |- _ ]
+         => rewrite Hout with (tr:=tr1) (tr':=tr2); auto;
+            inversion Hvars; auto
        end
-  end.*)
+  end.
+
+Ltac ho_eq_tac tac Hlblr :=
+  unfold high_out_eq; simpl; intros;
+  repeat remove_redundant_ktr;
+  repeat uninhabit; simpl;
+  simpl in Hlblr; try rewrite Hlblr;
+  try solve[tac | destruct_cond; tac
+    | state_var_branch | destruct_state; tac]
+  (*destruct_state is expensive, so try it only as
+     a last resort*).
+
+Ltac destruct_ite :=
+  match goal with
+  |- context[ Ite _ _ _ _ _ _ _ _ _ ]
+    => unfold kstate_run_prog;
+       unfold hdlr_state_run_cmd; simpl;
+       repeat destruct_cond
+  end.
+
+Ltac ho_eq_solve_low :=
+  simpl; auto.
 
 Ltac low_step :=
   unfold low_ok; intros;
   match goal with
-  | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+  | [ Hve : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
       Hlow : _ = false |- _ ]
-    => inversion Hve; repeat remove_redundant_ktr;
-       destruct_msg; destruct_comp; try discriminate;
-       repeat unpack; simpl in *; try rewrite Hlow in *;
-       split; [ auto | unfold vars_eq; simpl; auto ]
+    => destruct_msg; destruct_comp; try discriminate;
+       try solve [eapply prune_nop_1; eauto];
+       inversion Hve; repeat subst_inter_st; simpl;
+       try destruct_ite; split;
+       match goal with
+       | [ |- high_out_eq _ _ _ _ _ _ _ ]
+         => ho_eq_tac ho_eq_solve_low Hlow
+       | [ |- vars_eq _ _ _ _ _ _ _ ]
+         => auto
+       | _ => idtac
+       end
   end.
 
-(*Ltac low_step :=
-  intros;
+Ltac ho_eq_solve_high :=
+  repeat match goal with
+         | [ |- _::_ = _::_ ] => f_equal; auto
+         | _ => auto
+         end.
+
+Ltac high_steps :=
+  unfold high_ok; intros;
   match goal with
-  | [ IH : NonInterferenceSt _ _ _ _ _ _ _ _ |- _ ]
-    => unfold NonInterferenceSt in *; intros;
+  | [ Hve1 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+      Hve2 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+      Hhigh : _ = true |- _ ]
+    => destruct_msg; destruct_comp; try discriminate;
+       try solve [eapply prune_nop_2; eauto];
+       inversion Hve1; inversion Hve2;
+       repeat subst_inter_st; simpl;
+       try destruct_ite; split;
        match goal with
-       | [ Hve : ValidExchange _ _ _ _ _ _ _ _ _ _,
-           Hlow : _ _ = false |- _ ]
-         => inversion Hve; destruct_msg; destruct_comp; repeat unpack;
-            simpl in *; rewrite Hlow in *; apply IH; auto; try spawn_call
+       | [ |- high_out_eq _ _ _ _ _ _ _ ]
+         => ho_eq_tac ho_eq_solve_high Hhigh
+       | [ |- vars_eq _ _ _ _ _ _ _ ]
+         => vars_eq_tac
+       | _ => idtac
        end
-  end.*)
+  end.
 
 Ltac ni :=
-  apply ni_suf; [low_step | high_steps].
+  intros; apply ni_suf; [low_step | high_steps].

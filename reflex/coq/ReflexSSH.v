@@ -85,7 +85,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
     ("SCreatePtyerRes",   [fd_d; fd_d])
   ].
 
-Inductive COMPT' : Type := System | Slave.
+Inductive COMPT' : Type := Password | Terminal | Slave.
 
 Definition COMPT := COMPT'.
 
@@ -94,9 +94,12 @@ Proof. decide equality. Defined.
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | System => mk_compd
-                "System" "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys" []
-                (mk_vdesc [str_d])
+  | Password => mk_compd
+                "Password" "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys" []
+                (mk_vdesc [])
+  | Terminal => mk_compd
+                "Terminal" "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys" []
+                (mk_vdesc [])
   | Slave  => mk_compd
                 "Slave"  "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/ssh"      []
                 (mk_vdesc [])
@@ -122,22 +125,25 @@ Notation SCreatePtyerReq := 16%fin (only parsing).
 Notation SCreatePtyerRes := 17%fin (only parsing).
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
-  [ Comp _ System; Comp _ Slave ].
+  [ Comp _ Password; Comp _ Terminal; Comp _ Slave ].
 
-Notation v_env_system := (None) (only parsing).
-Notation v_env_slave  := (Some None) (only parsing).
+Notation v_env_password := 0%fin (only parsing).
+Notation v_env_terminal := 1%fin (only parsing).
+Notation v_env_slave    := 2%fin (only parsing).
 
 Definition KSTD : vcdesc COMPT := mk_vcdesc
-  [ Comp _ System
+  [ Comp _ Password
+  ; Comp _ Terminal
   ; Comp _ Slave
   ; Desc _ num_d (* authenticated *)
   ; Desc _ str_d (* authenticated username *)
   ].
 
-Notation v_st_system        := (None) (only parsing).
-Notation v_st_slave         := (Some None) (only parsing).
-Notation v_st_authenticated := (Some (Some None)) (only parsing).
-Notation v_st_auth_user     := (Some (Some (Some None))) (only parsing).
+Notation v_st_password      := 0%fin (only parsing).
+Notation v_st_terminal      := 1%fin (only parsing).
+Notation v_st_slave         := 2%fin (only parsing).
+Notation v_st_authenticated := 3%fin (only parsing).
+Notation v_st_auth_user     := 4%fin (only parsing).
 
 End SystemFeatures.
 
@@ -152,14 +158,12 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-   seq (spawn _ IENVD System (str_of_string "System", tt) v_env_system (Logic.eq_refl _))
-  (seq (stupd _ IENVD v_st_system (i_envvar IENVD v_env_system))
+   seq (spawn _ IENVD Password tt v_env_password (Logic.eq_refl _))
+  (seq (stupd _ IENVD v_st_password (i_envvar IENVD v_env_password))
+  (seq (spawn _ IENVD Terminal tt v_env_terminal (Logic.eq_refl _))
+  (seq (stupd _ IENVD v_st_terminal (i_envvar IENVD v_env_terminal))
   (seq (spawn _ IENVD Slave  tt                           v_env_slave  (Logic.eq_refl _))
-       (stupd _ IENVD v_st_slave (i_envvar IENVD v_env_slave)))).
-
-Definition system_pat := (Some (str_of_string "System"), tt).
-
-Definition exists_comp := exists_comp COMPT COMPTDEC COMPS.
+       (stupd _ IENVD v_st_slave (i_envvar IENVD v_env_slave)))))).
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -169,15 +173,15 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   with
      | Slave, LoginReq =>
        [[ mk_vcdesc [] :
-          send (stvar v_st_system) SLoginReq (mvar LoginReq 0%fin, tt)
+          send (stvar v_st_password) SLoginReq (mvar LoginReq 0%fin, tt)
        ]]
-     | System, SLoginResT =>
+     | Password, SLoginResT =>
        [[ mk_vcdesc [] :
            seq (stupd _ _ v_st_auth_user     (mvar SLoginResT 0%fin))
           (seq (stupd _ _ v_st_authenticated (nlit (num_of_nat 1)))
                (send (stvar v_st_slave) LoginResT tt))
        ]]
-     | System, SLoginResF =>
+     | Password, SLoginResF =>
        [[ mk_vcdesc [] :
           send (stvar v_st_slave) LoginResF tt
        ]]
@@ -204,10 +208,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                 nop
               )
               (
-                send (stvar v_st_system) SCreatePtyerReq (stvar v_st_auth_user, tt)
+                send (stvar v_st_terminal) SCreatePtyerReq (stvar v_st_auth_user, tt)
               )
        ]]
-     | System, SCreatePtyerRes =>
+     | Terminal, SCreatePtyerRes =>
        [[ mk_vcdesc [] :
           send (stvar v_st_slave) CreatePtyerRes
             (mvar SCreatePtyerRes 0%fin, (mvar SCreatePtyerRes 1%fin, tt))

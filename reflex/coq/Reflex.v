@@ -1293,8 +1293,7 @@ Fixpoint vdesc_fds_set' (n : nat) :
     end
   end.
 
-Definition vdesc_fds_set (v : vdesc) : s[[ v ]] -> FdSet.t :=
-  vdesc_fds_set' (projT1 v) (projT2 v).
+Definition vdesc_fds_set v := vdesc_fds_set' (projT1 v) (projT2 v).
 
 Fixpoint vcdesc_fds_set' (n : nat) :
   forall (v : vcdesc' n), sdenote_vcdesc' n v -> FdSet.t :=
@@ -1315,8 +1314,7 @@ Fixpoint vcdesc_fds_set' (n : nat) :
     end
   end.
 
-Definition vcdesc_fds_set (v : vcdesc) : s[[ v ]] -> FdSet.t :=
-  vcdesc_fds_set' (projT1 v) (projT2 v).
+Definition vcdesc_fds_set v := vcdesc_fds_set' (projT1 v) (projT2 v).
 
 Fixpoint payload_fds' (n : nat) :
   forall (v : vdesc' n), sdenote_vdesc' n v -> list fd :=
@@ -1411,11 +1409,9 @@ Fixpoint all_open_set_drop_all fs s :=
 
 Definition all_fds_in l s := List.Forall (fun x => FdSet.In (comp_fd x) s) l.
 
-Definition vdesc_fds_subset {envd : vdesc} (env : s[[envd]]) (s : FdSet.t) :=
-  FdSet.Subset (vdesc_fds_set envd env) s.
+Definition vdesc_fds_subset {envd} env s := FdSet.Subset (vdesc_fds_set envd env) s.
 
-Definition vcdesc_fds_subset {envd : vcdesc} (env : s[[envd]]) (s : FdSet.t) :=
-  FdSet.Subset (vcdesc_fds_set envd env) s.
+Definition vcdesc_fds_subset {envd} env s := FdSet.Subset (vcdesc_fds_set envd env) s.
 
 Definition init_invariant {envd} (s : init_state envd) :=
   let fds := init_fds _ s in
@@ -1756,129 +1752,34 @@ Lemma vcdesc_fds_subset_rest :
   vcdesc_fds_subset (envd := existT vcdesc' (S RESTSIZE) (PAY0, PAYREST)) (e0, erest) fds ->
   vcdesc_fds_subset (envd := existT vcdesc' _ PAYREST) erest fds.
 Proof.
+  unfold vcdesc_fds_subset, vcdesc_fds_set.
   intros until 0. intros SUB.
-  unfold vcdesc_fds_subset, vcdesc_fds_set in *.
-  simpl. simpl in SUB.
   destruct PAY0 as []_eqn.
   destruct d as []_eqn; try easy.
-  intros ? IN. apply SUB. apply FdSet.add_spec. now right.
-  intros ? IN. apply SUB. apply FdSet.add_spec. now right.
-Qed.
-
-Lemma ridiculous_lemma: forall
-  (c: COMPT)
-  (ENVD_SIZE: nat)
-  (PAYREST: vcdesc' ENVD_SIZE)
-  (erest: shvec sdenote_cdesc PAYREST)
-  (i: fin ENVD_SIZE)
-  (EQ: svec_ith PAYREST i = Comp c),
-  eval_base_term (envd:=existT _ ENVD_SIZE PAYREST) erest
-    match EQ in _ = __vi return base_term (existT vcdesc' ENVD_SIZE PAYREST) __vi with
-    | Logic.eq_refl => Var (existT vcdesc' ENVD_SIZE PAYREST) i
-    end
-  =
-  match EQ in _ = __vi return s[[__vi]] with
-  | Logic.eq_refl =>
-    eval_base_term
-      (envd:=existT _ ENVD_SIZE PAYREST)
-      erest (Var (existT vcdesc' ENVD_SIZE PAYREST) i)
-  end.
-Proof.
-  intros. dependent inversion EQ. reflexivity.
-Qed.
-
-Lemma ridiculous_lemma2: forall
-  (c: COMPT)
-  (ENVD_SIZE: nat)
-  PAY0
-  (e0: s[[PAY0]])
-  (PAYREST: vcdesc' ENVD_SIZE)
-  (erest: shvec sdenote_cdesc PAYREST)
-  (i: fin ENVD_SIZE)
-  (EQ: svec_ith PAYREST i = Comp c),
-  eval_base_term (envd:=existT vcdesc' (S ENVD_SIZE) (PAY0, PAYREST)) (e0, erest)
-    match EQ in _ = __vi return
-      base_term (existT vcdesc' (S ENVD_SIZE) (PAY0, PAYREST)) __vi
-    with
-    | Logic.eq_refl => Var (existT vcdesc' (S ENVD_SIZE) (PAY0, PAYREST)) (Some i)
-    end
-  =
-  match EQ in _ = __vi return s[[__vi]] with
-  | Logic.eq_refl =>
-    eval_base_term
-      (envd:=existT _ (S ENVD_SIZE) (PAY0, PAYREST))
-      (e0, erest) (Var (existT vcdesc' (S ENVD_SIZE) (PAY0, PAYREST)) (Some i))
-  end.
-Proof.
-  intros. dependent inversion EQ. reflexivity.
+  intros ? IN. apply SUB. simpl. apply FdSet.add_spec. now right.
+  intros ? IN. apply SUB. simpl. apply FdSet.add_spec. now right.
 Qed.
 
 Lemma send_lemma: forall envd (e : s[[envd]]) fds i,
-  vcdesc_fds_subset e fds ->
-  match svec_ith (projT2 envd) i as __d return (base_term envd __d -> Prop) with
+  vcdesc_fds_subset (envd := envd) e fds ->
+  match svec_ith (projT2 envd) i as __d return s[[__d]] -> Prop with
   | Desc d => fun _ => True
-  | Comp c => fun b => FdSet.In (comp_fd (projT1 (eval_base_term e b))) fds
-  end (Var envd i).
+  | Comp c => fun v => FdSet.In (comp_fd (projT1 v)) fds
+  end (shvec_ith sdenote_cdesc (projT2 envd) e i).
 Proof.
-  intros [ENVD_SIZE ENVD_PAY]. revert ENVD_PAY. induction ENVD_SIZE.
+  unfold vcdesc_fds_subset, vcdesc_fds_set.
+  intros [ENVD_SIZE ENVD]. induction ENVD_SIZE.
   intros. now exfalso.
-  intros ENVD_PAY e fds i SUB.
-  simpl in ENVD_PAY. destruct ENVD_PAY as [PAY0 PAYREST].
-  simpl in i. destruct i as [i|].
-  simpl in e. unfold sdenote_vcdesc, sdenote_vcdesc' in e.
-  simpl in e. destruct e as [e0 erest].
-  specialize (IHENVD_SIZE PAYREST erest fds i (vcdesc_fds_subset_rest _ _ _ _ _ _ SUB)).
-  simpl in *. revert IHENVD_SIZE.
-
-  pose (shvec_ith sdenote_cdesc PAYREST erest i) as v1.
-  pose (shvec_ith (n:=S ENVD_SIZE) sdenote_cdesc (PAY0, PAYREST) (e0, erest) (Some i)) as v2.
-
-refine (
-match svec_ith PAYREST i as _vi return
-   forall (EQ: (svec_ith (projT2 (existT vcdesc' ENVD_SIZE PAYREST)) i) = _vi),
-   match
-     _vi as __d
-     return (base_term (existT vcdesc' ENVD_SIZE PAYREST) __d -> Prop)
-   with
-   | Desc d => fun _ => True
-   | Comp c => fun b=>
-       FdSet.In
-         (comp_fd (projT1 (eval_base_term (envd:=existT _ ENVD_SIZE PAYREST) erest b)))
-         fds
-   end
-     match EQ in _ = __vi return base_term _ __vi with Logic.eq_refl =>
-       Var (existT vcdesc' ENVD_SIZE PAYREST) i
-     end
-   ->
-   match
-     _vi as __d
-     return
-       (base_term (existT vcdesc' (S ENVD_SIZE) (PAY0, PAYREST)) __d -> Prop)
-   with
-   | Desc d => fun _ => True
-   | Comp c => fun b =>
-       FdSet.In
-         (comp_fd (projT1 (eval_base_term (envd:=existT _ (S ENVD_SIZE) (PAY0, PAYREST)) (e0, erest) b)))
-         fds
-   end
-     match EQ in _ = __vi return base_term _ __vi with Logic.eq_refl =>
-       Var (existT vcdesc' (S ENVD_SIZE) (PAY0, PAYREST)) (Some i)
-     end
-with
-| Desc d => _
-| Comp c => _
-end (Logic.eq_refl _)
-).
-easy.
-intros EQ. simpl in EQ.
-rewrite ridiculous_lemma. rewrite ridiculous_lemma2.
-now simpl.
-
-simpl. destruct PAY0 as []_eqn.
-easy.
-simpl in *.
-unfold sdenote_vcdesc in e. simpl in *. destruct e as [e0 e].
-apply SUB. unfold vcdesc_fds_set. simpl. apply FdSet.add_spec. now left.
+  intros e fds i SUB.
+  simpl in *. unfold sdenote_vcdesc in e. destruct ENVD as [ENVD0 ENVD].
+  simpl in *. destruct e as [e0 e].
+  destruct i as [i|].
+  apply IHENVD_SIZE.
+  intros x IN. apply SUB.
+  destruct ENVD0.
+  destruct d. assumption. assumption. apply FdSet.add_spec. now right.
+  apply FdSet.add_spec. now right.
+  destruct ENVD0. exact I. apply SUB. apply FdSet.add_spec. now left.
 Qed.
 
 Definition run_init_cmd :
@@ -1998,11 +1899,11 @@ dependent inversion_clear ce with (
 ); simpl.
 dependent inversion_clear b with (
   fun _d _b =>
-  match _d as __d return base_term _ __d -> Prop with
-  | Comp _ => fun b =>
-    FdSet.In (comp_fd (projT1 (eval_base_term e b))) fds
+  match _d as __d return s[[__d]] -> Prop with
+  | Comp _ => fun v =>
+    FdSet.In (comp_fd (projT1 v)) fds
   | _      => fun _ => True
-  end _b
+  end (eval_base_term e _b)
 ).
 now apply send_lemma.
 inversion u.

@@ -37,6 +37,8 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
 
   Definition stvar {cc envd m} v :=
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (StVar _ _ _ _ _ _ _ v).
+  Definition i_envvar envd i :=
+    Term COMPT (base_term _) envd (Var _ envd i).
   Definition envvar {cc m} envd i :=
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd
          (Base _ _ _ _ _ _ _ (Var _ envd i)).
@@ -205,7 +207,7 @@ Ltac ho_eq_tac tac Hlblr :=
   repeat uninhabit; simpl;
   simpl in Hlblr; try rewrite Hlblr;
   try solve[tac | destruct_cond; tac
-    | state_var_branch | destruct_state; tac]
+    | state_var_branch | repeat destruct_state; tac]
   (*destruct_state is expensive, so try it only as
      a last resort*).
 
@@ -422,6 +424,7 @@ Ltac impossible :=
   end.
 
 Ltac exists_past :=
+  idtac "Exists past";
   destruct_action_matches;
   (*There may be conditions on s' (the intermediate state). We want
     to use these conditions to derive conditions on s.*)
@@ -442,7 +445,7 @@ Ltac exists_past :=
        try solve [ impossible
                  | use_IH_releases
                  | releaser_match
-                 | exists_past]
+                 (*| exists_past*)]
         (*destruct_eq might have created contradictions
            with previous calls of destruct_eq*)
   | [ _ : Reflex.BogusExchange _ _ _ _ _ _ _ _ |- _ ]
@@ -451,6 +454,7 @@ Ltac exists_past :=
   end.
 
 Ltac match_releases :=
+  idtac "Match releases";
   match goal with
   | [ |- Enables _ _ _ _ _ _ nil ]
       => constructor

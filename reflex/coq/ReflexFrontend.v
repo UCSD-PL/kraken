@@ -475,10 +475,10 @@ Ltac match_releases :=
          let H := fresh "H" in
          pose proof (decide_act pdv compt comps comptdec future act) as H;
          destruct H;
-         [ contradiction ||
-           (apply E_future; [ match_releases | try exists_past ])
-         | contradiction ||
-           (apply E_not_future; [ match_releases | assumption ]) ]
+         [ first [ contradiction | destruct_action_matches; contradiction |
+           (apply E_future; [ match_releases | (*try exists_past*) ]) ]
+         | first [ contradiction | destruct_action_matches; contradiction |
+           (apply E_not_future; [ match_releases | assumption ]) ] ]
          (*In some cases, one branch is impossible, so contradiction
            solves the goal immediately.
            In other cases, there are variables in the message payloads,

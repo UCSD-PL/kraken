@@ -221,7 +221,7 @@ Require Import ActionMatch.
 Local Opaque str_of_string.
 
 Definition System_pat : conc_pat COMPT COMPS :=
-  Build_conc_pat COMPT COMPS System (Some (str_of_string "System"), tt).
+  Build_conc_pat COMPT COMPS System (None, tt).
 
 Theorem enable : forall st tr u,
   Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
@@ -236,6 +236,7 @@ Theorem enable : forall st tr u,
           tr.
 Proof.
   crush.
+Qed.
 (*Ltac match_releases :=
   match goal with
   | [ |- Enables _ _ _ _ _ _ nil ]
@@ -420,7 +421,6 @@ induction H; try unpack.
 
   destruct_msg; destruct_comp.
     inversion H0. subst s'0. subst s'. simpl. try destruct_ite_pol. intros. uninhabit.*)
-Qed.
 
 End Spec.
 

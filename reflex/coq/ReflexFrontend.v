@@ -133,7 +133,7 @@ Ltac destruct_comp :=
          let cfd := fresh "cfd" in
          let cfg := fresh "cfg" in
          destruct c as [ct cfd cfg];
-         destruct ct
+         destruct ct; destruct_pay cfg
   end.
 
 Ltac remove_redundant_ktr :=
@@ -424,7 +424,6 @@ Ltac impossible :=
   end.
 
 Ltac exists_past :=
-  idtac "Exists past";
   destruct_action_matches;
   (*There may be conditions on s' (the intermediate state). We want
     to use these conditions to derive conditions on s.*)
@@ -454,7 +453,6 @@ Ltac exists_past :=
   end.
 
 Ltac match_releases :=
-  idtac "Match releases";
   match goal with
   | [ |- Enables _ _ _ _ _ _ nil ]
       => constructor
@@ -476,7 +474,7 @@ Ltac match_releases :=
          pose proof (decide_act pdv compt comps comptdec future act) as H;
          destruct H;
          [ first [ contradiction | destruct_action_matches; contradiction |
-           (apply E_future; [ match_releases | (*try exists_past*) ]) ]
+           (apply E_future; [ match_releases | try exists_past ]) ]
          | first [ contradiction | destruct_action_matches; contradiction |
            (apply E_not_future; [ match_releases | assumption ]) ] ]
          (*In some cases, one branch is impossible, so contradiction

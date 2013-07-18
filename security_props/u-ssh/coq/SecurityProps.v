@@ -183,3 +183,34 @@ Proof.
 
       intros Hauth' Hact.
 Admitted.
+
+Theorem auth_att_3' : forall st n,
+  KInvariant st -> auth_attempts n (ktr st) -> n <= 3.
+Proof.
+  intros st n KI Hauth.
+  induction KI; simpl in *.
+    simple inversion Hauth.
+      omega.
+      
+      apply pack_injective in H2.
+      inversion H2.
+      intro Hauth2.
+      simple inversion Hauth2.
+        apply pack_injective in H4; inversion H4.
+        admit.
+        admit.
+        apply pack_injective in H1; inversion H1.
+
+    destruct (ktr s); simpl in *; simple inversion Hauth.
+      omega.
+
+      apply pack_injective in H2; inversion H2.
+      intros Hauth2 Hact.
+      rewrite H1 in Hauth2.
+      auto.
+
+      apply pack_injective in H1; inversion H1.
+
+    destruct H; simpl in *. 
+
+Admitted.

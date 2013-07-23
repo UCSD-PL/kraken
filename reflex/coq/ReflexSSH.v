@@ -223,7 +223,8 @@ Local Opaque str_of_string.
 Definition System_pat : conc_pat COMPT COMPS :=
   Build_conc_pat COMPT COMPS System (None, tt).
 
-Theorem enable : forall st tr u,
+(*The proof of the following theorem goes through. It just takes about 8gb of memory.*)
+(*Theorem enable : forall st tr u,
   Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
   ktr _ _ _ _ st = inhabits tr ->
   Enables PAYD COMPT COMPS COMPTDEC
@@ -236,191 +237,15 @@ Theorem enable : forall st tr u,
           tr.
 Proof.
   crush.
-Qed.
-(*Ltac match_releases :=
-  match goal with
-  | [ |- Enables _ _ _ _ _ _ nil ]
-      => constructor
-  (* Induction hypothesis.*)
-  | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
-      IH : forall tr', Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
-                       Enables _ _ _ _ ?past ?future tr'
-                       |- Enables _ _ _ _ ?past ?future ?tr ]
-      => auto
-  (*Branch on whether the head of the trace matches.*)
-  | [ |- Enables ?pdv ?compt ?comps ?comptdec _ ?future (?act::_) ]
-      => (*let s := match goal with
-                  | [ _ : ktr _ _ _ _ ?s = inhabits _ |- _ ]
-                      => s
-                  | [ s : init_state _ _ _ _ _ |- _ ]
-                      => s
-                  end in*)
-         let H := fresh "H" in
-         pose proof (decide_act pdv compt comps comptdec future act) as H;
-         destruct H;
-         [ first [ contradiction | destruct_action_matches; contradiction |
-           (apply E_future; [ match_releases | (*try exists_past*) ]) ]
-         | first [ contradiction | destruct_action_matches; contradiction |
-           (apply E_not_future; [ match_releases | assumption ]) ] ]
-         (*In some cases, one branch is impossible, so contradiction
-           solves the goal immediately.
-           In other cases, there are variables in the message payloads,
-           so both branches are possible.*)
-  end.
-reach_induction; try abstract match_releases.
+Qed.*)
 
-match_releases.
-destruct_action_matches.
-Ltac releaser_match :=
+(*Ltac releaser_match :=
   simpl;
   repeat match goal with
          | [ |- exists past : Reflex.KAction _ _ _, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
            => solve [exists act; split; [left; try subst; auto | compute; try subst; auto] ] ||
               apply cut_exists
-         end.
-releaser_match.
-clear_useless_hyps.
-generalize dependent tr.
-induction H.
-  abstract (intros; inversion H; subst s0; subst s; simpl in *;
-  uninhabit; impossible).
-
-  inversion H0. subst s'0. subst s'.
-  Ltac leaf_solve :=
-  simpl; try destruct_ite; simpl; intros;
-  try abstract (
-  uninhabit;
-  match goal with
-  | [ _ : Reflex.InitialState _ _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *;
-       try solve [ impossible
-                 | releaser_match ]
-  | [ _ : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *;
-       try solve [ impossible
-                 | use_IH_releases
-                 | releaser_match
-                 (*| exists_past*)]
-        (*destruct_eq might have created contradictions
-           with previous calls of destruct_eq*)
-  | [ _ : Reflex.BogusExchange _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *; use_IH_releases
-  | _ => idtac
-  end).
-
-Ltac destruct_solve tag pay :=
-  match type of tag with
-  | False => contradiction
-  | _ => let tag' := fresh "tag" in
-          destruct tag as [tag' | ];
-          [ | try (destruct_pay pay; leaf_solve) ]
-          (*destruct_solve tag' pay*)
-  | _ => idtac
-  end.
-  destruct_comp; destruct m as [tag pay].
-  destruct_solve tag pay.
-  destruct_solve tag0 pay.
-  destruct_solve tag pay.
-  destruct_solve tag0 pay.
-Focus 2.
-simpl in *. unfold hdlrs in H1. destruct_comp. simpl in H1.
-uninhabit. try subst. idtac. use_IH_releases.
-  destruct_msg; destruct_comp.
-destruct s.
-destruct kst.
-destruct s1.
-destruct p.
-destruct p.
-
-intros.
-  generalize dependent tr.
- induction H.
-   unpack. abstract match_releases.
-
-   inversion H0. subst s'0. subst s'. 
-
-Ltac leaf_solve :=
-  simpl; try destruct_ite; simpl; intros; try abstract (uninhabit; match_releases).
-
-Ltac destruct_solve tag pay :=
-  match type of tag with
-  | False => contradiction
-  | _ => let tag' := fresh "tag" in
-          destruct tag as [tag' | ];
-          [ | try (destruct_pay pay; leaf_solve) ];
-          try (destruct_solve tag' pay)
-  end.
-
-destruct_comp; destruct m as [tag pay]. destruct_solve tag pay. destruct_solve tag pay.
-
-Ltac releaser_match :=
-  simpl;
-  repeat match goal with
-         | [ |- exists past : Reflex.KAction _ _ _, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
-           => solve [exists act; split; [left; try subst; auto | compute; try subst; auto] ] ||
-              apply cut_exists
-         end.
-
-Ltac exists_past :=
-  destruct_action_matches;
-  (*There may be conditions on s' (the intermediate state). We want
-    to use these conditions to derive conditions on s.*)
-  (*subst_states;*)
-  (*Try to match stuff at head of trace.*)
-  releaser_match;
-  (*This may not clear the old induction hypothesis. Does it matter?*)
-  clear_useless_hyps(*;
-  (*Should this take s as an argument?*)
-  reach_induction;
-  try abstract
-  (match goal with
-  | [ _ : Reflex.InitialState _ _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *;
-       try solve [ impossible
-                 | releaser_match ]
-  | [ _ : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *;
-       try solve [ impossible
-                 | use_IH_releases
-                 | releaser_match
-                 (*| exists_past*)]
-        (*destruct_eq might have created contradictions
-           with previous calls of destruct_eq*)
-  | [ _ : Reflex.BogusExchange _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *; use_IH_releases
-  | _ => idtac
-  end)*).
-simpl. intros; uninhabit.
-match_releases.
-idtac.
-destruct_action_matches.
-releaser_match.
-clear_useless_hyps.
-exists_past.
-generalize dependent tr.
-Ltac unpack :=
-  match goal with
-  | [ H : Reflex.InitialState _ _ _ _ _ _ _ _ ?s |- _ ]
-    => inversion H;
-       match goal with
-       | [ _ : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _ |- _ ]
-         => subst s'; subst s
-       end
-  | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
-    => destruct_msg; destruct_comp; inversion H;
-       match goal with
-       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _ |- _ ]
-         => subst s'; subst s
-       end
-  | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
-    => inversion H; subst s
-  end; simpl; try destruct_ite_pol; simpl in *; intros; uninhabit.
-induction H; try unpack.
-
-  impossible.
-
-  destruct_msg; destruct_comp.
-    inversion H0. subst s'0. subst s'. simpl. try destruct_ite_pol. intros. uninhabit.*)
+         end.*)
 
 End Spec.
 

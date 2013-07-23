@@ -231,13 +231,14 @@ Ltac low_step :=
        try solve [eapply prune_nop_1; eauto];
        inversion Hve; repeat subst_inter_st; simpl;
        try destruct_ite; split;
+       try abstract (
        match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
          => ho_eq_tac ho_eq_solve_low Hlow
        | [ |- vars_eq _ _ _ _ _ _ _ ]
          => auto
        | _ => idtac
-       end
+       end)
   end.
 
 Ltac ho_eq_solve_high :=
@@ -257,13 +258,14 @@ Ltac high_steps :=
        inversion Hve1; inversion Hve2;
        repeat subst_inter_st; simpl;
        try destruct_ite; split;
+       try abstract (
        match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
          => ho_eq_tac ho_eq_solve_high Hhigh
        | [ |- vars_eq _ _ _ _ _ _ _ ]
          => vars_eq_tac
        | _ => idtac
-       end
+       end)
   end.
 
 Ltac ni :=
@@ -519,9 +521,9 @@ Ltac crush :=
   reach_induction;
   match goal with
   | [ |- ImmBefore _ _ _ _ _ _ _ ]
-     => match_immbefore
+     => try abstract match_immbefore
   | [ |- Enables _ _ _ _ _ _ _ ]
-     => match_releases
+     => try abstract match_releases
   end.
 
 End MkLanguage.

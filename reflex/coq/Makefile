@@ -1,7 +1,7 @@
 include ../../Makefile.config
 
 INCLUDES := -R $(YNOT) Ynot -I .
-FILES    := $(filter-out Extract.v,$(wildcard *.v))
+FILES    := $(filter-out Extract.v EnablesTest.v NIHelperFacts.v, $(wildcard *.v))
 
 all:
 	$(MAKE) depend

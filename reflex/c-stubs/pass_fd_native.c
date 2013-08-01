@@ -3,6 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include <caml/mlvalues.h>
+#include <errno.h>
 
 /* cmsg size for 1 file descriptor */
 #define FD_CMSG_SPACE CMSG_SPACE(sizeof(int))
@@ -84,10 +85,13 @@ void _send_fd_native(int sock, int fd) {
   h->cmsg_type  = SCM_RIGHTS;
 
   /* pack file descriptor into cmsg */
-  ((int *)CMSG_DATA(h))[0] = fd;
+  //((int *)CMSG_DATA(h))[0] = fd;
+  *(int*)CMSG_DATA(h) = fd;
 
   /* send file descriptor, checking for errors */
-  assert(sendmsg(sock, &hdr, 0) == 1);
+  int n = sendmsg(sock, &hdr, 0);
+  if(n == -1)
+    printf("sendmsg() failed: %s (socket fd = %d %d)\n", strerror(errno), sock, fd);
 
   return;
 }

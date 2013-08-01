@@ -2,6 +2,7 @@ Require Import Ynot.Extract.
 Require Import ReflexEcho.
 Require Import ReflexQuark.
 Require Import ReflexSSH.
+Require Import ReflexFdEcho.
 
 Extraction Blacklist List String.
 
@@ -18,3 +19,4 @@ Cd "../ml".
 Recursive Extraction Library ReflexEcho.
 Recursive Extraction Library ReflexQuark.
 Recursive Extraction Library ReflexSSH.
+Recursive Extraction Library ReflexFdEcho.

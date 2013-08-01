@@ -20,7 +20,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
 
 Notation M := 0%fin (only parsing).
 
-Inductive COMPT' : Type := Echo.
+Inductive COMPT' : Type := Echo | Stupid.
 Definition COMPT := COMPT'.
 
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
@@ -28,10 +28,11 @@ Proof. decide equality. Defined.
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | Echo => mk_compd "Echo" "test/fd-unique/fd-unique.py" [] (mk_vdesc [])
+  | Echo => mk_compd "Echo" "../test/fd-unique/fd-unique.py" [] (mk_vdesc [])
+  | Stupid => mk_compd "Echo" "../test/fd-unique/fd-unique.py" [] (mk_vdesc [])
   end.
 
-Definition KSTD : vcdesc COMPT := mk_vcdesc [].
+Definition KSTD : vcdesc COMPT := mk_vcdesc [ Desc _ num_d ].
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Echo].
@@ -49,8 +50,10 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
+  let fd_term := Term _ _ _ (CompFd _ IENVD Echo (Var _ IENVD 0%fin)) in
+  let comp_term := Term _ _ _ (Var _ IENVD 0%fin) in
   seq (spawn _ IENVD Echo tt 0%fin (Logic.eq_refl _))
-      (send (i_envvar IENVD 0%fin) M (Term _ _ _ (CompFd _ IENVD Echo (Var _ IENVD 0%fin)), tt)).
+      (send comp_term M (fd_term, tt)).
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=

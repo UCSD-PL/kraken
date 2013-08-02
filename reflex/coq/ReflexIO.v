@@ -63,6 +63,20 @@ Instance SDenoted_desc : SDenoted desc :=
 { sdenote := sdenote_desc
 }.
 
+Definition action_fds (a : Action) : FdSet.t :=
+  match a with
+  | Exec _ _ f => FdSet.singleton f
+  | Call _ _ f => FdSet.singleton f
+  | Select _ _ => FdSet.empty
+  | Recv _ _   => FdSet.empty
+  | Send _ _   => FdSet.empty
+  | RecvFD _ f => FdSet.singleton f
+  | SendFD _ _ => FdSet.empty
+  end.
+
+Definition trace_fds (tr : Trace) : FdSet.t :=
+  fold_right (fun a b => FdSet.union (action_fds a) b) FdSet.empty tr.
+
 (*
 Axiom oracle : forall (d : desc) (tr : [Trace]), s[[ d ]].
 *)
@@ -70,7 +84,8 @@ Axiom oracle : forall (d : desc) (tr : [Trace]), s[[ d ]].
 Axiom exec :
   forall (prog : str) (args : list str) (tr : [Trace]),
     STsep (tr ~~ traced tr)
-          (fun f : fd => (tr ~~ open f * traced (Exec prog args f :: tr))).
+          (fun f : fd => (tr ~~ open f * [~FdSet.In f (trace_fds tr)] *
+            traced (Exec prog args f :: tr))).
 (*
 Definition vdesc' n : Set := svec desc n.
 
@@ -280,7 +295,8 @@ Fixpoint expand_ktrace (kt : KTrace) : Trace :=
 Axiom call :
   forall (prog : str) (args : list str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
-        (fun f : fd => tr ~~ open f * traced (Call prog args f :: tr)).
+        (fun f : fd => tr ~~ open f * [~FdSet.In f (trace_fds tr)] *
+          traced (Call prog args f :: tr)).
 
 Fixpoint in_fd (f : fd) (l : list fd) {struct l} : Set :=
   match l with
@@ -310,7 +326,8 @@ Axiom send :
 Axiom recv_fd :
   forall (f : fd) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
-        (fun f' : fd => tr ~~ traced (RecvFD f f' :: tr) * open f * open f').
+        (fun f' : fd => tr ~~ traced (RecvFD f f' :: tr) * open f * open f' *
+          [~FdSet.In f' (trace_fds tr)]).
 
 Axiom send_fd :
   forall (f : fd) (f' : fd) (tr : [Trace]),

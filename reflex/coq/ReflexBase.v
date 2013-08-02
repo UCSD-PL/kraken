@@ -3,6 +3,7 @@ Require Import Int.
 Require Import List.
 Require Import MSetAVL.
 Require Import MSetInterface.
+Require Import MSetProperties.
 Require Import NPeano.
 Require Import Omega.
 Require Import Orders.
@@ -132,3 +133,5 @@ Module FdSet : Sets
   with Module E := OrderedFd
   := Raw2Sets(OrderedFd)(RawFdSet)
 .
+
+Module FdSetProperties := WPropertiesOn OrderedFd FdSet.

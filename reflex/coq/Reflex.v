@@ -1,6 +1,7 @@
 Require Import Ascii.
 Require Import Bool.
 Require Import Eqdep_dec.
+Require Import Coq.Logic.Eqdep.
 Require MSetInterface.
 Require Import NPeano.
 Require Orders.
@@ -22,6 +23,9 @@ Open Scope char_scope.
 Open Scope hprop_scope.
 Open Scope stsepi_scope.
 Open Scope list_scope.
+
+Require Import Coq.MSets.MSetDecide.
+Module FdSetDec := WDecideOn OrderedFd FdSet.
 
 (* Some num/fin/nat stuff *)
 
@@ -1678,12 +1682,24 @@ Qed.
 Definition trace_send_msg_comps (cps : list comp) (m : msg) : Trace :=
   flat_map (fun c => trace_send_msg (comp_fd c) m) cps.
 
+Global Instance hprop_iff_e : Equivalence hprop_iff.
+
+Global Instance hprop_sep_iff_m :
+  Morphisms.Proper
+  (Morphisms.respectful hprop_iff (Morphisms.respectful hprop_iff hprop_iff))
+  hprop_sep.
+Proof.
+  unfold Morphisms.Proper. unfold Morphisms.respectful.
+  intros. rewrite H. unfold hprop_iff in *. sep'.
+Qed.
+
+(*
 Lemma hprop_iff_equiv : Equivalence hprop_iff.
 Proof.
   sep'.
   apply Symmetric_instance_0.
   apply Transitive_instance_1.
-Qed.
+Qed.*)
 
 Lemma open_proper :
   Morphisms.Proper
@@ -1691,7 +1707,8 @@ Lemma open_proper :
   (fun (f : FdSet.elt) (a : hprop) => open f * a).
 Proof.
   unfold Morphisms.Proper. unfold Morphisms.respectful.
-  intros. rewrite H. unfold hprop_iff in *. sep'.
+  intros ? ? Heq ? ? Hiff. rewrite Heq. rewrite Hiff.
+  sep'.
 Qed.
 
 Lemma open_transpose :
@@ -1708,7 +1725,7 @@ Proof.
   intros. unfold all_open_set, all_open_set_drop.
   apply FdSetProperties.remove_fold_1 with (eqA:=hprop_iff) (x:=x)
     (f:=(fun (f : FdSet.elt) (a : hprop) => open f * a)).
-  apply hprop_iff_equiv. apply open_proper. apply open_transpose.
+  apply hprop_iff_e. apply open_proper. apply open_transpose.
   assumption.
 Qed.
 (*
@@ -1998,7 +2015,7 @@ Proof.
   intros f m tr.
   unfold all_open_set.
   apply FdSetProperties.fold_equal.
-  apply hprop_iff_equiv. apply open_proper. apply open_transpose.
+  apply hprop_iff_e. apply open_proper. apply open_transpose.
   setoid_rewrite <- trace_fds_dist.
   setoid_rewrite trace_send_fds_empty.
   apply FdSetProperties.empty_union_1.
@@ -2012,6 +2029,160 @@ Proof.
   intros tr1 tr2.
   setoid_rewrite <- trace_fds_dist.
   apply FdSetProperties.union_subset_2.
+Qed.
+
+Lemma vcdesc_fds_set_replace_comp : forall ct envd i (EQ:svec_ith (projT2 envd) i = Comp ct) e c_fd cfg,
+  vcdesc_fds_subset (envd:=envd)
+      (shvec_replace_cast EQ e
+        (existT (fun c1 : comp => comp_type c1 = ct) 
+          {|comp_type:=ct; comp_fd:=c_fd; comp_conf:=cfg|}
+          (Logic.eq_refl ct)))
+    (FdSet.add c_fd (vcdesc_fds_set _ e)).
+Proof.
+  intros.
+  intros. destruct envd as [n envd'].
+  induction n.
+    intros. simpl in *. contradiction.
+
+    unfold shvec_replace_cast in *. destruct envd'. simpl in *.
+    destruct i; simpl in *.
+      destruct e as [ehd erest]. simpl in *. unfold vcdesc_fds_subset in *.
+      destruct c; simpl in *.
+        destruct d; simpl in *; unfold vcdesc_fds_set in *;
+        simpl in *; try solve [apply IHn].
+        rewrite FdSetProperties.add_add.
+        apply FdSetProperties.subset_add_3.
+        apply FdSet.add_spec. left. auto.
+        apply FdSetProperties.subset_add_2. apply IHn.
+
+        destruct ehd as [ce ?]. destruct ce. unfold vcdesc_fds_set in *;
+        simpl in *. rewrite FdSetProperties.add_add.
+        apply FdSetProperties.subset_add_3.
+        apply FdSet.add_spec. left. auto.
+        apply FdSetProperties.subset_add_2. apply IHn.
+        
+      unfold vcdesc_fds_subset. unfold vcdesc_fds_set.
+      simpl. destruct c; try discriminate. inversion EQ. subst ct.
+      assert (EQ = Logic.eq_refl (Comp c)) as Heq_refl.
+        apply UIP_refl.
+      rewrite Heq_refl. simpl.
+      destruct e. simpl.
+      FdSetDec.fsetdec.
+Qed.
+
+Lemma vcdesc_fds_set_replace_fd : forall envd i (EQ:svec_ith (projT2 envd) i = Desc fd_d) e f,
+  vcdesc_fds_subset (envd:=envd)
+      (shvec_replace_cast EQ e f)
+    (FdSet.add f (vcdesc_fds_set _ e)).
+Proof.
+  intros.
+  intros. destruct envd as [n envd'].
+  induction n.
+    intros. simpl in *. contradiction.
+
+    unfold shvec_replace_cast in *. destruct envd'. simpl in *.
+    destruct i; simpl in *.
+      destruct e as [ehd erest]. simpl in *. unfold vcdesc_fds_subset in *.
+      destruct c; simpl in *.
+        destruct d; simpl in *; unfold vcdesc_fds_set in *;
+        simpl in *; try solve [apply IHn].
+        rewrite FdSetProperties.add_add.
+        apply FdSetProperties.subset_add_3.
+        apply FdSet.add_spec. left. auto.
+        apply FdSetProperties.subset_add_2. apply IHn.
+
+        destruct ehd as [ce ?]. destruct ce. unfold vcdesc_fds_set in *;
+        simpl in *. rewrite FdSetProperties.add_add.
+        apply FdSetProperties.subset_add_3.
+        apply FdSet.add_spec. left. auto.
+        apply FdSetProperties.subset_add_2. apply IHn.
+        
+      unfold vcdesc_fds_subset. unfold vcdesc_fds_set.
+      simpl. destruct c; try discriminate. inversion EQ. subst d.
+      assert (EQ = Logic.eq_refl (Desc fd_d)) as Heq_refl.
+        apply UIP_refl.
+      rewrite Heq_refl.
+      destruct e. simpl.
+      FdSetDec.fsetdec.
+Qed.
+
+Lemma find_comp_suc : forall envd e cp cs c,
+  find_comp base_term
+    (fun (d : cdesc) (envd : vcdesc) (e : s[[envd]]) =>
+      eval_base_term e) envd e cp cs = Some c ->
+  In (projT1 c) cs.
+Proof.
+  intros envd e cp cs c.
+  induction cs.
+    discriminate.
+
+    simpl.
+    match goal with
+    |- context[ match ?e with Some _ => _ | None => _ end ]
+      => destruct e
+    end.
+      intro H. inversion H. subst c. auto.
+
+      auto.
+Qed.
+
+
+Lemma fds_set_shift : forall ct c EQ envd e,
+  FdSet.Equal
+    (vcdesc_fds_set (existT (svec cdesc) (S (projT1 envd))
+      (svec_shift (Comp ct) (projT2 envd)))
+      (shvec_shift _ _ (existT _ c EQ) _ e))
+    (FdSet.add (comp_fd c) (vcdesc_fds_set _ e)).
+Proof.
+  intros ct c EQ envd e.
+  destruct envd as [n envd'].
+  induction n.
+    unfold vcdesc_fds_set. simpl. FdSetDec.fsetdec.
+
+    destruct envd' as [d rest]. simpl in *. destruct e.
+    destruct d as [d | cp].
+    destruct d; simpl in *;  unfold vcdesc_fds_set in *;
+      simpl in *; try solve [apply IHn].
+      rewrite FdSetProperties.add_add.
+      match goal with
+      |- FdSet.Equal (FdSet.add _ ?s) (FdSet.add _ ?s')
+        => assert (FdSet.Equal s s') as Heq by apply IHn;
+           rewrite Heq; FdSetDec.fsetdec
+      end.
+
+      unfold vcdesc_fds_set in *. simpl in *.
+      rewrite FdSetProperties.add_add.
+      match goal with
+      |- FdSet.Equal (FdSet.add _ ?s) (FdSet.add _ ?s')
+        => assert (FdSet.Equal s s') as Heq by apply IHn;
+           rewrite Heq; FdSetDec.fsetdec
+      end.
+Qed.
+
+Lemma fds_set_unshift : forall ct envd e,
+  FdSet.Subset
+    (vcdesc_fds_set envd
+      (shvec_unshift _ _ _ (Comp ct) _ e))
+    (vcdesc_fds_set (existT (svec cdesc) (S (projT1 envd))
+        (svec_shift (Comp ct) (projT2 envd))) e).
+Proof.
+  intros ct envd e.
+  destruct envd as [n envd'].
+  induction n.
+    unfold vcdesc_fds_set. simpl. destruct e. FdSetDec.fsetdec.
+
+    destruct envd' as [d rest]. simpl in *. destruct e.
+    destruct d as [d | cp].
+    destruct d; simpl in *;  unfold vcdesc_fds_set in *;
+      simpl in *; try solve [apply IHn].
+      apply FdSetProperties.subset_add_3.
+      apply FdSet.add_spec. left. auto.
+      apply FdSetProperties.subset_add_2. apply IHn.
+
+      unfold vcdesc_fds_set in *. simpl in *.
+      apply FdSetProperties.subset_add_3.
+      apply FdSet.add_spec. left. auto.
+      apply FdSetProperties.subset_add_2. apply IHn.
 Qed.
 
 Definition run_init_cmd :
@@ -2171,28 +2342,6 @@ rewrite Forall_forall in *. intros.
 eapply FdSetProperties.in_subset; eauto.
 apply trace_fds_app_subset.
 
-(* SendAll *)
-(*destruct s as [cs tr e st fds]_eqn; simpl.
-refine (
-  let m := eval_base_payload_expr _ e _ me in
-  let comps := filter_comps base_term (fun d envd e => @eval_base_term _ _ e) _ _ cp cs in
-  let msg := Build_msg t m in
-  send_msg_comps msg comps fds (tr ~~~ expand_ktrace tr)
-    <@> [all_fds_in cs fds] * [vcdesc_fds_subset e fds];;
-
-  let tr := tr ~~~ ktrace_send_msgs comps msg ++ tr in
-  {{ Return {| init_comps := cs
-             ; init_ktr   := tr
-             ; init_env   := e
-             ; init_kst   := st
-             ; init_fds   := fds
-             |}
-  }}
-); sep''.
-admit.
-admit.
-exists tt. admit.*)
-
 (* Spawn *)
 destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
@@ -2213,142 +2362,33 @@ refine (
 ); sep''.
 unfold all_open_set.
 rewrite hstar_comm.
-replace (open c_fd *
-  FdSet.fold (fun (f : FdSet.elt) (a : hprop) => open f * a)
-    (trace_fds (expand_ktrace x3)) emp) with
-(FdSet.fold (fun (f : FdSet.elt) (a : hprop) => open f * a)
-    (FdSet.singleton c_fd)
-    (FdSet.fold (fun (f : FdSet.elt) (a : hprop) => open f * a)
-       (trace_fds (expand_ktrace x3)) emp)).
 rewrite FdSetProperties.fold_union with (eqA:=hprop_iff)
   (f:=(fun (f : FdSet.elt) (a : hprop) => open f * a))
   (s:=FdSet.singleton c_fd) (s':=(trace_fds (expand_ktrace x3)))
   (i:=emp).
-sep''.
-apply hprop_iff_equiv. apply open_proper. apply open_transpose.
-intros. unfold not. intros. destruct H2. rewrite FdSet.singleton_spec in H2.
+rewrite FdSetProperties.fold_equal with (eqA:=hprop_iff)
+  (s:=FdSet.singleton c_fd)
+  (s':=FdSet.add c_fd FdSet.empty).
+rewrite FdSetProperties.fold_add with (eqA:=hprop_iff).
+rewrite FdSetProperties.fold_empty.
+sep'.
+apply hprop_iff_e. apply open_proper. apply open_transpose.
+FdSetDec.fsetdec.
+apply hprop_iff_e. apply open_proper. apply open_transpose.
+FdSetDec.fsetdec.
+apply hprop_iff_e. apply open_proper. apply open_transpose.
+FdSetDec.fsetdec.
+unfold vcdesc_fds_subset in *.
+rewrite <- FdSetProperties.add_union_singleton.
+apply FdSetProperties.subset_trans with (s2:=FdSet.add c_fd (vcdesc_fds_set _ e)).
+apply vcdesc_fds_set_replace_comp.
+FdSetDec.fsetdec.
+unfold all_fds_in in *. apply Forall_forall. rewrite Forall_forall in H.
+intros cp Hcpin. specialize (H cp). simpl in *.
+destruct Hcpin.
+  subst cp. subst c. simpl. FdSetDec.fsetdec.
 
-Check FdSet.in_spec.
-
-(*Lemma open_lists : forall l1 l2,
-  SetoidList.equivlistA eq l1 l2 ->
-  all_open l1 ==> all_open l2.
-Proof.
-  intros l1.
-  induction l1.
-    intros.
-    assert (l2 = nil). 
-      destruct l2; auto.
-      unfold SetoidList.equivlistA in H.
-      specialize (H f). destruct H.
-      assert (SetoidList.InA eq f (f:: l2)) by auto.
-      apply H0 in H1. inversion H1.
-
-    rewrite H0. auto.
-
-    intros.
-    induction l2.
-      unfold SetoidList.equivlistA in H.
-      specialize (H a).
-      assert (SetoidList.InA eq a (a:: l1)) by auto.
-      apply H in H0. inversion H0.
-*)
-      
-Lemma hprop_iff_equiv : Equivalence hprop_iff.
-Proof.
-  sep'.
-  apply Symmetric_instance_0.
-  apply Transitive_instance_1.
-Qed.
-
-Lemma open_proper :
-  Morphisms.Proper
-  (Morphisms.respectful eq (Morphisms.respectful hprop_iff hprop_iff))
-  (fun (f : FdSet.elt) (a : hprop) => open f * a).
-Proof.
-  unfold Morphisms.Proper. unfold Morphisms.respectful.
-  intros. rewrite H. unfold hprop_iff in *. sep'.
-Qed.
-
-Lemma open_transpose :
-  SetoidList.transpose hprop_iff
-  (fun (f : FdSet.elt) (a : hprop) => open f * a).
-Proof.
-  unfold SetoidList.transpose. intros. unfold hprop_iff. sep'.
-Qed.
-  
-Definition all_open_set' (s : FdSet.t) : hprop :=
-  FdSet.fold (fun f a => open f * a) s emp.
-Lemma open_sets_equal : forall s s',
-  FdSet.Equal s s' ->
-  all_open_set' s ==> all_open_set' s' /\ all_open_set' s' ==> all_open_set' s.
-Proof.
-  intros s s' Heq. unfold all_open_set'.
-  apply FdSetProperties.fold_equal with (eqA:=hprop_iff).
-  
-  apply hprop_iff_equiv.
-
-  apply open_proper.
-
-  apply open_transpose.
-
-  auto.
-Qed.
-
-Lemma test : forall c_fd fds,
-  all_open_set' (FdSet.add c_fd fds) <==> open c_fd * all_open_set' fds.
-Proof.
-  intros. unfold all_open_set'.
-  apply FdSetProperties.fold_add with (eqA:=hprop_iff) (x:=c_fd).
-  apply hprop_iff_equiv. apply open_proper. apply open_transpose.
-
-  setoid_replace (all_open_set' (FdSet.add c_fd fds)) with
-    (open c_fd * all_open_set' fds).
-  sep'.
-  
-
-Lemma open_sets_equal : forall s s',
-  FdSet.Equal s s' ->
-  all_open_set s ==> all_open_set s'.
-Proof.
-  intros s.
-  induction s using FdSetProperties.set_induction.
-    intros s' Heq.
-    assert (FdSet.Empty s').
-      unfold FdSet.Empty in *. intro e.
-      specialize (H e). unfold FdSet.Equal in Heq.
-      specialize (Heq e). intuition.
-    unfold all_open_set. apply FdSetProperties.elements_Empty in H.
-    apply FdSetProperties.elements_Empty in H0. rewrite H. rewrite H0.
-    auto.
-
-    intros.
-    
-
-
-assert (open c_fd * all_open_set_drop c_fd (FdSet.add c_fd fds) ==> all_open_set (FdSet.add c_fd fds)).
-  apply all_open_set_pack. rewrite FdSet.add_spec. left. auto.
-Definition all_open_set' (s : FdSet.t) : hprop :=
-  FdSet.fold (fun f a => open f * a) s emp.
-Lemma all_open_set_add : forall f fds,
-  open f * all_open_set' fds ==> all_open_set' (FdSet.add f fds).
-Proof.
-  intros f fds. unfold all_open_set'.
-  apply FdSetProperties.fold_rec.
-    intros.
-    simpl. 
-
-    
-unfold all_open_set.
-unfold all_open.
-admit.
-admit.
-constructor.
-  rewrite FdSet.add_spec. auto.
-
-  rewrite Forall_forall. unfold all_fds_in in H. rewrite Forall_forall in H.
-  intros. specialize (H x H1). eapply FdSetProperties.in_subset. eapply H.
-  eapply FdSetProperties.subset_add_2. apply FdSetProperties.subset_refl.
+  apply FdSet.union_spec. right. auto.
 exists c_fd. sep''.
 
 (* Call *)
@@ -2368,9 +2408,32 @@ refine (
              |}
   }}
 ); sep''.
-admit.
-admit.
-admit.
+unfold all_open_set.
+rewrite hstar_comm.
+rewrite FdSetProperties.fold_union with (eqA:=hprop_iff)
+  (f:=(fun (f : FdSet.elt) (a : hprop) => open f * a))
+  (s:=FdSet.singleton f) (s':=(trace_fds (expand_ktrace x3)))
+  (i:=emp).
+rewrite FdSetProperties.fold_equal with (eqA:=hprop_iff)
+  (s:=FdSet.singleton f)
+  (s':=FdSet.add f FdSet.empty).
+rewrite FdSetProperties.fold_add with (eqA:=hprop_iff).
+rewrite FdSetProperties.fold_empty.
+sep'.
+apply hprop_iff_e. apply open_proper. apply open_transpose.
+FdSetDec.fsetdec.
+apply hprop_iff_e. apply open_proper. apply open_transpose.
+FdSetDec.fsetdec.
+apply hprop_iff_e. apply open_proper. apply open_transpose.
+FdSetDec.fsetdec.
+unfold vcdesc_fds_subset in *.
+rewrite <- FdSetProperties.add_union_singleton.
+apply FdSetProperties.subset_trans with (s2:=FdSet.add f (vcdesc_fds_set _ e)).
+apply vcdesc_fds_set_replace_fd.
+FdSetDec.fsetdec.
+unfold all_fds_in in *. apply Forall_forall. rewrite Forall_forall in H.
+intros cp Hcpin. specialize (H cp). simpl in *.
+apply FdSet.union_spec. right. auto.
 exists f. sep''.
 
 (* StUpd *)
@@ -2408,18 +2471,27 @@ refine (
              |}
   }}
 ); sep''.
-admit.
-admit.
-get_input. admit.
-admit.
-admit.
+subst s'. simpl.
+unfold vcdesc_fds_subset in *. unfold new_envd. unfold d. rewrite fds_set_shift.
+unfold all_fds_in in *. rewrite Forall_forall in H1.
+assert (In c cs) as Hin.
+  unfold c; eapply find_comp_suc; eauto.
+specialize (H1 c Hin). FdSetDec.fsetdec.
+subst v. simpl in *. rewrite H1 in H0. uninhabit. sep'.
+subst v. simpl.
+unfold vcdesc_fds_subset in *. unfold new_envd in *. unfold d in *. rewrite fds_set_unshift.
+simpl in *.
+rewrite H1 in H0. uninhabit. auto.
+subst v. simpl in *. rewrite H1 in H0. uninhabit. sep'.
+get_input. subst v. subst new_envd. subst ocdp. simpl in *. rewrite Heqo.
+subst s''. subst s'. sep'.
+
 (*Component not found*)
 refine (
   s' <- self envd c2 s;
   {{ Return s' }}
 ); sep''.
-rewrite Heqo.
-get_input. auto.
+rewrite Heqo. get_input. auto.
 Qed.
 
 Theorem all_open_default_payload : forall henv,

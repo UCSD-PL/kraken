@@ -77,14 +77,17 @@ Definition action_fds (a : Action) : FdSet.t :=
 Definition trace_fds (tr : Trace) : FdSet.t :=
   fold_right (fun a b => FdSet.union (action_fds a) b) FdSet.empty tr.
 
-(*
-Axiom oracle : forall (d : desc) (tr : [Trace]), s[[ d ]].
-*)
+Definition devnull := Num "000" "000".
+
+Axiom devnull_open : emp ==> open devnull.
+
+Definition fresh_fd (f : fd) (tr : Trace) :=
+  ~FdSet.In f (FdSet.add devnull (trace_fds tr)).
 
 Axiom exec :
   forall (prog : str) (args : list str) (tr : [Trace]),
     STsep (tr ~~ traced tr)
-          (fun f : fd => (tr ~~ open f * [~FdSet.In f (trace_fds tr)] *
+          (fun f : fd => (tr ~~ open f * [fresh_fd f tr] *
             traced (Exec prog args f :: tr))).
 (*
 Definition vdesc' n : Set := svec desc n.
@@ -295,7 +298,7 @@ Fixpoint expand_ktrace (kt : KTrace) : Trace :=
 Axiom call :
   forall (prog : str) (args : list str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
-        (fun f : fd => tr ~~ open f * [~FdSet.In f (trace_fds tr)] *
+        (fun f : fd => tr ~~ open f * [fresh_fd f tr] *
           traced (Call prog args f :: tr)).
 
 Fixpoint in_fd (f : fd) (l : list fd) {struct l} : Set :=
@@ -327,7 +330,7 @@ Axiom recv_fd :
   forall (f : fd) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
         (fun f' : fd => tr ~~ traced (RecvFD f f' :: tr) * open f * open f' *
-          [~FdSet.In f' (trace_fds tr)]).
+          [fresh_fd f' tr]).
 
 Axiom send_fd :
   forall (f : fd) (f' : fd) (tr : [Trace]),

@@ -1839,10 +1839,13 @@ Proof.
   intros ? IN. apply SUB. simpl. apply FdSet.add_spec. now right.
 Qed.
 
-Lemma send_lemma: forall envd (e : s[[envd]]) fds i,
+Lemma env_fds_lemma: forall envd (e : s[[envd]]) fds i,
   vcdesc_fds_subset (envd := envd) e fds ->
   match svec_ith (projT2 envd) i as __d return s[[__d]] -> Prop with
-  | Desc d => fun _ => True
+  | Desc d => match d as __d return s[[__d]] -> Prop with
+              | fd_d => fun v => FdSet.In v fds
+              | _    => fun _ => True
+              end
   | Comp c => fun v => FdSet.In (comp_fd (projT1 v)) fds
   end (shvec_ith sdenote_cdesc (projT2 envd) e i).
 Proof.
@@ -1858,7 +1861,77 @@ Proof.
   destruct ENVD0.
   destruct d. assumption. assumption. apply FdSet.add_spec. now right.
   apply FdSet.add_spec. now right.
-  destruct ENVD0. exact I. apply SUB. apply FdSet.add_spec. now left.
+  destruct ENVD0. destruct d. exact I. exact I.
+  apply SUB. apply FdSet.add_spec. now left.
+  apply SUB. apply FdSet.add_spec. now left.
+Qed.
+
+Lemma base_expr_fds_lemma : forall envd (e : s[[envd]]) fds
+  d (ce : expr base_term envd d),
+  vcdesc_fds_subset (envd := envd) e fds ->
+  match d as _d return s[[_d]] -> Prop with
+  | Desc d => match d as _d return s[[Desc _d]] -> Prop with
+              | fd_d => fun v => FdSet.In v fds
+              | _    => fun _ => True
+              end
+  | Comp c => fun v => FdSet.In (comp_fd (projT1 v)) fds
+  end (eval_base_expr e ce).
+Proof.
+  intros envd e fds d ce Hsub.
+  destruct ce.
+    destruct b; simpl; solve [auto |
+      apply env_fds_lemma; auto |
+      dependent inversion_clear b with (
+        fun c b =>
+          match c as _c return s[[_c]] -> Prop with
+          | Comp _ => fun v => FdSet.In (comp_fd (projT1 v)) fds
+          | Desc d => match d as _d return s[[Desc _d]] -> Prop with
+                      | fd_d => fun v => FdSet.In v fds
+                      | _    => fun _ => True
+                      end
+          end (eval_base_term e b)
+      ); apply env_fds_lemma; auto].
+      
+    destruct u; auto.
+    destruct b; auto.
+Qed.
+
+Lemma stupd_sub : forall st envd (e:s[[envd]]) i ve fds,
+  vcdesc_fds_subset (envd:=envd) e fds ->
+  vcdesc_fds_subset st fds ->
+  vcdesc_fds_subset
+    (shvec_replace_ith sdenote_cdesc KSTD_DESC st i (eval_base_expr e ve))
+    fds.
+Proof.
+  intros st envd e i ve fds Hsub_e Hsub_st.
+  destruct KSTD as [n kstd].
+  induction n.
+    simpl in *. contradiction.
+
+    simpl in *. destruct kstd. simpl in *.
+
+    destruct i; simpl in *.
+      destruct c as [d | c]; simpl in *.
+        destruct d; simpl in *;
+        destruct st; try solve [apply vcdesc_fds_subset_rest in Hsub_st;
+        unfold vcdesc_fds_subset in *; unfold vcdesc_fds_set in *;
+        simpl in *; apply IHn; auto].
+        unfold vcdesc_fds_subset in *; unfold vcdesc_fds_set in *;
+        simpl in *. apply FdSetProperties.subset_add_3. setdec. apply IHn; setdec.
+
+        destruct st; unfold vcdesc_fds_subset in *; unfold vcdesc_fds_set in *;
+        simpl in *. apply FdSetProperties.subset_add_3. setdec. apply IHn; setdec.
+
+      unfold vcdesc_fds_subset in *; unfold vcdesc_fds_set in *. simpl.
+      destruct c as [d | c]; simpl in *.
+        destruct d; simpl in *;
+        destruct st; try apply Hsub_st.
+        apply FdSetProperties.subset_add_3.
+        apply base_expr_fds_lemma with (e:=e) (ce:=ve) (fds:=fds).
+        apply Hsub_e. setdec.
+        apply FdSetProperties.subset_add_3.
+        apply base_expr_fds_lemma with (e:=e) (ce:=ve) (fds:=fds).
+        apply Hsub_e. destruct st. simpl in *. setdec.
 Qed.
 
 Lemma trace_fds_dist : forall tr1 tr2,
@@ -2185,48 +2258,13 @@ refine (
 etransitivity.
 apply all_open_set_packing with (x := comp_fd c).
 unfold c. clear c.
-dependent inversion_clear ce with (
-  fun _d _ce =>
-  match _d as __d return expr _ _ __d -> _ with
-  | Comp _ => fun ce =>
-    FdSet.In (comp_fd (projT1 (eval_base_expr e ce))) (FdSet.add devnull (trace_fds (expand_ktrace x)))
-  | _      => fun _ => False
-  end _ce
-); simpl.
-dependent inversion_clear b with (
-  fun _d _b =>
-  match _d as __d return s[[__d]] -> Prop with
-  | Comp _ => fun v =>
-    FdSet.In (comp_fd (projT1 v)) (FdSet.add devnull (trace_fds (expand_ktrace x)))
-  | _      => fun _ => True
-  end (eval_base_term e _b)
-).
-now apply send_lemma.
-inversion u.
-inversion b.
+apply base_expr_fds_lemma with (ce:=ce) (e:=e) (fds:=(FdSet.add devnull (trace_fds (expand_ktrace x)))).
+auto.
 sep''.
 rewrite trace_send_fds_equal.
 apply all_open_set_packing.
-unfold c. clear c.
-dependent inversion_clear ce with (
-  fun _d _ce =>
-  match _d as __d return expr _ _ __d -> _ with
-  | Comp _ => fun ce =>
-    FdSet.In (comp_fd (projT1 (eval_base_expr e ce))) (FdSet.add devnull (trace_fds (expand_ktrace x0)))
-  | _      => fun _ => False
-  end _ce
-); simpl.
-dependent inversion_clear b with (
-  fun _d _b =>
-  match _d as __d return s[[__d]] -> Prop with
-  | Comp _ => fun v =>
-    FdSet.In (comp_fd (projT1 v)) (FdSet.add devnull (trace_fds (expand_ktrace x0)))
-  | _      => fun _ => True
-  end (eval_base_term e _b)
-).
-now apply send_lemma.
-inversion u.
-inversion b.
+apply base_expr_fds_lemma with (ce:=ce) (e:=e) (fds:=(FdSet.add devnull (trace_fds (expand_ktrace x0)))).
+auto.
 rewrite trace_send_fds_equal. auto.
 rewrite trace_send_fds_equal. auto.
 rewrite trace_send_fds_equal. auto.
@@ -2312,113 +2350,7 @@ refine (
              |}
   }}
 ); sep''.
-(*
-Lemma vcdesc_subset_hd : forall n d (vd:vcdesc' n)
-  (v:s[[existT _ (S n) (d, vd)]]) s,
-  vcdesc_fds_subset (envd:=existT _ n vd) (snd v) s ->
-  vcdesc_fds_subset v s.
-Proof.
-  intros n d vd v s Hsub.
-  destruct v as [vhd vrest]. simpl in *. unfold vcdesc_fds_subset in *.
-    destruct d as [d | c]; simpl in *.
-      destruct d; simpl in *; unfold vcdesc_fds_set in *;
-      simpl in *; try solve [apply Hsub].
-      apply FdSetProperties.subset_add_3.
-        apply FdSet.add_spec. left. auto.
-        apply FdSetProperties.subset_add_2. apply IHn.*)
-
-(*Lemma fd_eval_base_expr_in_env : forall envd (e:s[[envd]])
-  (ve:expr base_term envd (Desc fd_d)),
-  FdSet.In (eval_base_expr e ve) (vcdesc_fds_set _ e).
-Proof.
-  intros envd e ve.
-  dependent inversion ve with (
-    fun _d _ve =>
-    match _d as __d return expr _ _ __d -> _ with
-    | Desc fd_d => fun ve =>
-      FdSet.In (eval_base_expr e ve) (vcdesc_fds_set envd e)
-    | _      => fun _ => False
-    end _ve
-  ); simpl.
-  dependent inversion b with (
-  fun _d _b =>
-    match _d as __d return base_term _ __d -> Prop with
-    | Desc fd_d => fun b =>
-       FdSet.In (eval_base_term e b) (vcdesc_fds_set envd e)
-    | _      => fun _ => True
-    end _b
-  ); simpl.
-  
-  clear H.
-  clear b.
-  clear ve.
-  clear d.
-  
-rewrite H1.
-
-
-Lemma stupd_sub : forall st envd (e:s[[envd]]) i ve fds,
-  vcdesc_fds_subset e fds ->
-  vcdesc_fds_subset st fds ->
-  vcdesc_fds_subset
-    (shvec_replace_ith sdenote_cdesc KSTD_DESC st i (eval_base_expr e ve))
-    fds.
-Proof.
-  intros st envd e i ve fds Hsub_e Hsub_st.
-  destruct KSTD as [n kstd].
-  induction n.
-    simpl in *. contradiction.
-
-    simpl in *. destruct kstd. simpl in *.
-
-    destruct i; simpl in *.
-      destruct c as [d | c]; simpl in *.
-        destruct d; simpl in *;
-        destruct st; try solve [apply vcdesc_fds_subset_rest in Hsub_st;
-        unfold vcdesc_fds_subset in *; unfold vcdesc_fds_set in *;
-        simpl in *; apply IHn; auto].
-        unfold vcdesc_fds_subset in *; unfold vcdesc_fds_set in *;
-        simpl in *. apply FdSetProperties.subset_add_3. setdec. apply IHn; setdec.
-
-        destruct st; unfold vcdesc_fds_subset in *; unfold vcdesc_fds_set in *;
-        simpl in *. apply FdSetProperties.subset_add_3. setdec. apply IHn; setdec.
-
-      destruct ve as [c | ? | ?].
-        destruct c as [d | c].
-          destruct d; try solve [unfold vcdesc_fds_subset in *;
-          unfold vcdesc_fds_set in *; destruct st; simpl in *; auto].
-          inversion b. unfold eval_base_expr. unfold eval_expr. unfold eval_base_term. simpl. try discriminate.
-intros.
-  intros. destruct envd as [n envd'].
-  induction n.
-    intros. simpl in *. contradiction.
-
-    unfold shvec_replace_cast in *. destruct envd'. simpl in *.
-    destruct i; simpl in *.
-      destruct e as [ehd erest]. simpl in *. unfold vcdesc_fds_subset in *.
-      destruct c; simpl in *.
-        destruct d; simpl in *; unfold vcdesc_fds_set in *;
-        simpl in *; try solve [apply IHn].
-        rewrite FdSetProperties.add_add.
-        apply FdSetProperties.subset_add_3.
-        apply FdSet.add_spec. left. auto.
-        apply FdSetProperties.subset_add_2. apply IHn.
-
-        destruct ehd as [ce ?]. destruct ce. unfold vcdesc_fds_set in *;
-        simpl in *. rewrite FdSetProperties.add_add.
-        apply FdSetProperties.subset_add_3.
-        apply FdSet.add_spec. left. auto.
-        apply FdSetProperties.subset_add_2. apply IHn.
-        
-      unfold vcdesc_fds_subset. unfold vcdesc_fds_set.
-      simpl. destruct c; try discriminate. inversion EQ. subst ct.
-      assert (EQ = Logic.eq_refl (Comp c)) as Heq_refl.
-        apply UIP_refl.
-      rewrite Heq_refl. simpl.
-      destruct e. simpl.
-      setdec.
-eapply stupd_sub; eauto.*)
-admit.
+eapply stupd_sub; eauto.
 
 (* CompLkup *)
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -2665,7 +2597,38 @@ refine (
                |}
   }}
 ); sep''.
-admit.
+apply all_open_set_packing.
+Print eval_hdlr_expr.
+Lemma hdlr_expr_fds_lemma : forall cc cm envd (e:s[[envd]]) (st:s[[KSTD]]) fds
+  d (ce : expr (hdlr_term (comp_type cc) (tag cm)) envd d),
+  vcdesc_fds_subset (envd := envd) e fds ->
+  vcdesc_fds_subset (envd := KSTD) st fds ->
+  match d as _d return s[[_d]] -> Prop with
+  | Desc d => match d as _d return s[[Desc _d]] -> Prop with
+              | fd_d => fun v => FdSet.In v fds
+              | _    => fun _ => True
+              end
+  | Comp c => fun v => FdSet.In (comp_fd (projT1 v)) fds
+  end (eval_hdlr_expr cc cm st e ce).
+Proof.
+  intros cc cm envd e fds d ce Hsub.
+  destruct ce.
+    destruct b; simpl; solve [auto |
+      apply env_fds_lemma; auto |
+      dependent inversion_clear b with (
+        fun c b =>
+          match c as _c return s[[_c]] -> Prop with
+          | Comp _ => fun v => FdSet.In (comp_fd (projT1 v)) fds
+          | Desc d => match d as _d return s[[Desc _d]] -> Prop with
+                      | fd_d => fun v => FdSet.In v fds
+                      | _    => fun _ => True
+                      end
+          end (eval_base_term e b)
+      ); apply env_fds_lemma; auto].
+      
+    destruct u; auto.
+    destruct b; auto.
+Qed.
 admit.
 unfold vdesc_fds_subset in *. setdec.
 unfold vcdesc_fds_subset in *. setdec.

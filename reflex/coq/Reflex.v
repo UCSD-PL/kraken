@@ -861,7 +861,7 @@ Inductive cmd : vcdesc -> Type :=
 | Send : forall envd ct, expr envd (Comp ct) -> forall (t : fin NB_MSG), payload_expr envd (lkup_tag t) -> cmd envd
 (*| SendAll : forall envd, comp_pat envd -> forall (t : fin NB_MSG), payload_expr envd (lkup_tag t) -> cmd envd*)
 | Spawn :
-    forall (envd : vcdesc) (t : COMPT), s[[ comp_conf_desc t ]] ->
+    forall (envd : vcdesc) (t : COMPT), payload_expr envd (comp_conf_desc t) ->
     forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Comp t -> cmd envd
 | Call : forall (envd : vcdesc), expr envd (Desc str_d) -> list (expr envd (Desc str_d)) ->
     forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Desc fd_d -> cmd envd
@@ -1015,9 +1015,10 @@ Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd bas
      ; init_fds   := init_fds _ s
      |}*)
 
-  | Spawn _ ct cfg i EQ => fun s i =>
+  | Spawn _ ct cfge i EQ => fun s i =>
     let tr := init_ktr _ s in
     let c_fd := i in
+    let cfg := eval_base_payload_expr _ (init_env _ s) _ cfge in
     let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
     let comp := COMPS ct in
     {| init_comps := c :: (init_comps _ s)
@@ -1126,10 +1127,11 @@ Fixpoint hdlr_state_run_cmd (envd : vcdesc) (s : hdlr_state envd) (cmd : cmd (hd
      ; hdlr_env := env
     |}*)
 
-  | Spawn _ ct cfg i EQ => fun s i =>
+  | Spawn _ ct cfge i EQ => fun s i =>
     let (s', env) := s in
     let tr := ktr s' in
     let c_fd := i in
+    let cfg := eval_hdlr_payload_expr (kst s') _ env _ cfge in
     let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
     let comp := COMPS ct in
     {| hdlr_kst :=
@@ -1410,11 +1412,22 @@ Definition all_open_set_drop f s := all_open_set (FdSet.remove f s).
   | f::fs' => all_open_set_drop_all fs' (FdSet.remove f s)
   end.*)
 
-Definition all_fds_in l s := List.Forall (fun x => FdSet.In (comp_fd x) s) l.
-
 Definition vdesc_fds_subset {envd} env s := FdSet.Subset (vdesc_fds_set envd env) s.
 
+Definition all_fds_in l s := List.Forall
+  (fun x => FdSet.In (comp_fd x) s /\ vdesc_fds_subset (comp_conf x) s) l.
+
 Definition vcdesc_fds_subset {envd} env s := FdSet.Subset (vcdesc_fds_set envd env) s.
+
+(*Definition all_base_fd_exprs_in_fds {envd} (s : init_state envd) fds :=
+  forall d (ce : expr base_term envd d),
+  match d as _d return s[[_d]] -> Prop with
+  | Desc d => match d as _d return s[[Desc _d]] -> Prop with
+              | fd_d => fun v => FdSet.In v fds
+              | _    => fun _ => True
+              end
+  | Comp c => fun v => FdSet.In (comp_fd (projT1 v)) fds
+  end (eval_base_expr (init_env _ s) ce).*)
 
 Definition init_invariant {envd} (s : init_state envd) :=
 (*  let fds := init_fds _ s in*)
@@ -1432,7 +1445,8 @@ Definition hdlr_invariant {envd} (cc : comp) (cm : msg) (s : hdlr_state envd) :=
   tr :~~ ktr st in
   let fds := FdSet.add devnull (trace_fds (expand_ktrace tr)) in
   all_open_set fds
-  * [FdSet.In (comp_fd cc) fds]
+(*  * [FdSet.In (comp_fd cc) fds]*)
+  * [In cc (kcs st)]
   * [all_fds_in (kcs st) fds]
   * [vcdesc_fds_subset env fds]
   * [vcdesc_fds_subset (kst st) fds]
@@ -1725,6 +1739,16 @@ Proof.
   assumption.
 Qed.
 
+Global Instance set_equal_vdesc_fds_subset : forall envd (e:s[[envd]]),
+  Morphisms.Proper
+  (Morphisms.respectful FdSet.Equal iff)
+  (vdesc_fds_subset (envd:=envd) e).
+Proof.
+  unfold Morphisms.Proper. unfold Morphisms.respectful.
+  intros envd e x y Heq. unfold vdesc_fds_subset.
+  rewrite Heq. auto.
+Qed.
+
 Global Instance set_equal_all_fds_in : forall cs,
   Morphisms.Proper
   (Morphisms.respectful FdSet.Equal iff)
@@ -1839,7 +1863,7 @@ Proof.
   intros ? IN. apply SUB. simpl. apply FdSet.add_spec. now right.
 Qed.
 
-Lemma env_fds_lemma: forall envd (e : s[[envd]]) fds i,
+Lemma vcdesc_fds_lemma: forall envd (e : s[[envd]]) fds i,
   vcdesc_fds_subset (envd := envd) e fds ->
   match svec_ith (projT2 envd) i as __d return s[[__d]] -> Prop with
   | Desc d => match d as __d return s[[__d]] -> Prop with
@@ -1880,7 +1904,7 @@ Proof.
   intros envd e fds d ce Hsub.
   destruct ce.
     destruct b; simpl; solve [auto |
-      apply env_fds_lemma; auto |
+      apply vcdesc_fds_lemma; auto |
       dependent inversion_clear b with (
         fun c b =>
           match c as _c return s[[_c]] -> Prop with
@@ -1890,10 +1914,29 @@ Proof.
                       | _    => fun _ => True
                       end
           end (eval_base_term e b)
-      ); apply env_fds_lemma; auto].
+      ); apply vcdesc_fds_lemma; auto].
       
     destruct u; auto.
     destruct b; auto.
+Qed.
+
+Lemma base_pl_expr_fds_sub : forall envd (e:s[[envd]]) ct cfge,
+  vdesc_fds_subset
+    (eval_base_payload_expr envd e (comp_conf_desc ct) cfge)
+    (vcdesc_fds_set _ e).
+Proof.
+  intros envd e ct cfge.
+  destruct (comp_conf_desc ct) as [n vd].
+  induction n.
+    unfold vdesc_fds_subset, vdesc_fds_set. simpl in *. setdec.
+  
+    unfold vdesc_fds_subset, vdesc_fds_set. destruct vd.
+    unfold eval_base_payload_expr. destruct cfge as [cfge0 cfg']. simpl in *.
+    destruct d; simpl in *; try apply IHn.
+      apply FdSetProperties.subset_add_3.
+      apply base_expr_fds_lemma with (e:=e) (ce:=cfge0) (fds:=vcdesc_fds_set envd e).
+      unfold vcdesc_fds_subset. setdec.
+      apply IHn.
 Qed.
 
 Lemma stupd_sub : forall st envd (e:s[[envd]]) i ve fds,
@@ -2193,7 +2236,7 @@ Proof.
 (*    | SendAll _ cp t me => fun s =>
       let case := "SendAll _ cp t me"%string in _*)
 
-    | Spawn _ ct cfg i EQ => fun s =>
+    | Spawn _ ct cfge i EQ => fun s =>
       let case := "Spawn _ ct cfg i EQ"%string in _
 
     | Call _ ce argse i EQ => fun s =>
@@ -2257,7 +2300,6 @@ refine (
 ); sep''.
 etransitivity.
 apply all_open_set_packing with (x := comp_fd c).
-unfold c. clear c.
 apply base_expr_fds_lemma with (ce:=ce) (e:=e) (fds:=(FdSet.add devnull (trace_fds (expand_ktrace x)))).
 auto.
 sep''.
@@ -2274,6 +2316,7 @@ destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let c_cmd := compd_cmd (COMPS ct) in
   let c_args := compd_args (COMPS ct) in
+  let cfg := eval_base_payload_expr _ e _ cfge in
   c_fd <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
       <@> init_invariant s;
 
@@ -2291,19 +2334,21 @@ rewrite <- FdSetProperties.add_union_singleton.
 rewrite FdSetProperties.add_add.
 rewrite hstar_comm.
 rewrite <- all_open_set_add; sep'.
-unfold vcdesc_fds_subset in *.
-setdec.
-unfold vcdesc_fds_subset in *.
+unfold vcdesc_fds_subset in *; setdec.
 rewrite <- FdSetProperties.add_union_singleton.
 apply FdSetProperties.subset_trans with (s2:=FdSet.add c_fd (vcdesc_fds_set _ e)).
 apply vcdesc_fds_set_replace_comp.
+unfold vcdesc_fds_subset in *.
 setdec.
 unfold all_fds_in in *. apply Forall_forall. rewrite Forall_forall in H.
 intros cp Hcpin. specialize (H cp). simpl in *.
 destruct Hcpin as [? | Hcpin].
-  subst cp. subst c. simpl. setdec.
+  subst cp. subst c. unfold cfg. split.
+    simpl in *. setdec.
+    simpl. eapply FdSetProperties.subset_trans. apply base_pl_expr_fds_sub.
+    unfold vcdesc_fds_subset in *. setdec.
 
-  specialize (H Hcpin). setdec.
+  specialize (H Hcpin). unfold vdesc_fds_subset in *. split; setdec.
 exists c_fd. sep''.
 
 (* Call *)
@@ -2335,7 +2380,8 @@ apply FdSetProperties.subset_trans with (s2:=FdSet.add f (vcdesc_fds_set _ e)).
 apply vcdesc_fds_set_replace_fd.
 setdec.
 unfold all_fds_in in *. apply Forall_forall. rewrite Forall_forall in H.
-intros cp Hcpin. specialize (H cp Hcpin). simpl in *. setdec.
+intros cp Hcpin. specialize (H cp Hcpin). simpl in *.
+unfold vdesc_fds_subset in *. split; setdec.
 exists f. sep''.
 
 (* StUpd *)
@@ -2532,7 +2578,7 @@ Proof.
   (*| SendAll _ cp t me => fun s =>
     let case := "SendAll _ cp t me"%string in _*)
 
-  | Spawn _ ct cfg i EQ => fun s =>
+  | Spawn _ ct cfge i EQ => fun s =>
     let case := "Spawn _ ct cfg i EQ"%string in _
 
   | Call _ ce argse i EQ => fun s =>
@@ -2582,6 +2628,7 @@ refine (
   send_msg (comp_fd c) msg (tr ~~~ expand_ktrace tr)
     <@> (tr ~~ let fds := FdSet.add devnull (trace_fds (expand_ktrace tr)) in
       all_open_set_drop (comp_fd c) fds
+      * [In cc cs]
       * [all_fds_in cs fds]
       * [vcdesc_fds_subset st fds]
       * [vcdesc_fds_subset env fds]
@@ -2598,11 +2645,36 @@ refine (
   }}
 ); sep''.
 apply all_open_set_packing.
-Print eval_hdlr_expr.
+
+Lemma vdesc_fds_lemma: forall vd (v : s[[vd]]) fds i,
+  vdesc_fds_subset (envd := vd) v fds ->
+  match svec_ith (projT2 vd) i as _d return s[[_d]] -> Prop with
+  | fd_d => fun v => FdSet.In v fds
+  | _    => fun _ => True
+  end (shvec_ith sdenote_desc (projT2 vd) v i).
+Proof.
+  unfold vdesc_fds_subset, vdesc_fds_set.
+  intros [VD_SIZE VD]. induction VD_SIZE.
+  intros. now exfalso.
+  intros v fds i SUB.
+  simpl in *. unfold sdenote_vdesc in v. destruct VD as [VD0 VD].
+  simpl in *. destruct v as [v0 v].
+  destruct i as [i|].
+  apply IHVD_SIZE.
+  intros x IN. apply SUB.
+  destruct VD0.
+  assumption. assumption. apply FdSet.add_spec. now right.
+  destruct VD0; auto.
+  apply SUB. apply FdSet.add_spec. now left.
+Qed.
+
 Lemma hdlr_expr_fds_lemma : forall cc cm envd (e:s[[envd]]) (st:s[[KSTD]]) fds
   d (ce : expr (hdlr_term (comp_type cc) (tag cm)) envd d),
   vcdesc_fds_subset (envd := envd) e fds ->
   vcdesc_fds_subset (envd := KSTD) st fds ->
+  vdesc_fds_subset (pay cm) fds ->
+  vdesc_fds_subset (comp_conf cc) fds ->
+  FdSet.In (comp_fd cc) fds ->
   match d as _d return s[[_d]] -> Prop with
   | Desc d => match d as _d return s[[Desc _d]] -> Prop with
               | fd_d => fun v => FdSet.In v fds
@@ -2611,35 +2683,61 @@ Lemma hdlr_expr_fds_lemma : forall cc cm envd (e:s[[envd]]) (st:s[[KSTD]]) fds
   | Comp c => fun v => FdSet.In (comp_fd (projT1 v)) fds
   end (eval_hdlr_expr cc cm st e ce).
 Proof.
-  intros cc cm envd e fds d ce Hsub.
+  intros cc cm envd e st fds d ce Hsub_e Hsub_st Hsub_cm Hsub_cc Hcc_in.
   destruct ce.
-    destruct b; simpl; solve [auto |
-      apply env_fds_lemma; auto |
-      dependent inversion_clear b with (
-        fun c b =>
+    destruct d; simpl.
+      destruct d; simpl.
+        auto. auto.
+        dependent inversion_clear h with (
+        fun c h =>
           match c as _c return s[[_c]] -> Prop with
           | Comp _ => fun v => FdSet.In (comp_fd (projT1 v)) fds
           | Desc d => match d as _d return s[[Desc _d]] -> Prop with
                       | fd_d => fun v => FdSet.In v fds
                       | _    => fun _ => True
                       end
-          end (eval_base_term e b)
-      ); apply env_fds_lemma; auto].
-      
-    destruct u; auto.
-    destruct b; auto.
+          end (eval_hdlr_term cc cm st h e)
+      ). try (apply base_expr_fds_lemma with (e:=e) (ce:=Term _ _ b) (fds:=fds); auto).
+        simpl. apply vdesc_fds_lemma; auto.
+        simpl. apply vdesc_fds_lemma; auto.
+        simpl. apply vcdesc_fds_lemma; auto.
+        dependent inversion_clear h with (
+        fun c h =>
+          match c as _c return s[[_c]] -> Prop with
+          | Comp _ => fun v => FdSet.In (comp_fd (projT1 v)) fds
+          | Desc d => match d as _d return s[[Desc _d]] -> Prop with
+                      | fd_d => fun v => FdSet.In v fds
+                      | _    => fun _ => True
+                      end
+          end (eval_hdlr_term cc cm st h e)
+      ); simpl.
+         apply base_expr_fds_lemma with (e:=e) (ce:=Term _ _ b) (fds:=fds); auto.
+         auto.
+         apply vcdesc_fds_lemma; auto.
+
+     destruct u; auto.
+     destruct b; auto.
 Qed.
-admit.
-unfold vdesc_fds_subset in *. setdec.
-unfold vcdesc_fds_subset in *. setdec.
-unfold vcdesc_fds_subset in *. setdec.
+idtac. unfold c0.
+apply hdlr_expr_fds_lemma with
+  (cc:=cc) (cm:=cm) (st:=st) (e:=env)
+  (ce:=ce) (fds:=FdSet.add devnull (trace_fds (expand_ktrace x0))); auto.
+unfold all_fds_in in H0. rewrite Forall_forall in H0. specialize (H0 cc H). sep'.
+unfold all_fds_in in H0. rewrite Forall_forall in H0. specialize (H0 cc H). sep'.
+rewrite trace_send_fds_equal. apply all_open_set_packing.
+unfold c0.
+apply hdlr_expr_fds_lemma with
+  (cc:=cc) (cm:=cm) (st:=st) (e:=env)
+  (ce:=ce) (fds:=FdSet.add devnull (trace_fds (expand_ktrace x))); auto.
+unfold all_fds_in in H0. rewrite Forall_forall in H0. specialize (H0 cc H). sep'.
+unfold all_fds_in in H0. rewrite Forall_forall in H0. specialize (H0 cc H). sep'.
 rewrite trace_send_fds_equal. auto.
 rewrite trace_send_fds_equal. auto.
-admit.
-admit.
+rewrite trace_send_fds_equal. auto.
+rewrite trace_send_fds_equal. auto.
 
 (*SendAll*)
-destruct s as [ [cs tr st fds] env]_eqn.
+(*destruct s as [ [cs tr st fds] env]_eqn.
 refine (
   let m := eval_hdlr_payload_expr cc cm st envd env _ me in
   let comps := filter_comps (hdlr_term _ (tag cm))
@@ -2659,7 +2757,7 @@ refine (
 ); sep''.
 admit.
 admit.
-exists tt. admit.
+exists tt. admit.*)
 
 (*Spawn*)
 destruct s as [ [cs tr st fds] env]_eqn.
@@ -2669,6 +2767,7 @@ refine (
   c_fd <- exec c_cmd c_args (tr ~~~ expand_ktrace tr)
     <@> hdlr_invariant cc cm s;
 
+  let cfg := eval_hdlr_payload_expr cc cm st _ env _ cfge in
   let c := {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
   let tr := tr ~~~ KExec c_cmd c_args c :: tr in
   {{ Return {| hdlr_kst := {| kcs := c :: cs
@@ -2679,13 +2778,58 @@ refine (
              |}
   }}
 ); sep''.
-admit.
-admit.
-admit.
-admit.
-admit.
-exists c_fd.
-unfold c0. repeat f_equal; auto.
+rewrite <- FdSetProperties.add_union_singleton.
+rewrite FdSetProperties.add_add.
+rewrite <- all_open_set_add; sep'.
+unfold all_fds_in in *. apply Forall_forall. rewrite Forall_forall in H1.
+intros cp Hcpin. simpl in *.
+destruct Hcpin as [? | Hcpin].
+  subst cp. unfold c0. unfold cfg. split.
+    simpl in *. setdec.
+    simpl. eapply FdSetProperties.subset_trans.
+Lemma hdlr_pl_expr_fds_sub : forall cc cm st envd (e:s[[envd]]) ct cfge,
+  vdesc_fds_subset
+    (eval_hdlr_payload_expr cc cm st envd e (comp_conf_desc ct) cfge)
+    (FdSet.add (comp_fd cc)
+      (FdSet.union (vdesc_fds_set _ (pay cm))
+        (FdSet.union (vdesc_fds_set _ (comp_conf cc))
+          (FdSet.union (vcdesc_fds_set _ e)
+            (vcdesc_fds_set _ st))))).
+Proof.
+  intros cc cm st envd e ct cfge.
+  destruct (comp_conf_desc ct) as [n vd].
+  induction n.
+    unfold vdesc_fds_subset, vdesc_fds_set. simpl in *. setdec.
+  
+    unfold vdesc_fds_subset, vdesc_fds_set. destruct vd.
+    unfold eval_hdlr_payload_expr. destruct cfge as [cfge0 cfg']. simpl in *.
+    destruct d; simpl in *; try apply IHn.
+      apply FdSetProperties.subset_add_3.
+apply hdlr_expr_fds_lemma with (e:=e) (ce:=cfge0) (st:=st) (fds:=
+(FdSet.add (comp_fd cc)
+       (FdSet.union
+          (vdesc_fds_set' (projT1 (lkup_tag (tag cm)))
+             (projT2 (lkup_tag (tag cm))) (pay cm))
+          (FdSet.union
+             (vdesc_fds_set' (projT1 (comp_conf_desc (comp_type cc)))
+                (projT2 (comp_conf_desc (comp_type cc))) 
+                (comp_conf cc))
+             (FdSet.union (vcdesc_fds_set envd e) (vcdesc_fds_set KSTD st))))));
+  unfold vcdesc_fds_subset; unfold vdesc_fds_subset; try setdec.
+apply IHn.
+Qed.
+apply hdlr_pl_expr_fds_sub. specialize (H1 cc H0).
+unfold vcdesc_fds_subset, vdesc_fds_subset in *. setdec.
+
+  specialize (H1 cp Hcpin). unfold vdesc_fds_subset in *. split; setdec.
+rewrite <- FdSetProperties.add_union_singleton.
+apply FdSetProperties.subset_trans with (s2:=FdSet.add c_fd (vcdesc_fds_set _ env)).
+apply vcdesc_fds_set_replace_comp.
+unfold vcdesc_fds_subset in *.
+setdec.
+unfold vcdesc_fds_subset in *; setdec.
+unfold vdesc_fds_subset in *; setdec.
+exists c_fd. sep''.
 
 (*Call*)
 destruct s as [ [cs tr st fds] env]_eqn.
@@ -2724,6 +2868,7 @@ refine (
              |}
   }}
 ); sep''.
+unfold v. eapply stupd_sub; eauto.
 
 (*CompLkup*)
 destruct s as [ [cs tr st fds] env]_eqn.

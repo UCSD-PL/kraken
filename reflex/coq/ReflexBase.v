@@ -1,9 +1,6 @@
 Require Import Ascii.
 Require Import Int.
 Require Import List.
-Require Import MSetAVL.
-Require Import MSetInterface.
-Require Import MSetProperties.
 Require Import NPeano.
 Require Import Omega.
 Require Import Orders.
@@ -113,49 +110,3 @@ Qed.
 
 (* prevent sep tactic from unfolding *)
 Global Opaque nat_of_num num_of_nat.
-
-Module OrderedFd : OrderedType
-  with Definition t := fd
-  with Definition eq := @eq fd
-  .
-
-  Definition t := fd.
-
-  Definition eq := @eq fd.
-
-  Parameter eq_equiv : Equivalence eq.
-
-  Parameter lt : t -> t -> Prop.
-
-  Parameter lt_strorder : StrictOrder lt.
-
-  Parameter lt_compat : Morphisms.Proper (eq ==> eq ==> iff) lt.
-
-  Definition compare (f1 : t) (f2 : t) : comparison :=
-    let n1 := nat_of_num f1 in
-    let n2 := nat_of_num f2 in
-    match le_dec n1 n2 with
-    | left H => if le_decide n1 n2 H
-                then Lt
-                else Eq
-    | right H => if le_decide n2 n1 H
-                 then Gt
-                 else Eq
-    end.
-
-  Parameter compare_spec :
-    forall x y : t, CompSpec eq lt x y (compare x y).
-
-  Definition eq_dec : forall x y : t, {eq x y} + {~ eq x y} :=
-    fd_eq.
-
-End OrderedFd.
-
-Module RawFdSet : RawSets OrderedFd := MSetAVL.MakeRaw(Int.Z_as_Int)(OrderedFd).
-
-Module FdSet : Sets
-  with Module E := OrderedFd
-  := Raw2Sets(OrderedFd)(RawFdSet)
-.
-
-Module FdSetProperties := WPropertiesOn OrderedFd FdSet.

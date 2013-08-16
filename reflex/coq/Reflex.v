@@ -1478,12 +1478,17 @@ Ltac uninhabit :=
   | [ H1 : ktr ?s = [_]%inhabited, H2 : ktr ?s = [_]%inhabited |- _ ] =>
     rewrite H1 in H2; apply pack_injective in H2;
     rewrite -> H2 in * || rewrite <- H2 in * (* subst may be blocked *)
+  | [ H1 : init_ktr _ ?s = [_]%inhabited, H2 : init_ktr _ ?s = [_]%inhabited |- _ ] =>
+    rewrite H1 in H2; apply pack_injective in H2;
+    rewrite -> H2 in * || rewrite <- H2 in * (* subst may be blocked *)
   | [ H : [?x]%inhabited = [?y]%inhabited |- _ ] =>
     apply pack_injective in H; try first [subst x | subst y]
   end.
 
 Ltac get_input :=
   match goal with
+  | [ |- exists _ : unit, _ ]
+    => exists tt
   | [ H1 : exists i : ?it1, _ = _,
       H2 : exists i : ?it2, _ = _
     |- exists i : (?it1 * ?it2)%type, _ = _ ]
@@ -1504,6 +1509,8 @@ Ltac get_input :=
     => let i := fresh "i" in
        let H' := fresh "H" in
        destruct H as [i H']; exists (default_input c, i)
+  | [ f : fd |- exists i : fd, _ ]
+    => exists f
   end.
 
 Ltac misc :=
@@ -2167,6 +2174,94 @@ Proof.
    apply vcdesc_fds_all_in_rest with (vd0:=Comp cp) (v0:=s); auto.
 Qed.
 
+Lemma all_comp_fds_in_app_base :
+  forall envd (e:s[[envd]]) ct c_fd
+    cfge cs fds,
+  let cfg := eval_base_payload_expr envd e (comp_conf_desc ct) cfge in
+  let c:= {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
+  vcdesc_fds_all_in e fds ->
+  all_comp_fds_in cs fds ->
+  all_comp_fds_in (c :: cs) (c_fd :: fds).
+Proof.
+  intros envd e ct c_fd cfge cs fds cfg c Hall_in Hallc_in.
+  unfold c. unfold cfg.
+  intros c' Hin.
+  destruct Hin.
+    subst c'; simpl. split.
+      left; auto.
+      apply base_pl_expr_fds_sub.
+      apply vcdesc_fds_sub; auto.
+
+  split.
+    right. apply Hallc_in; auto.
+
+    apply vdesc_fds_sub; apply Hallc_in; auto.
+Qed.
+
+Ltac destruct_eq :=
+  match goal with
+  | [ |- context[ if ?e then _ else _ ] ] =>
+    match e with
+    | num_eq _ _ => destruct e
+    end
+  end.
+
+(*It seems that you can't give ltac variables the same names as
+  bound variables in lemmas. This is why I named the variables things
+  like ce_in instead of ce.*)
+Ltac fd_exprs_in :=
+  match goal with
+  | [ |- In (comp_fd ?c) ?fds_in ]
+    => try subst c; simpl;
+        match goal with
+        | [ |- In (comp_fd (projT1 (eval_base_expr ?e_in ?ce_in))) fds_in ]
+          => apply base_expr_fds_lemma with (ce:=ce_in) (e:=e_in) (fds:=fds_in)
+        | [ ocdp := find_comp _ _ _ ?env _ _,
+            Hall_in : all_comp_fds_in _ _ |- In (comp_fd _) fds_in ]
+          => apply Hall_in; apply find_comp_suc with (e:=env)
+        | [ _ : context [ find_comp _ _ _ ?env _ _ ],
+            Hall_in : all_comp_fds_in _ _ |- In (comp_fd _) fds_in ]
+          => apply Hall_in; apply find_comp_suc with (e:=env)
+        end
+  end.
+
+Ltac subst_states :=
+  repeat match goal with
+         | [ s : init_state _ |- _ ]
+           => subst s
+         end; simpl in *.
+
+Ltac find_comp_rewrite :=
+  try match goal with
+      | [ ocdp := find_comp _ _ _ _ _ _ |- _ ]
+        => unfold ocdp in *
+      end;
+  match goal with
+  | [ Heqo : find_comp _ _ _ _ _ _ = _ |- _ ]
+    => rewrite Heqo
+  end.
+
+Ltac simplr_base :=
+  subst_states;
+  try uninhabit;
+  discharge_pure;
+  try get_input;
+  try (now destruct_eq);
+  try rewrite trace_send_fds_equal;
+  try apply unpack_all_open;
+  try apply repack_all_open;
+  try fd_exprs_in;
+  try apply all_comp_fds_in_app_base;
+  try apply vcdesc_fds_set_replace_comp;
+  try apply vcdesc_fds_set_replace_fd;
+  (* The subs should come after the replaces*)
+  try apply vcdesc_fds_sub;
+  try apply all_comp_fds_in_sub;
+  try apply stupd_sub_base;
+  try apply fds_all_in_shift;
+  try apply fds_all_in_unshift;
+  try find_comp_rewrite.
+
 Definition run_init_cmd :
   forall (envd : vcdesc) (s : init_state envd)
          (c : cmd base_term envd),
@@ -2221,7 +2316,7 @@ Proof.
       let case := "CompLkup envd cp c1 c2"%string in _
 
     end s0
-  ); sep''.
+  ); sep unfoldr simplr_base.
 
 (* Seq *)
 refine (
@@ -2229,24 +2324,14 @@ refine (
   s2 <- self envd c2 s1
     <@> [exists i, s1 = init_state_run_cmd envd s c1 i];
   {{ Return s2 }}
-); sep''.
-get_input.
-simpl.
-rewrite <- H.
-assumption.
+); sep unfoldr simplr_base.
 
 (* Ite *)
 refine (
   if num_eq (eval_base_expr (init_env _ s) cond) FALSE
   then s' <- self envd c2 s; {{ Return s' }}
   else s' <- self envd c1 s; {{ Return s' }}
-); sep''.
-destruct (num_eq (eval_base_expr (init_env envd s) cond) FALSE).
-get_input. auto.
-contradiction.
-destruct (num_eq (eval_base_expr (init_env envd s) cond) FALSE).
-contradiction.
-get_input. auto.
+); sep unfoldr simplr_base.
 
 (* Send *)
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -2267,13 +2352,7 @@ refine (
              ; init_kst   := st
              |}
   }}
-); sep''.
-apply base_expr_fds_lemma with (ce:=ce) (e:=e) (fds:=trace_fds (expand_ktrace x) ++ (devnull::nil)); sep'.
-rewrite trace_send_fds_equal. apply repack_all_open.
-apply base_expr_fds_lemma with (ce:=ce) (e:=e) (fds:=trace_fds (expand_ktrace x0) ++ (devnull::nil)); sep'.
-rewrite trace_send_fds_equal; sep'.
-rewrite trace_send_fds_equal; sep'.
-rewrite trace_send_fds_equal; sep'.
+); sep unfoldr simplr_base.
 
 (* Spawn *)
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -2292,22 +2371,7 @@ refine (
              ; init_kst   := st
              |}
   }}
-); sep''.
-unfold all_comp_fds_in in *. intros c' Hin.
-destruct Hin.
-  subst c'; subst c; simpl. split.
-    left; auto.
-    unfold cfg. apply base_pl_expr_fds_sub.
-    apply vcdesc_fds_sub; auto.
-
-  split.
-    right. apply H; auto.
-
-    apply vdesc_fds_sub; apply H; auto.
-
-apply vcdesc_fds_set_replace_comp; auto.
-apply vcdesc_fds_sub; auto.
-exists c_fd. sep''.
+); sep unfoldr simplr_base.
 
 (* Call *)
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -2324,12 +2388,7 @@ refine (
              ; init_kst   := st
              |}
   }}
-); sep''.
-
-apply all_comp_fds_in_sub; auto.
-apply vcdesc_fds_set_replace_fd; auto.
-apply vcdesc_fds_sub; auto.
-exists f. sep''.
+); sep unfoldr simplr_base.
 
 (* StUpd *)
 destruct s as [cs tr e st fds]_eqn; simpl.
@@ -2341,8 +2400,7 @@ refine (
              ; init_kst   := shvec_replace_ith _ _ st i v
              |}
   }}
-); sep''.
-eapply stupd_sub_base; eauto.
+); sep unfoldr simplr_base.
 
 (* CompLkup *)
 destruct s as [cs tr e st]_eqn; simpl.
@@ -2364,24 +2422,13 @@ refine (
              ; init_kst   := init_kst _ s''
              |}
   }}
-); sep''.
-subst s'. simpl.
-apply fds_all_in_shift; auto.
-simpl. apply H1. eapply find_comp_suc; eauto.
-subst v. simpl in *. rewrite H1 in H0. uninhabit. sep'.
-subst v. simpl in *. rewrite H1 in H0. uninhabit. sep'.
-subst v; simpl.
-simpl in *. rewrite H1 in H0. uninhabit. apply fds_all_in_unshift; auto.
-subst v. simpl in *. rewrite H1 in H0. uninhabit. auto.
-get_input. subst v. subst new_envd. subst ocdp. simpl in *. rewrite Heqo.
-subst s''. subst s'. sep'.
+); sep unfoldr simplr_base.
 
 (*Component not found*)
 refine (
   s' <- self envd c2 s;
   {{ Return s' }}
-); sep''.
-rewrite Heqo. get_input. auto.
+); sep unfoldr simplr_base.
 Qed.
 
 Theorem all_open_default_payload : forall henv,
@@ -2426,6 +2473,11 @@ Proof.
 
       unfold in_if_fd_cdesc. simpl. auto.
 Qed.
+
+Ltac simplr_init :=
+  simplr_base;
+  try apply devnull_open;
+  try apply default_cpayload_fds.
 
 Definition kinit :
   forall (_ : unit),

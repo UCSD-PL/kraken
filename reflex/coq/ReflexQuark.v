@@ -102,9 +102,9 @@ Close Scope char_scope.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
-  seq (spawn _ IENVD Tab       (default_domain, tt) i_curtab    (Logic.eq_refl _)) (
+  seq (spawn _ IENVD Tab       (i_slit default_domain, tt) i_curtab    (Logic.eq_refl _)) (
   seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
-  seq (sendall _ IENVD (mk_comp_pat _ _ Tab (None, tt)) Go (i_slit default_url, tt)) (
+  seq (send (i_envvar IENVD i_curtab) Go (i_slit default_url, tt)) (
   seq (stupd _ IENVD v_output (Term _ (base_term _ ) _ (Var _ IENVD i_output))) (
   seq (stupd _ IENVD v_curtab (Term _ (base_term _ ) _ (Var _ IENVD i_curtab))
   ) nop))))).
@@ -169,7 +169,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | UserInput, NewTab =>
       let envd := mk_vcdesc [Comp _ Tab] in
       [[ envd :
-         seq (spawn _ envd Tab (default_domain, tt) None (Logic.eq_refl _)) (
+         seq (spawn _ envd Tab (slit default_domain, tt) None (Logic.eq_refl _)) (
          seq (stupd _ envd v_curtab (envvar envd None)) (
          seq (send (stvar v_curtab) Go (slit default_url, tt))
              nop))

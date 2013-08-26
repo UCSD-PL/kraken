@@ -139,13 +139,6 @@ Proof.
     eapply IHinit2 with (i:=(snd i)) (i0:=ist); eauto.
     eapply IHinit1 with (i:=(fst i)) (i0:=ist); eauto.
 
-    (*Send all*)
-    induction init_comps; auto; simpl in *.
-      match goal with
-      |- context[ if ?e then _ else _ ]
-         => destruct e
-      end; auto.
-
     (*CompLkup*)
     match goal with
     | [ _ : context [ match ?e with | Some _ => _ | None => _ end ] |- _ ]
@@ -243,47 +236,6 @@ Proof.
     destruct H.
       subst act; auto.
       contradiction.
-
-    intros.
-    destruct hst as [hkst henv].
-    destruct hkst.
-    generalize dependent tr'.
-    induction kcs; intros.
-      destruct ktr0; simpl in *.
-      exists nil.
-      apply pack_injective in H; subst tr.
-      apply pack_injective in H0; subst tr'.
-      split; auto.
-      intros; simpl in *; contradiction.
-
-      simpl in *.
-      match goal with
-      | [ _ : context[ if ?e then _ else _ ] |- _ ]
-          => destruct e
-      end; try solve [apply IHkcs; auto].
-      destruct ktr0.
-      simpl in *.
-      apply pack_injective in H0; subst tr'.
-      match goal with
-      | [ _ : _ -> forall _, [?tr0]%inhabited = _ -> _ |- _ ]
-          => pose proof (IHkcs H tr0 (Logic.eq_refl [tr0]%inhabited))
-      end.
-      destruct H0.
-      exists (KSend PAYD COMPT COMPS a
-       {|
-       tag := t;
-       pay := eval_hdlr_payload_expr PAYD COMPT COMPS KSTD c m kst envd henv
-                (lkup_tag PAYD t) p |}::x).
-      destruct H0.
-      split.
-        rewrite <- app_comm_cons.
-        f_equal.
-        assumption.
-
-        intros.
-        simpl in *.
-        destruct H2; auto.
-        subst act; auto.
 
     intros.
     destruct hst as [hkst henv];

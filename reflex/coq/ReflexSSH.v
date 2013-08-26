@@ -152,7 +152,7 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-   seq (spawn _ IENVD System (str_of_string "System", tt) v_env_system (Logic.eq_refl _))
+   seq (spawn _ IENVD System (i_slit (str_of_string "System"), tt) v_env_system (Logic.eq_refl _))
   (seq (stupd _ IENVD v_st_system (i_envvar IENVD v_env_system))
   (seq (spawn _ IENVD Slave  tt                           v_env_slave  (Logic.eq_refl _))
        (stupd _ IENVD v_st_slave (i_envvar IENVD v_env_slave)))).

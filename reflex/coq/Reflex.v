@@ -630,10 +630,6 @@ Definition CT := comp_type CC.
 Definition CPAY : vdesc := lkup_tag CTAG.
 Definition CCONFD := comp_conf_desc CT.
 
-(*This is never used.*)
-(*Definition msg_param_i (i : fin (projT1 CPAY)) : s[[ svec_ith (projT2 CPAY) i ]] :=
-  shvec_ith _ (projT2 CPAY) (pay CMSG) i.*)
-
 Fixpoint all_open_payload_drop' (n : nat) :
   forall (v : vdesc' n) (drop : fd), sdenote_vdesc' n v -> hprop :=
   match n with
@@ -1209,13 +1205,15 @@ Fixpoint hdlr_state_run_cmd (envd : vcdesc) (s : hdlr_state envd) (cmd : cmd (hd
                                            |}
                                 (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
                                               (existT _ c (projT2 cdp)) (projT2 envd) env) in
-      let (ks'', new_env) := hdlr_state_run_cmd new_envd s' c1 (fst i) in
-      {| hdlr_kst :=
-           {| kcs := kcs ks''
+      let s'' := hdlr_state_run_cmd new_envd s' c1 (fst i) in
+(*      let ks'' := hdlr_kst _ s'' in
+      let new_env := hdlr_env _ s'' in*)
+      {| hdlr_kst := hdlr_kst _ s''
+(*           {| kcs := kcs ks''
             ; ktr := ktr ks''
             ; kst := kst ks''
-            |}
-       ; hdlr_env := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) new_env
+            |}*)
+       ; hdlr_env := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) (hdlr_env _ s'')
        |}
     | None   =>  hdlr_state_run_cmd envd s c2 (snd i)
     end
@@ -1519,7 +1517,7 @@ Ltac misc :=
   end.
 
 Ltac unfoldr :=
-  unfold kstate_inv, init_invariant, hdlr_invariant.
+  unfold kstate_inv, init_invariant, hdlr_invariant, CT, CTAG.
 
 Ltac simplr :=
   try uninhabit;
@@ -2070,6 +2068,28 @@ Proof.
       auto.
 Qed.
 
+Lemma find_comp_suc_hdlr : forall cc cm envd env st cp cs c,
+  find_comp (hdlr_term (comp_type cc) (tag cm))
+    (fun (d : cdesc) (envd : vcdesc) (e : sdenote_vcdesc envd)
+      (t : hdlr_term (comp_type cc) (tag cm) envd d) =>
+      eval_hdlr_term cc cm st t e) envd env cp cs = 
+    Some c ->
+  In (projT1 c) cs.
+Proof.
+  intros cc cm envd env st cp cs c.
+  induction cs.
+    discriminate.
+
+    simpl.
+    match goal with
+    |- context[ match ?e with Some _ => _ | None => _ end ]
+      => destruct e
+    end.
+      intro H. inversion H. subst c. auto.
+
+      auto.
+Qed.
+
 Lemma all_comp_fds_in_sub : forall cs f fds,
   all_comp_fds_in cs fds ->
   all_comp_fds_in cs (f :: fds).
@@ -2198,6 +2218,50 @@ Proof.
     apply vdesc_fds_sub; apply Hallc_in; auto.
 Qed.
 
+Lemma comp_in_cs : forall c cs fds,
+  In c cs ->
+  all_comp_fds_in cs fds ->
+  vdesc_fds_all_in (comp_conf c) fds /\
+  In (comp_fd c) fds.
+Proof.
+  intros c cs fds Hin Hall_in.
+  specialize (Hall_in c Hin).
+  intuition.
+Qed.
+
+Lemma all_comp_fds_in_app_hdlr :
+  forall envd (e:s[[envd]]) ct c_fd cc cm st
+    cfge cs fds,
+  let cfg := eval_hdlr_payload_expr cc cm st envd e (comp_conf_desc ct) cfge in
+  let c:= {| comp_type := ct; comp_fd := c_fd; comp_conf := cfg |} in
+  vcdesc_fds_all_in e fds ->
+  vcdesc_fds_all_in st fds ->
+  vdesc_fds_all_in (pay cm) fds ->
+  all_comp_fds_in cs fds ->
+  In cc cs ->
+  all_comp_fds_in (c :: cs) (c_fd :: fds).
+Proof.
+  intros envd e ct c_fd cc cm st cfge cs fds cfg c
+    Hin_e Hin_st Hin_pay Hin_cs Hin_cc.
+  unfold all_comp_fds_in.
+  intros c' Hin. destruct Hin.
+  subst c'; simpl. split.
+    left; auto.
+    apply hdlr_pl_expr_fds_sub.
+    apply vcdesc_fds_sub; auto.
+    apply vcdesc_fds_sub; auto.
+    apply vdesc_fds_sub; auto.
+    apply vdesc_fds_sub; auto.
+    eapply comp_in_cs; eauto.
+    simpl. right.
+    eapply comp_in_cs; eauto.
+
+  split.
+    right. apply Hin_cs; auto.
+
+    apply vdesc_fds_sub; apply Hin_cs; auto.
+Qed.
+
 Ltac destruct_eq :=
   match goal with
   | [ |- context[ if ?e then _ else _ ] ] =>
@@ -2216,18 +2280,27 @@ Ltac fd_exprs_in :=
         match goal with
         | [ |- In (comp_fd (projT1 (eval_base_expr ?e_in ?ce_in))) fds_in ]
           => apply base_expr_fds_lemma with (ce:=ce_in) (e:=e_in) (fds:=fds_in)
+        | [ _ : In ?cc_in ?cs_in 
+          |- In (comp_fd (projT1 (eval_hdlr_expr ?cc_in ?cm_in ?st_in ?e_in ?ce_in))) fds_in ]
+          => apply hdlr_expr_fds_lemma with
+            (cc:=cc_in) (cm:=cm_in) (st:=st_in) (e:=e_in)
+            (ce:=ce_in) (fds:=fds_in); auto; try apply comp_in_cs with (cs:=cs_in)
         | [ ocdp := find_comp _ _ _ ?env _ _,
             Hall_in : all_comp_fds_in _ _ |- In (comp_fd _) fds_in ]
-          => apply Hall_in; apply find_comp_suc with (e:=env)
+          => apply Hall_in; (apply find_comp_suc with (e:=env) ||
+               eapply find_comp_suc_hdlr)
         | [ _ : context [ find_comp _ _ _ ?env _ _ ],
             Hall_in : all_comp_fds_in _ _ |- In (comp_fd _) fds_in ]
-          => apply Hall_in; apply find_comp_suc with (e:=env)
+          => apply Hall_in; (apply find_comp_suc with (e:=env) ||
+               eapply find_comp_suc_hdlr)
         end
   end.
 
 Ltac subst_states :=
   repeat match goal with
          | [ s : init_state _ |- _ ]
+           => subst s
+         | [ s : hdlr_state _ |- _ ]
            => subst s
          end; simpl in *.
 
@@ -2252,12 +2325,14 @@ Ltac simplr_base :=
   try apply repack_all_open;
   try fd_exprs_in;
   try apply all_comp_fds_in_app_base;
+  try apply all_comp_fds_in_app_hdlr;
   try apply vcdesc_fds_set_replace_comp;
   try apply vcdesc_fds_set_replace_fd;
-  (* The subs should come after the replaces*)
-  try apply vcdesc_fds_sub;
-  try apply all_comp_fds_in_sub;
-  try apply stupd_sub_base;
+  try solve [apply vcdesc_fds_sub; auto];
+  try solve [apply all_comp_fds_in_sub; auto];
+  try solve [apply stupd_sub_base; auto];
+  try solve [apply stupd_sub_hdlr; auto];
+  try solve [apply vdesc_fds_sub; auto];
   try apply fds_all_in_shift;
   try apply fds_all_in_unshift;
   try find_comp_rewrite.
@@ -2474,8 +2549,12 @@ Proof.
       unfold in_if_fd_cdesc. simpl. auto.
 Qed.
 
+Ltac unfoldr_init :=
+  unfoldr;
+  unfold all_comp_fds_in.
+
 Ltac simplr_init :=
-  simplr_base;
+  discharge_pure;
   try apply devnull_open;
   try apply default_cpayload_fds.
 
@@ -2492,10 +2571,7 @@ Proof.
                ; kst := init_kst _ s'
                |}
      }}
-  ); sep''.
-  apply devnull_open.
-  apply default_cpayload_fds.
-  apply default_cpayload_fds.
+  ); sep unfoldr_init simplr_init.
   match goal with
   | [ H : exists i : _, _ = _ |- _ ]
     => let i := fresh "i" in
@@ -2506,41 +2582,6 @@ Proof.
   end.
   econstructor; eauto.
 Qed.
-
-(*Lemma subset_union_singleton : forall f s s',
-  FdSet.Subset s (FdSet.add devnull (FdSet.union (FdSet.singleton f) s')) <->
-  FdSet.Subset s (FdSet.add devnull (FdSet.add f s')).
-Proof.
-  split; setdec.
-Qed.
-
-Lemma all_open_set_singleton : forall f s,
-  all_open_set (FdSet.add devnull (FdSet.union (FdSet.singleton f) s)) <==>
-  all_open_set (FdSet.add f (FdSet.add devnull s)).
-Proof.
-  intros f s.
-  rewrite <- FdSetProperties.add_union_singleton.
-  rewrite FdSetProperties.add_add.
-  sep'.
-Qed.
-
-Lemma all_fds_in_sub : forall cs s s',
-  all_fds_in cs s ->
-  FdSet.Subset s s' ->
-  all_fds_in cs s'.
-Proof.
-  intros cs s s' Hforall Hsub.
-  unfold all_fds_in in *. apply Forall_forall. rewrite Forall_forall in Hforall.
-  intros c Hin. specialize (Hforall c Hin). unfold vdesc_fds_subset in *.
-  split; setdec.
-Qed.
-
-Lemma subset_add_add : forall f f' s s',
-  FdSet.Subset s (FdSet.add f' (FdSet.add f s')) <->
-  FdSet.Subset s (FdSet.add f (FdSet.add f' s')).
-Proof.
-  split; setdec.
-Qed.*)
 
 Definition run_hdlr_cmd :
   forall (cc : comp) (cm : msg) (envd : vcdesc) (s : hdlr_state envd)
@@ -2604,7 +2645,7 @@ Proof.
     let case := "CompLkup _ cp c1 c2"%string in _
 
   end s0
-  ); sep''; try subst v; sep'; simpl in *.
+  ); sep unfoldr simplr_base. (*sep''; try subst v; sep'; simpl in *.*)
 
 (* Seq *)
 refine (
@@ -2612,11 +2653,7 @@ refine (
   s2 <- self _ c2 s1
     <@> [exists i, s1 = hdlr_state_run_cmd _ _ envd s c1 i];
   {{ Return s2 }}
-); sep''.
-get_input.
-simpl.
-rewrite <- H.
-assumption.
+); sep unfoldr simplr_base.
 
 (* Ite *)
 destruct s as [ ks env]_eqn.
@@ -2624,13 +2661,7 @@ refine (
   if num_eq (eval_hdlr_expr _ _ (kst (hdlr_kst _ s)) (hdlr_env _ s) cond) FALSE
   then s' <- self _ c2 s; {{ Return s' }}
   else s' <- self _ c1 s; {{ Return s' }}
-); sep''.
-destruct (num_eq (eval_hdlr_expr cc cm (kst ks) env cond) FALSE).
-get_input. auto.
-contradiction.
-destruct (num_eq (eval_hdlr_expr cc cm (kst ks) env cond) FALSE).
-contradiction.
-get_input. auto.
+); sep unfoldr simplr_base.
 
 (*Send*)
 destruct s as [ [cs tr st] env]_eqn.
@@ -2655,24 +2686,7 @@ refine (
                ; hdlr_env := env
                |}
   }}
-); sep''.
-unfold c0.
-apply hdlr_expr_fds_lemma with
-  (cc:=cc) (cm:=cm) (st:=st) (e:=env)
-  (ce:=ce) (fds:=trace_fds (expand_ktrace x0) ++ (devnull::nil) ); auto.
-specialize (H0 cc H). sep'.
-specialize (H0 cc H). sep'.
-rewrite trace_send_fds_equal. apply repack_all_open.
-unfold c0.
-apply hdlr_expr_fds_lemma with
-  (cc:=cc) (cm:=cm) (st:=st) (e:=env)
-  (ce:=ce) (fds:=trace_fds (expand_ktrace x) ++ (devnull :: nil)); auto.
-specialize (H0 cc H). sep'.
-specialize (H0 cc H). sep'.
-rewrite trace_send_fds_equal. auto.
-rewrite trace_send_fds_equal. auto.
-rewrite trace_send_fds_equal. auto.
-rewrite trace_send_fds_equal. auto.
+); sep unfoldr simplr_base.
 
 (*Spawn*)
 destruct s as [ [cs tr st] env]_eqn.
@@ -2692,27 +2706,7 @@ refine (
              ; hdlr_env := shvec_replace_cast EQ env (existT _ c (Logic.eq_refl ct))
              |}
   }}
-); sep''.
-exists c_fd. sep''.
-apply vdesc_fds_sub; auto.
-apply vcdesc_fds_sub; auto.
-apply vcdesc_fds_set_replace_comp; auto.
-unfold all_comp_fds_in in *. intros c' Hin.
-destruct Hin.
-  subst c'; subst c0; simpl. split.
-    left; auto.
-    unfold cfg. apply hdlr_pl_expr_fds_sub.
-    apply vcdesc_fds_sub; auto.
-    apply vcdesc_fds_sub; auto.
-    apply vdesc_fds_sub; auto.
-    apply vdesc_fds_sub; auto.
-    apply H0; auto.
-    specialize (H0 cc H). sep'.
-
-  split.
-    right. apply H0; auto.
-
-    apply vdesc_fds_sub; apply H0; auto.
+); sep unfoldr simplr_base.
 
 (*Call*)
 destruct s as [ [cs tr st] env]_eqn.
@@ -2730,12 +2724,7 @@ refine (
              ; hdlr_env := shvec_replace_cast EQ env f
              |}
   }}
-); sep''.
-exists f. sep''.
-apply all_comp_fds_in_sub; auto.
-apply vcdesc_fds_set_replace_fd; auto.
-apply vcdesc_fds_sub; auto.
-apply vdesc_fds_sub; auto.
+); sep unfoldr simplr_base.
 
 (*StUpd*)
 destruct s as [ [cs tr st] env]_eqn.
@@ -2748,10 +2737,10 @@ refine (
              ; hdlr_env := env
              |}
   }}
-); sep''.
-unfold v. eapply stupd_sub_hdlr; eauto.
-specialize (H0 cc H). sep''.
-specialize (H0 cc H). sep''.
+); sep unfoldr simplr_base.
+apply stupd_sub_hdlr; auto.
+eapply comp_in_cs; eauto.
+eapply comp_in_cs; eauto.
 
 (*CompLkup*)
 destruct s as [ [cs tr st] env]_eqn.
@@ -2770,60 +2759,24 @@ refine (
                      (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
                        (existT _ c (projT2 cdp)) (projT2 envd) env) in
   s'' <- self new_envd c1 s';
-  let ks'' := hdlr_kst _ s'' in
-  let new_env := hdlr_env _ s'' in
-  {{ Return {| hdlr_kst :=
-                {| kcs := kcs ks''
+(*  let ks'' := hdlr_kst _ s'' in
+  let new_env := hdlr_env _ s'' in*)
+  {{ Return {| hdlr_kst := hdlr_kst _ s''
+(*                {| kcs := kcs ks''
                  ; ktr := ktr ks''
                  ; kst := kst ks''
-                 |}
-             ; hdlr_env := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) new_env
+                 |}*)
+             ; hdlr_env := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) (hdlr_env _ s'')
              |}
   }}
-); sep''.
-subst s'. simpl.
-apply fds_all_in_shift; auto.
-simpl. apply H3.
-Lemma find_comp_suc_hdlr : forall cc cm envd env st cp cs c,
-  find_comp (hdlr_term (comp_type cc) (tag cm))
-    (fun (d : cdesc) (envd : vcdesc) (e : sdenote_vcdesc envd)
-      (t : hdlr_term (comp_type cc) (tag cm) envd d) =>
-      eval_hdlr_term cc cm st t e) envd env cp cs = 
-    Some c ->
-  In (projT1 c) cs.
-Proof.
-  intros cc cm envd env st cp cs c.
-  induction cs.
-    discriminate.
-
-    simpl.
-    match goal with
-    |- context[ match ?e with Some _ => _ | None => _ end ]
-      => destruct e
-    end.
-      intro H. inversion H. subst c. auto.
-
-      auto.
-Qed.
-unfold ocdp in *; unfold c0; eapply find_comp_suc_hdlr; eauto.
-subst v. simpl in *. unfold ks'' in *. rewrite H1 in H0. uninhabit. sep'.
-subst v. simpl in *. unfold ks'' in *. rewrite H1 in H0. uninhabit. sep'.
-subst v. simpl in *. unfold ks'' in *. rewrite H1 in H0. uninhabit. sep'.
-subst v. simpl in *. unfold ks'' in *. rewrite H1 in H0. uninhabit.
-apply fds_all_in_unshift; auto.
-subst v. simpl in *. unfold ks'' in *. rewrite H1 in H0. uninhabit. sep'.
-subst v. simpl. unfold ks'' in *. sep'.
-get_input. subst v. subst new_envd. subst ocdp. simpl in *.
-unfold CT in *. unfold CTAG in *. rewrite Heqo. subst d. subst s'. subst c0.
-rewrite <- H9. destruct s''. sep''.
+); sep unfoldr simplr_base.
+eauto.
 
 (*Component not found*)
 refine (
   s' <- self envd c2 s;
   {{ Return s' }}
-); sep''.
-unfold CT. unfold CTAG.
-rewrite Heqo. get_input. auto.
+); sep unfoldr simplr_base.
 Qed.
 
 Theorem all_open_unconcat : forall a b,
@@ -2833,36 +2786,6 @@ Proof.
   simpl. sep'.
   simpl. sep'.
 Qed.
-(*
-Lemma all_open_set_union : forall s s',
-  FdSet.Empty (FdSet.inter s s') ->
-  all_open_set (FdSet.union s s') <==>
-  all_open_set s * all_open_set s'.
-Proof.
-  intro s.
-  apply FdSetProperties.set_induction with (s:=s); clear s.
-    intros s_emp Hemp s' ?. apply FdSetProperties.empty_is_empty_1 in Hemp. rewrite Hemp.
-    rewrite FdSetProperties.empty_union_1; try setdec.
-    unfold all_open_set. rewrite FdSetProperties.fold_empty. split; sep'.
-
-    intros ? s' IH f Hnin Hadd s Hinter.
-    rewrite FdSetProperties.Add_Equal in Hadd. rewrite Hadd.
-    unfold all_open_set in *; rewrite FdSetProperties.fold_union;
-      try solve [apply hprop_iff_e | apply open_proper | apply open_transpose | setdec].
-    rewrite FdSetProperties.fold_add;
-      try solve [apply hprop_iff_e | apply open_proper | apply open_transpose | auto].
-    rewrite FdSetProperties.fold_add;
-      try solve [apply hprop_iff_e | apply open_proper | apply open_transpose | auto].
-    rewrite <- FdSetProperties.fold_union;
-      try solve [apply hprop_iff_e | apply open_proper | apply open_transpose
-        | setdec].
-    split; sep'; apply IH; setdec.
-    unfold Basics.flip. sep''.
-    unfold Transitive. sep''. rewrite <- H. sep''.
-    unfold Morphisms.Proper, Morphisms.respectful. intros. unfold Basics.flip in *.
-    rewrite H. rewrite H0. sep''.
-    unfold SetoidList.transpose. intros. unfold Basics.flip. split; sep''.
-Qed.*)
 
 Lemma trace_recv_msg_fds : forall f m,
   trace_fds (trace_recv_msg f m) =
@@ -2999,6 +2922,49 @@ Proof.
       left. auto.
 Qed.
 
+Ltac comp_in_cs_tac :=
+  match goal with
+  | [ Hin : In ?c ?cs,
+      Hall_in : all_comp_fds_in ?cs ?fds_in |-
+        In (comp_fd ?c) ?fds_in ]
+    => specialize (Hall_in c Hin); auto
+  end.
+
+Ltac subst_states' :=
+  repeat match goal with
+         | [ s : init_state _ |- _ ]
+           => subst s
+         | [ s : hdlr_state _ |- _ ]
+           => subst s
+         | [ s : kstate |- _ ]
+           => subst s
+         end; simpl in *.
+
+Ltac destruct_btag :=
+  match goal with
+  |- context[ btag ?m ]
+    => destruct (btag m)
+  end.
+
+Ltac unfoldr_body :=
+  unfoldr; unfold trace_recv_bogus_msg.
+
+Ltac simplr_body :=
+  subst_states';
+  try uninhabit;
+  discharge_pure;
+  try apply unpack_all_open;
+  try comp_in_cs_tac(*;
+  try rewrite trace_fds_dist;
+  try rewrite trace_recv_msg_fds;
+  try rewrite <- app_assoc;
+  try rewrite <- all_open_concat;
+  try rewrite <- all_open_rev;
+  try apply repack_all_open;
+  try solve [eapply all_comp_fds_in_sub_app; eauto];
+  try solve [eapply vcdesc_fds_sub_app; eauto];
+  try solve [apply default_cpayload_fds]*).
+
 Definition kbody:
   forall s,
   STsep (kstate_inv s)
@@ -3039,22 +3005,19 @@ Proof.
       {{ Return {|kcs := cs; ktr := tr; kst := st |} }}
     end
 
-  ); sep''; try subst v; sep'; simpl in *.
-
-  rewrite H2 in H0. uninhabit. sep'.
-  subst s. sep'.
-  specialize (H6 c H4). sep'.
-  specialize (H6 c H4). sep'.
+  ); sep unfoldr_body simplr_body.
 
   rewrite trace_fds_dist. rewrite trace_recv_msg_fds.
   rewrite <- app_assoc. rewrite <- all_open_concat. rewrite <- all_open_rev.
-  sep'. simpl. rewrite hstar_comm. apply repack_all_open.
-  apply H7; auto.
+  sep'. simpl. rewrite hstar_comm. apply repack_all_open. sep'.
 
   rewrite trace_fds_dist. rewrite <- app_assoc. eapply all_comp_fds_in_sub_app; eauto.
+
   rewrite trace_fds_dist. rewrite <- app_assoc. eapply vcdesc_fds_sub_app; eauto.
   eapply vcdesc_fds_sub_app; eauto. apply default_cpayload_fds.
+
   rewrite trace_fds_dist. rewrite <- app_assoc. eapply vcdesc_fds_sub_app; eauto.
+
   rewrite trace_fds_dist. rewrite trace_recv_msg_fds.
   rewrite <- app_assoc.
 
@@ -3064,35 +3027,31 @@ Proof.
   apply sublist_rev.
   apply sublist_app_l.
 
-  rewrite H4 in H3. uninhabit. sep'.
-  rewrite H4 in H3. uninhabit. sep'.
-  rewrite H4 in H3. uninhabit. sep'.
-
   match goal with
   | [ H : exists i : _, _ = _ |- _ ]
     => let i := fresh "i" in
        let Hin := fresh "Hin" in
        destruct H as [i Hin];
-       apply Reach_valid with (s:=s) (c:=c) (m:=m)
+       eapply Reach_valid with (input:=i); eauto
+       (*apply Reach_valid with (s:=s) (c:=c) (m:=m)
          (input:=i);
-       auto
+       auto*)
   end.
-  subst s''.
-  subst s.
-  apply C_ve with (tr:=x2); sep''.
-  uninhabit. sep'. simpl. unfold trace_recv_bogus_msg.
-  destruct (btag m). simpl.
+  subst_states'.
+  econstructor; sep'; sep'.
+
+  unfold trace_recv_bogus_msg.
+  destruct_btag.
   apply repack_all_open; sep'.
 
-  uninhabit. simpl. unfold trace_recv_bogus_msg.
-  destruct (btag m). simpl. sep'.
+  unfold trace_recv_bogus_msg.
+  destruct_btag. sep'.
 
-  uninhabit. simpl. unfold trace_recv_bogus_msg.
-  destruct (btag m). simpl. sep'.
+  unfold trace_recv_bogus_msg.
+  destruct_btag. sep'.
 
   eapply Reach_bogus; eauto.
-  pose proof (C_be c m s x2). subst s. unfold mk_bogus_st in *.
-  simpl in *. eauto.
+  econstructor. sep'.
 Qed.
 
 Definition kloop:

@@ -44,7 +44,7 @@ def launch_browser(uri, echo=True):
   # WARNING: You should call this function ONLY inside of GTK
   #          (i.e. use synchronous_gtk_message)
 
-  window = gtk.Window()
+  window = gtk.OffscreenWindow()
   box = gtk.VBox(homogeneous=False, spacing=0)
   browser = webkit.WebView()
 
@@ -81,7 +81,7 @@ def launch_browser(uri, echo=True):
 
   browser.open(uri)
 
-  return browser, web_recv, web_send
+  return window, box, browser, web_recv, web_send
 
 
 class Global(object):

@@ -5,6 +5,7 @@ Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
 Require Import ReflexFrontend.
+Require Import ReflexIO.
 Require Import ReflexVec.
 
 Open Scope string_scope.
@@ -19,7 +20,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
 
 Notation M := 0%fin (only parsing).
 
-Inductive COMPT' : Type := Echo.
+Inductive COMPT' : Type := Echo1 | Echo2.
 Definition COMPT := COMPT'.
 
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
@@ -27,13 +28,15 @@ Proof. decide equality. Defined.
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | Echo => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
+  | Echo1 => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
+  | Echo2 => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
   end.
 
 Definition KSTD : vcdesc COMPT := mk_vcdesc [].
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
-  [ Comp _ Echo
+  [ Comp _ Echo1;
+    Comp _ Echo2
   ].
 
 End SystemFeatures.
@@ -49,26 +52,148 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  [fun s => spawn IENVD _ Echo tt None (Logic.eq_refl _)
-  ].
+  seq (spawn _ IENVD Echo1 tt None (Logic.eq_refl _))
+  (seq (spawn _ IENVD Echo2 tt (Some None) (Logic.eq_refl _))
+  nop).
 
+Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  fun m cc =>
-    let (_, cf, _) := cc in
-    match m as _m return forall (EQ : _m = m), _ with
-    | Build_msg None p => fun EQ =>
-      let envd := existT _ 0 tt in
-      existT (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc _ d) envd (
-        let (msg, _) := p in fun st0 =>
-        [ fun s => sendall envd _
-                           (Build_comp_pat COMPT' COMPS Echo (Some cf) tt)
-                           None (mvar EQ None, tt)
-        ]
-      )
-    | Build_msg (Some bad) _ =>
-      match bad with end
-    end (Logic.eq_refl m).
+  fun t ct =>
+  match t as _t, ct as _ct return
+    {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
+  with
+  | None, _ =>
+    [[ mk_vcdesc [] :
+       send ccomp None (mvar None None, tt) ]]
+  | Some bad, _ =>
+    match bad with end
+  end.
+Close Scope hdlr.
 
+Require Import ActionMatch.
+Require Import PolLang.
+Require Import Ynot.
+
+Local Opaque str_of_string.
+
+Theorem recv_before : forall st tr m,
+  Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
+  ktr _ _ _ _ st = inhabits tr ->
+  ImmBefore PAYD COMPT COMPS COMPTDEC
+            (KORecv PAYD COMPT COMPS None
+                     (Some (Build_opt_msg PAYD
+                                          None (Some m, tt))))
+            (KOSend PAYD COMPT COMPS None
+                     (Some (Build_opt_msg PAYD
+                                          None (Some m, tt))))
+            tr.
+Proof.
+  crush.
+Qed.
+
+Require Import NIExists.
+
+Require Import Ynot.
+Require Import NITactics.
+
+Definition clblr (c : comp COMPT COMPS) :=
+  match comp_type _ _ c with
+  | Echo1 => true
+  | Echo2 => false
+  end.
+
+Definition vlblr (f : fin (projT1 KSTD)) : bool :=
+  match f with end.
+
+Theorem ni : NI PAYD COMPT COMPTDEC COMPS
+  IENVD KSTD INIT HANDLERS clblr vlblr.
+Proof.
+  ni.
+Qed.
+
+(*
+unfold NIWeak'.
+unfold NonInterference'.
+  unfold NonInterferenceSt'.
+  intros.
+  generalize dependent tr1.
+  generalize dependent tr2.
+  generalize dependent s2.
+  induction H; intros.
+    induction H0.
+      admit.
+
+      inversion H6.
+      destruct_msg.
+      repeat unpack.
+      simpl in *.
+      destruct (labeler c).
+        admit.
+        admit.
+
+      admit.
+
+    inversion H0.
+    destruct_msg.
+    repeat unpack.
+    simpl in *.
+    destruct (labeler c).
+      simpl in *.
+      apply call_ok_sym in H4.
+      repeat apply call_ok_sub in H4.
+      apply spawn_ok_sym in H5.
+      repeat apply spawn_ok_sub in H5.
+      generalize dependent tr2.
+      induction H1; intros.
+        admit.
+
+        inversion H2.
+        destruct_msg.
+        repeat unpack.
+        simpl in *.
+        destruct (labeler c0).
+          inversion H6.
+          replace a with a0 in * by admit.
+          replace b with b0 in * by admit.
+          f_equal; auto.
+          apply IHReach with (s2:=s1); auto.
+          admit.
+          admit.
+
+          apply IHReach0; auto.
+          admit.
+          admit.
+
+        subst s'.
+        simpl in *.
+        apply pack_injective in H4.
+        subst tr2.
+        simpl in *.
+        apply IHReach0; auto.
+        admit.
+        admit.
+
+    apply IHReach with (s2:=s2); auto.
+admit.
+admit.
+
+apply
+  inversion H0.
+  inversion H1.
+  destruct_msg.
+  repeat unpack.
+  simpl in *.
+  destruct (labeler c).
+  
+    
+
+  apply H; eauto.
+  apply call_ok_sym in H3; apply call_ok_sym;
+  repeat apply call_ok_sub in H3; assumption.
+  apply spawn_ok_sym in H4; apply spawn_ok_sym;
+  repeat apply spawn_ok_sub in H4; assumption.
+Qed.
+*)
 End Spec.
 
 Module Main := MkMain(Spec).

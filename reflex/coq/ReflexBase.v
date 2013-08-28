@@ -1,12 +1,11 @@
 Require Import Ascii.
 Require Import Int.
 Require Import List.
-Require Import MSetAVL.
-Require Import MSetInterface.
 Require Import NPeano.
 Require Import Omega.
 Require Import Orders.
 Require Import String.
+Require Import Arith.Compare.
 
 Notation decide P := ({ P } + { ~ P }).
 
@@ -24,13 +23,37 @@ Definition num_of_nat (n : nat) : num :=
   let h := n / 256 in
   Num (ascii_of_nat l) (ascii_of_nat h).
 
+Fixpoint pow (r: nat) (n: nat) : nat :=
+  match n with
+  | O => 1
+  | S n => r * (pow r n)
+  end.
+Notation "r ^ n" := (pow r n).
+
+Lemma N_of_digits_len : forall l, Nnat.nat_of_N (N_of_digits l) < (2 ^ (List.length l)).
+Proof.
+  unfold Nnat.nat_of_N.
+  induction l.
+  simpl;  omega.
+  destruct a; simpl.
+  destruct (N_of_digits l).
+  unfold nat_of_P. simpl. omega.
+  rewrite nat_of_P_xI. omega.
+  destruct (N_of_digits l).
+  omega.
+  rewrite nat_of_P_xO. omega.
+Qed.
+
 Lemma nat_of_ascii_bound :
   forall x, nat_of_ascii x < 256.
 Proof.
-  destruct x.
-  repeat (
-    match goal with [ b : bool |- _ ] => destruct b end
-  ); compute; omega.
+  unfold nat_of_ascii, Nnat.nat_of_N, N_of_ascii.
+  repeat destruct x as [? x].
+  match goal with |- match N_of_digits ?l with 0%N => _ | Npos p => _ end < _ =>
+    pose proof (N_of_digits_len l) as P; destruct (N_of_digits l)
+  end.
+  omega.
+  exact P.
 Qed.
 
 Lemma num_nat_embedding :
@@ -49,8 +72,8 @@ Definition num_eq (n1 n2 : num) : decide (n1 = n2).
   decide equality; apply ascii_dec.
 Defined.
 
-Let FALSE : num := Num "000" "000".
-Let TRUE  : num := Num "001" "000".
+Notation FALSE := (Num "000" "000").
+Notation TRUE  := (Num "001" "000").
 
 Definition str : Set :=
   list ascii.
@@ -87,30 +110,3 @@ Qed.
 
 (* prevent sep tactic from unfolding *)
 Global Opaque nat_of_num num_of_nat.
-
-Module OrderedFd : OrderedType with Definition t := fd.
-
-  Definition t := fd.
-
-  Definition eq := @eq fd.
-
-  Parameter eq_equiv : Equivalence eq.
-
-  Parameter lt : t -> t -> Prop.
-
-  Parameter lt_strorder : StrictOrder lt.
-
-  Parameter lt_compat : Morphisms.Proper (eq ==> eq ==> iff) lt.
-
-  Parameter compare : t -> t -> comparison.
-
-  Parameter compare_spec :
-    forall x y : t, CompSpec eq lt x y (compare x y).
-
-  Parameter eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
-
-End OrderedFd.
-
-Module RawFdSet : RawSets OrderedFd := MSetAVL.MakeRaw(Int.Z_as_Int)(OrderedFd).
-
-Module FdSet : Sets with Module E := OrderedFd := Raw2Sets(OrderedFd)(RawFdSet).

@@ -9,11 +9,13 @@ FLAGS := \
 	-verbose 2 \
 	-lib unix \
 	-cflags -g \
-	-lflags -g,-I,$(SODIR),$(SOBJS) \
+	-lflags -g,-I,$(SODIR),$(SOBJS),-dllpath,$(SODIR) \
 	-no-links
 
 all:
 	cp primitives/* .
+	cp ReflexEcho.ml Foo.ml
+	sed "s/COMPT'/COMPT/g" < Foo.ml > ReflexEcho.ml
 	$(OCAMLBUILD) $(FLAGS) Main.byte
 	cp _build/Main.byte kernel
   

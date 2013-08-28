@@ -6,9 +6,13 @@ def main():
   msg.init()
   try:
     while True:
-      url = raw_input("\n")
-      msg.send('Input', url)
+      uin = raw_input("\n")
+      if uin == ':new':
+        msg.send(msg.NewTab)
+      else:
+        msg.send(msg.KeyPress, uin)
   except EOFError:
-    msg.send('Quit')
+    pass
+    #msg.send('Quit')
 
 main()

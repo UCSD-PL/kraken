@@ -35,6 +35,31 @@ Fixpoint shvec_ith (n : nat) :
     end
   end.
 
+Fixpoint shvec_shift (n : nat) (d : desc) (e : s[[d]]) :
+  forall (v_d : svec desc n), shvec n v_d -> shvec (S n) (svec_shift d v_d) :=
+  match n
+  with
+  | O => fun _ _ => (e, tt)
+  | S n' => fun v_d =>
+    match v_d with
+    | (_, _) => fun v =>
+      (fst v, shvec_shift n' d e _ (snd v))
+    end
+  end.
+
+Fixpoint shvec_unshift (n : nat) (d : desc) :
+  forall (v_d : svec desc n), shvec (S n) (svec_shift d v_d) -> shvec n v_d :=
+  match n as _n return
+    forall (v_d : svec desc _n), shvec (S _n) (svec_shift d v_d) -> shvec _n v_d
+  with
+  | O => fun _ _ => tt
+  | S n' => fun v_d =>
+    match v_d with
+    | (_, _) => fun v =>
+      (fst v, shvec_unshift n' d _ (snd v))
+    end
+  end.
+
 Variable desc_eqdec : forall (x y : desc), decide (x = y).
 Variable d : desc.
 Variable x : s[[ d ]].
@@ -90,15 +115,111 @@ Fixpoint shvec_replace_ith (n : nat) : forall (v_d : svec desc n),
     end
   end.
 
+Fixpoint shvec_eq (n:nat):
+  forall (vd:svec desc n) (v1:shvec n vd) (v2:shvec n vd)
+    (lblr:fin n -> bool), Prop :=
+  match n as _n return
+    forall (vd:svec desc _n) (v1:shvec _n vd) (v2:shvec _n vd)
+      (lblr:fin _n -> bool), Prop
+  with
+  | O => fun _ _ _ _ => True
+  | S n' => fun (vd:svec desc (S n')) =>
+    match vd as _vd return
+      forall (v1:shvec (S n') _vd) (v2:shvec (S n') _vd)
+        (lblr:fin (S n') -> bool), Prop
+    with
+    | (h, vd') => fun v1 v2 lblr =>
+      let lblr' := fun (f:fin n') => lblr (shift_fin f) in
+      let rest_eq := shvec_eq n' vd' (snd v1) (snd v2) lblr' in
+      if lblr None
+      then if repr_eqdec h (fst v1) (fst v2)
+           then rest_eq
+           else False
+      else rest_eq
+    end
+  end.
+
+Lemma shvec_eq_sym : forall n vd v1 v2 lblr,
+  shvec_eq n vd v1 v2 lblr <->
+  shvec_eq n vd v2 v1 lblr.
+Proof.
+  intros.
+  induction n.
+    tauto.
+
+    simpl in *.
+    destruct vd as [h vd'].
+    repeat match goal with
+           | [ |- (if ?e1 then _ else _) <-> (if ?e2 then _ else _)]
+             => destruct e1; destruct e2
+           end; auto; try tauto;
+           try match goal with
+               | [ H : ?x = ?y, H' : ?y <> ?x |- _ ]
+                 => symmetry in H; contradiction
+               end.
+Qed.
+
+Lemma shvec_eq_refl : forall n vd v lblr,
+  shvec_eq n vd v v lblr.
+Proof.
+  intros.
+  induction n.
+    simpl. auto.
+
+    simpl in *.
+    destruct vd as [h vd'].
+    repeat match goal with
+           | [ |- (if ?e then _ else _)]
+             => destruct e
+           end; auto.
+Qed.
+
 End SHeterogeneousVector.
+
+Definition extend_denote desc (sdenote_desc : desc -> Set) : (desc+unit) -> Set :=
+  (fun d => match d with inl d => sdenote_desc d | inr _ => unit end).
+
+Fixpoint shvec_erase desc sdenote_desc (n : nat) :
+  forall (lblr : fin n -> bool) (vd : svec desc n),
+    shvec desc sdenote_desc n vd ->
+    shvec (desc+unit) (extend_denote desc sdenote_desc) n (svec_erase lblr vd) :=
+  match n as _n return
+    forall (lblr : fin _n -> bool) (vd : svec desc _n),
+      shvec desc sdenote_desc _n vd ->
+      shvec (desc+unit) (extend_denote desc sdenote_desc) _n (svec_erase lblr vd)
+  with
+  | O => fun _ _ _ => tt
+  | S n' => fun lblr vd =>
+    match vd as _vd return
+      shvec desc sdenote_desc (S n') _vd ->
+      shvec (desc+unit) (extend_denote desc sdenote_desc) (S n') (svec_erase lblr _vd)
+    with
+    | (h, vd') => fun v =>
+      let lblr' := fun (f:fin n') => lblr (shift_fin f) in
+      let rest := shvec_erase desc sdenote_desc n' lblr' vd' (snd v) in
+      match lblr None as _b return
+        shvec (desc+unit) (extend_denote desc sdenote_desc) (S n')
+          (if _b then (inl _ h, svec_erase lblr' vd') else (inr _ tt, svec_erase lblr' vd'))
+      with
+      | true => (fst v, rest)
+      | false => (tt, rest)
+      end
+    end
+  end.
 
 Implicit Arguments shvec [desc n].
 
 Implicit Arguments shvec_ith [desc n].
 
+Implicit Arguments shvec_shift [desc n].
+
 Implicit Arguments shvec_in [desc n].
 
 Implicit Arguments shvec_replace_ith [desc n].
+
+Implicit Arguments shvec_eq [desc n].
+
+Implicit Arguments shvec_erase [desc n].
 
 Fixpoint shvec_match {desc:Set} {n:nat} (vd:svec desc n)
   (sdenote_desc:desc->Set) (sdenote_desc':desc->Set)

@@ -156,9 +156,12 @@ let select cfds _ =
   let fd = List.hd r in
   log (Printf.sprintf "select : %s -> %d"
         (String.concat " " (List.map string_of_fd fds)) (int_of_fd fd));
-  List.find
-    (fun cfd -> fd_of_cfd cfd = fd)
-    cfds
+  let cfd =
+    List.find
+      (fun cfd -> fd_of_cfd cfd = fd)
+      cfds
+  in
+  Specif.Coq_existT (cfd, Obj.magic ())
 
 let recv cfd n _ =
   let fd = fd_of_cfd cfd in
@@ -191,6 +194,9 @@ let send cfd s _ =
           (int_of_fd fd) (String.escaped s));
     ()
   end
+
+let oracle _ =
+  Obj.magic ()
 
 external recv_fd_native : Unix.file_descr -> Unix.file_descr =
   "recv_fd_native"

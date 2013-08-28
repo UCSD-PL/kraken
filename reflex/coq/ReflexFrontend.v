@@ -5,6 +5,14 @@ Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
 Require Import ReflexHVec.
+Require Import ReflexIO.
+Require Import NIExists.
+Require Import Ynot.
+Require Import PruneFacts.
+Require Import Decidable.
+Require Import List.
+Require Import ActionMatch.
+Require Import PolLang.
 
 Module Type SystemFeaturesInterface.
   Parameter NB_MSG   : nat.
@@ -18,24 +26,34 @@ End SystemFeaturesInterface.
 
 Module MkLanguage (Import SF : SystemFeaturesInterface).
   Instance SDenoted_cdesc : SDenoted (cdesc COMPT) := SDenoted_cdesc COMPT COMPS.
-  Definition sendall := SendAll PAYD COMPT COMPS KSTD.
+  Definition seq {envd term} := Seq PAYD COMPT COMPS KSTD envd term.
+  Definition nop {envd term} := Nop PAYD COMPT COMPS KSTD envd term.
+  Definition ite {envd term} := Ite PAYD COMPT COMPS KSTD envd term.
+  Definition send {envd term ct} := Reflex.Send PAYD COMPT COMPS KSTD envd term ct.
   Definition spawn := Spawn PAYD COMPT COMPS KSTD.
+  Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
+
   Definition stvar {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (StVar _ _ _ _ _ _ _ v).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (StVar _ _ _ _ _ _ _ v).
+  Definition i_envvar envd i :=
+    Term COMPT (base_term _) envd (Var _ envd i).
   Definition envvar {cc m} envd i :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (Var _ envd i)).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd
+         (Base _ _ _ _ _ _ _ (Var _ envd i)).
   Definition slit {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (SLit _ _ v)).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (SLit _ _ v)).
   Definition nlit {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (Base _ _ _ _ _ _ _ (NLit _ _ v)).
-  Definition cfd {cc envd m} :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) (CFd _ _ _ _ _ _ _).
-  Definition i_slit v := Term COMPT (base_term _ IENVD) (SLit _ _ v).
-  Definition i_nlit v := Term COMPT (base_term _ IENVD) (NLit _ _ v).
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (NLit _ _ v)).
+  Definition ccomp {cc envd m} :=
+    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (CComp _ _ _ _ _ _ _).
+  Definition i_slit v := Term COMPT (base_term _) IENVD (SLit _ _ v).
+  Definition i_nlit v := Term COMPT (base_term _) IENVD (NLit _ _ v).
   Definition mk_comp_pat := Build_comp_pat COMPT COMPS.
-  Definition comp_fd {ct : COMPT} (x : sigT (fun c => comp_type COMPT COMPS c = ct))
-    := comp_fd COMPT COMPS (projT1 x).
+
+(*
+  Definition comp_fd {envd ct} ce (*{ct : COMPT} (x : sigT (fun c => comp_type COMPT COMPS c = ct))*)
+    := CompFd COMPT envd ct ce.*)
   Definition comp_conf {ct : COMPT} (x : sigT (fun c => comp_type COMPT COMPS c = ct))
   : s[[ comp_conf_desc COMPT COMPS ct ]]
     :=
@@ -60,6 +78,452 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
               (kst PAYD COMPT COMPS KSTD s) i.
   Notation "s ## i" := (kst_ith s i) (at level 0) : kst.
   Delimit Scope kst with kst.
+
+  Definition eq {term d envd} e1 e2 :=
+    BinOp COMPT term envd
+          (Eq _ d) e1 e2.
+
+  Definition splitfst envd term c s :=
+    UnOp COMPT term envd (SplitFst _ c) s.
+
+  Definition splitsnd envd term c s :=
+    UnOp COMPT term envd (SplitSnd _ c) s.
+
+  Definition mvar
+  {envd} (t : fin NB_MSG) {ct} i :=
+  (Term COMPT _ _ (MVar PAYD COMPT COMPS KSTD ct t envd i)).
+
+  Definition cconf
+  {envd} {t : fin NB_MSG} ct i :=
+  (Term COMPT _ _ (CConf PAYD COMPT COMPS KSTD ct t envd i)).
+
+(*Unfortunately, I need to put tactics here because one of them
+  must refer to ite in a match.*)
+Ltac destruct_fin f :=
+  match type of f with
+  | False => destruct f
+  | _ => let f' := fresh "f" in
+         destruct f as [ f' | ]; [destruct_fin f' | ]
+  end.
+
+Ltac destruct_pay pay :=
+  compute in pay;
+  match type of pay with
+  | unit => idtac
+  | _ => let a := fresh "a" in
+         let b := fresh "b" in
+         destruct pay as [a b]; simpl in a; destruct_pay b
+  end.
+
+Ltac destruct_msg :=
+  match goal with
+  | [ m : msg _ |- _ ]
+      => let tag := fresh "tag" in
+         let pay := fresh "pay" in
+         destruct m as [tag pay]; destruct_fin tag;
+         destruct_pay pay
+  end.
+
+
+Ltac destruct_comp :=
+  match goal with
+  | [ c : Reflex.comp _ _ |- _ ]
+      => let ct := fresh "ct" in
+         let cfd := fresh "cfd" in
+         let cfg := fresh "cfg" in
+         destruct c as [ct cfd cfg];
+         destruct ct; destruct_pay cfg
+  end.
+
+Ltac remove_redundant_ktr :=
+  unfold NIExists.ktr in *;
+  match goal with
+  | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
+      H' : Reflex.ktr _ _ _ _ ?s = inhabits ?tr' |- _ ]
+    => rewrite H' in H; apply pack_injective in H; subst tr
+  end.
+
+Ltac uninhabit :=
+  match goal with
+  | [ H : inhabits _ = inhabits ?tr |- _ ]
+    => apply pack_injective in H; subst tr
+  end.
+
+Ltac subst_inter_st :=
+  match goal with
+  | [ _ : ?s = mk_inter_ve_st _ _ _ _ _ _ _ _ |- _ ]
+    => subst s
+  end.
+
+Ltac destruct_comp_var :=
+  match goal with
+  | [ cp : sigT (fun (c : Reflex.comp _ _) => _) |- _ ]
+    => let pf := fresh "pf" in
+       let ct := fresh "ct" in
+       let f := fresh "f" in
+       let cfg := fresh "cfg" in
+       destruct cp as [ [ct f cfg] pf];
+       destruct ct; try discriminate
+       (*discriminate prunes impossible ctypes*)
+  end.
+
+Ltac destruct_state :=
+  match goal with
+  |- context[kst _ _ _ _ ?s]
+    => let kvars := fresh "kvars" in
+       set (kvars:=kst _ _ _ _ s);
+       destruct_pay kvars;
+       repeat destruct_comp_var; simpl
+  end.
+
+Ltac destruct_cond :=
+match goal with
+|- context[ if ?e then _ else _ ] => destruct e
+end.
+
+Ltac vars_eq_tac :=
+  match goal with
+  | [ Hvars :  vars_eq _ _ _ _ _ _ _ |- _ ]
+    => solve [ unfold vars_eq; simpl; auto
+      | unfold vars_eq; simpl; inversion Hvars; auto ]
+  end.
+
+Ltac state_var_branch :=
+  match goal with
+  | [ Hout : high_out_eq _ _ _ _ ?s1 ?s2 _,
+      Hvars : vars_eq _ _ _ _ ?s1 ?s2 _ |- _ ]
+    => match goal with
+       | [ _ : Reflex.ktr _ _ _ _ s1 = inhabits ?tr1,
+           _ : Reflex.ktr _ _ _ _ s2 = inhabits ?tr2 |- _ ]
+         => rewrite Hout with (tr:=tr1) (tr':=tr2); auto;
+            inversion Hvars; auto
+       end
+  end.
+
+Ltac ho_eq_tac tac Hlblr :=
+  unfold high_out_eq; simpl; intros;
+  repeat remove_redundant_ktr;
+  repeat uninhabit; simpl;
+  simpl in Hlblr; try rewrite Hlblr;
+  try solve[tac | destruct_cond; tac
+    | state_var_branch | repeat destruct_state; tac]
+  (*destruct_state is expensive, so try it only as
+     a last resort*).
+
+Ltac destruct_ite :=
+  match goal with
+  |- context[ ite _ _ _ ]
+    => unfold kstate_run_prog;
+       unfold hdlr_state_run_cmd; simpl;
+       repeat destruct_cond
+  end.
+
+Ltac ho_eq_solve_low :=
+  simpl; auto.
+
+Ltac low_step :=
+  unfold low_ok; intros;
+  match goal with
+  | [ Hve : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+      Hlow : _ = false |- _ ]
+    => destruct_msg; destruct_comp; try discriminate;
+       try solve [eapply prune_nop_1; eauto];
+       inversion Hve; repeat subst_inter_st; simpl;
+       try destruct_ite; split;
+       try abstract (
+       match goal with
+       | [ |- high_out_eq _ _ _ _ _ _ _ ]
+         => ho_eq_tac ho_eq_solve_low Hlow
+       | [ |- vars_eq _ _ _ _ _ _ _ ]
+         => auto
+       | _ => idtac
+       end)
+  end.
+
+Ltac ho_eq_solve_high :=
+  repeat match goal with
+         | [ |- _::_ = _::_ ] => f_equal; auto
+         | _ => auto
+         end.
+
+Ltac high_steps :=
+  unfold high_ok; intros;
+  match goal with
+  | [ Hve1 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+      Hve2 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+      Hhigh : _ = true |- _ ]
+    => destruct_msg; destruct_comp; try discriminate;
+       try solve [eapply prune_nop_2; eauto];
+       inversion Hve1; inversion Hve2;
+       repeat subst_inter_st; simpl;
+       try destruct_ite; split;
+       try abstract (
+       match goal with
+       | [ |- high_out_eq _ _ _ _ _ _ _ ]
+         => ho_eq_tac ho_eq_solve_high Hhigh
+       | [ |- vars_eq _ _ _ _ _ _ _ ]
+         => vars_eq_tac
+       | _ => idtac
+       end)
+  end.
+
+Ltac ni :=
+  intros; apply ni_suf; [low_step | high_steps].
+
+(*Policy language tactics*)
+
+Ltac destruct_ite_pol :=
+  match goal with
+  |- context[ ite _ _ _ ]
+    => unfold kstate_run_prog in *;
+       unfold hdlr_state_run_cmd in *; simpl in *;
+       repeat destruct_cond
+  end.
+
+Ltac unpack :=
+  match goal with
+  | [ H : Reflex.InitialState _ _ _ _ _ _ _ _ ?s |- _ ]
+    => inversion H;
+       match goal with
+       | [ _ : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _ |- _ ]
+         => subst s'; subst s
+       end
+  | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
+    => destruct_msg; destruct_comp; inversion H;
+       match goal with
+       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _ |- _ ]
+         => subst s'; subst s
+       end
+  | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
+    => inversion H; subst s
+  end; simpl; try destruct_ite_pol; simpl; intros; uninhabit.
+
+Ltac clear_useless_hyps :=
+  repeat match goal with
+         | [ s : Reflex.kstate _ _ _ _ |- _ ]
+           => match goal with
+              | [ H : s = _ |- _ ]
+                => clear H
+              | [ H : _ = s |- _ ]
+                => clear H
+              end
+         | [ H : _ = _ |- _ ]
+           => revert H
+         | [ H : _ <> _ |- _ ]
+           => revert H
+         | [ H : Reflex.Reach _ _ _ _ _ _ _ _ _ |- _ ]
+           => revert H
+         | [ H : In _ _ |- _ ]
+           => revert H
+         | _
+           => idtac
+         end; clear; intros.
+
+Ltac destruct_unpack :=
+  match goal with
+  | [ m : msg _ |- _ ]
+      => destruct_msg; unpack
+  | _
+      => unpack
+  end.
+
+Ltac subst_states :=
+  repeat match goal with
+         | [ s : kstate _ _ _ _ |- _ ]
+             => match goal with
+                | [ _ : s = _ |- _ ]
+                    => subst s
+                end
+         | [ s : init_state _ _ _ _ _ |- _ ]
+             => match goal with
+                | [ _ : s = _ |- _ ]
+                    => subst s
+                end
+         end.
+
+Ltac subst_assignments :=
+  repeat match goal with
+         | [ a := _ |- _ ]
+           => subst a
+         end.
+
+Lemma and_not_decide : forall P Q, decide P -> ~(P /\ Q) -> ~P \/ ~Q.
+intros P Q dP H.
+apply not_and in H.
+auto.
+unfold decidable; destruct dP; auto.
+Qed.
+
+Ltac get_decide P :=
+  match P with
+  | ?a = _ => match type of a with
+             | str => apply str_eq
+             | num => apply num_eq
+             | fd => apply fd_eq
+             end
+  | _ => auto
+  end.
+
+Ltac destruct_neg_conjuncts H :=
+  match type of H with
+  | ~(?P /\ _) => let R := fresh "R" in
+                  apply and_not_decide in H;
+                  [ destruct H as [ | R ];
+                    [ | destruct_neg_conjuncts R ] | get_decide P ]
+  | _ => idtac
+  end.
+
+Ltac destruct_action_matches :=
+  repeat match goal with
+         | [ H : ActionMatch.AMatch _ _ _ _ ?future ?act |- _ ]
+           => compute in H (*maybe produces a conjunction of Props*);
+              decompose [and] H
+         | [ H : ~ActionMatch.AMatch _ _ _ _ ?future ?act |- _ ]
+           => compute in H
+              (*maybe produces a negated conjunction of decidable Props*);
+              destruct_neg_conjuncts H
+         end.
+
+Lemma cut_exists : forall nb_msg plt compt comps act disj_R conj_R,
+  (exists past : @Reflex.KAction nb_msg plt compt comps, (disj_R past) /\ (conj_R past)) ->
+  exists past, (act = past \/ disj_R past) /\ (conj_R past).
+Proof.
+  intros nb_msg plt compt comps act disj_R conj_R H.
+  destruct H.
+  exists x.
+  destruct H.
+  auto.
+Qed.
+
+Ltac releaser_match :=
+  simpl;
+  repeat match goal with
+         | [ |- exists past : Reflex.KAction _ _ _, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
+           => (exists act; compute; tauto) ||
+              apply cut_exists
+         end.
+
+Ltac use_IH_releases :=
+  match goal with
+  | [ IHReach : context[ exists past : Reflex.KAction _ _ _, _ ] |- _ ]
+    => repeat apply cut_exists; apply IHReach; auto
+  end.
+
+Ltac reach_induction :=
+  intros;
+  match goal with
+  | [ _ : Reflex.ktr _ _ _ _ _ = inhabits ?tr, H : Reflex.Reach _ _ _ _ _ _ _ _ _ |- _ ]
+      => generalize dependent tr; induction H; unpack
+         (*Do not put simpl anywhere in here. It breaks destruct_unpack.*)
+  end.
+
+Ltac impossible :=
+  try discriminate; try contradiction;
+  match goal with
+  | [ H : _ = _ |- _ ] => contradict H; solve [auto]
+  | [ H : _ <> _ |- _ ] => contradict H; solve [auto]
+  end.
+
+Ltac exists_past :=
+  destruct_action_matches;
+  (*There may be conditions on s' (the intermediate state). We want
+    to use these conditions to derive conditions on s.*)
+  (*subst_states;*)
+  (*Try to match stuff at head of trace.*)
+  releaser_match;
+  (*This may not clear the old induction hypothesis. Does it matter?*)
+  clear_useless_hyps;
+  (*Should this take s as an argument?*)
+  reach_induction;
+  match goal with
+  | [ _ : Reflex.InitialState _ _ _ _ _ _ _ _ _ |- _ ]
+    => try subst; simpl in *;
+       try solve [ impossible
+                 | releaser_match ]
+  | [ _ : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
+    => try subst; simpl in *;
+       try solve [ impossible
+                 | use_IH_releases
+                 | releaser_match
+                 (*| exists_past*)]
+        (*destruct_eq might have created contradictions
+           with previous calls of destruct_eq*)
+  | [ _ : Reflex.BogusExchange _ _ _ _ _ _ _ _ |- _ ]
+    => try subst; simpl in *; use_IH_releases
+  | _ => idtac
+  end.
+
+Ltac match_releases :=
+  match goal with
+  | [ |- Enables _ _ _ _ _ _ nil ]
+      => constructor
+  (* Induction hypothesis.*)
+  | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
+      IH : forall tr', Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
+                       Enables _ _ _ _ ?past ?future tr'
+                       |- Enables _ _ _ _ ?past ?future ?tr ]
+      => auto
+  (*Branch on whether the head of the trace matches.*)
+  | [ |- Enables ?pdv ?compt ?comps ?comptdec _ ?future (?act::_) ]
+      => (*let s := match goal with
+                  | [ _ : ktr _ _ _ _ ?s = inhabits _ |- _ ]
+                      => s
+                  | [ s : init_state _ _ _ _ _ |- _ ]
+                      => s
+                  end in*)
+         let H := fresh "H" in
+         pose proof (decide_act pdv compt comps comptdec future act) as H;
+         destruct H;
+         [ first [ contradiction | destruct_action_matches; contradiction |
+           (apply E_future; [ match_releases | try exists_past ]) ]
+         | first [ contradiction | destruct_action_matches; contradiction |
+           (apply E_not_future; [ match_releases | assumption ]) ] ]
+         (*In some cases, one branch is impossible, so contradiction
+           solves the goal immediately.
+           In other cases, there are variables in the message payloads,
+           so both branches are possible.*)
+  end.
+
+Ltac act_match :=
+  match goal with
+  | [ |- AMatch ?pdv ?compt ?comps ?comptdec ?oact ?act ]
+      => let H := fresh "H" in
+         pose proof (decide_act pdv compt comps comptdec oact act) as H;
+         destruct H; [ assumption | contradiction ]
+  end.
+
+Ltac match_immbefore :=
+  match goal with
+  | [ |- ImmBefore _ _ _ _ _ _ nil ]
+      => constructor
+  (*Induction hypothesis*)
+  | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
+      IH : forall tr', Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
+                       ImmBefore _ _ _ _ ?oact_b ?oact_a tr'
+                       |- ImmBefore _ _ _ _ ?oact_b ?oact_a ?tr ]
+      => auto
+  | [ |- ImmBefore ?pdv ?compt ?comps ?comptdec _ ?oact_a (?act::_) ]
+     => let H := fresh "H" in
+        pose proof (decide_act pdv compt comps comptdec oact_a act) as H;
+        destruct H;
+        [ contradiction ||
+          (apply IB_A; [ match_immbefore | act_match ])
+        | contradiction ||
+          (apply IB_nA; [ match_immbefore | assumption ]) ]
+         (*In some cases, one branch is impossible, so contradiction
+           solves the goal immediately.
+           In other cases, there are variables in the message payloads,
+           so both branches are possible.*)
+  end.
+
+Ltac crush :=
+  reach_induction;
+  match goal with
+  | [ |- ImmBefore _ _ _ _ _ _ _ ]
+     => try abstract match_immbefore
+  | [ |- Enables _ _ _ _ _ _ _ ]
+     => try abstract match_releases
+  end.
 
 End MkLanguage.
 
@@ -107,20 +571,10 @@ Notation " [ ] " := nil.
 Notation " [ x ] " := (cons x nil).
 Notation " [ x ; .. ; y ] " := (cons x .. (cons y nil) ..).
 
-Definition cast_m_expr
-  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p d}
-  (EQ : Build_msg PAYD t p = m)
-  (e : expr COMPT (hdlr_term PAYD COMPT COMPS KSTD cc (Build_msg PAYD t p) envd) d)
-  : expr COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m envd) d
-  :=
-  match EQ in _ = _m return expr _ (hdlr_term _ _ _ _ _ _m _) _ with
-  | Logic.eq_refl => e
-  end.
-
-Definition mvar
-  {NB_MSG COMPT COMPS} {PAYD : vvdesc NB_MSG} {KSTD envd} {m : msg PAYD} {cc t p}
-  (EQ : Build_msg PAYD t p = m) i :=
-  cast_m_expr EQ (Term _ _ (MVar PAYD COMPT COMPS KSTD cc (Build_msg PAYD t p) envd i)).
+Notation "<< n & e >>" := (existT _ n e)
+ (n at level 59, e at level 39) : hdlr.
+Notation "[[ e : c ]]" := (existT _ e c)
+ (c at level 59, e at level 39) : hdlr.
 
 Delimit Scope fin_scope with fin.
 

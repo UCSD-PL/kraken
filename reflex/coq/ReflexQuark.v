@@ -22,7 +22,15 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 11.
+Definition NB_MSG : nat := 13.
+
+(*Cookies:
+For now, we won't have cookies go through the kernel. Instead, when
+a tab is spawned for a new domain, a new cookie proc will be spawned for that
+domain. The fd for that cookie proc will be sent to the tab and the fd for the
+tab will be sent to the cookie proc. Each subsequent tab spawned for that domain
+will be sent the fd of the cookie proc and the cookie proc will be sent the fd
+of the new tab.*)
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [ ("Display",     [str_d])
@@ -36,6 +44,8 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("MouseClick",  [str_d; str_d; num_d])
   ; ("Go",          [str_d])
   ; ("NewTab",      [])
+  ; ("CProcFD", [fd_d])
+  ; ("TabFD", [fd_d])
   ].
 
 Notation Display     := 0%fin (only parsing).
@@ -49,8 +59,10 @@ Notation KeyPress    := 7%fin (only parsing).
 Notation MouseClick  := 8%fin (only parsing).
 Notation Go          := 9%fin (only parsing).
 Notation NewTab      := 10%fin (only parsing).
+Notation CProcFD     := 11%fin (only parsing).
+Notation TabFD       := 12%fin (only parsing).
 
-Inductive COMPT' : Set := UserInput | Output | Tab | DomainBar.
+Inductive COMPT' : Set := UserInput | Output | Tab | CProc | DomainBar.
 
 Definition COMPT := COMPT'.
 
@@ -63,16 +75,19 @@ Definition COMPS (t : COMPT) : compd :=
   match t with
   | UserInput => mk_compd "UserInput" (test_dir ++ "user-input.py")       [] (mk_vdesc [])
   | Output    => mk_compd "Output"    (test_dir ++ "screen.py")    [] (mk_vdesc [])
-  | Tab       => mk_compd "Tab"       (test_dir ++ "tab.py")     [] (mk_vdesc [str_d])
+  (*A tab's configuration contains it's domain and the fd of its cookie process.*)
+  | Tab       => mk_compd "Tab"       (test_dir ++ "tab.py")     [] (mk_vdesc [str_d; fd_d])
+  | CProc     => mk_compd "CProc"     (test_dir ++ "cproc.py")     [] (mk_vdesc [])
   | DomainBar => mk_compd "DomainBar" (test_dir ++ "domainbar.py") [] (mk_vdesc [])
   end.
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
-  [ Comp _ Output; Comp _ Tab; Comp _ UserInput ].
+  [ Comp _ Output; Comp _ Tab; Comp _ UserInput; Comp _ CProc ].
 
 Notation i_output    := (None) (only parsing).
 Notation i_curtab    := (Some None) (only parsing).
 Notation i_userinput := (Some (Some None)) (only parsing).
+Notation i_cproc := (Some (Some (Some None))) (only parsing).
 
 Definition KSTD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Output; Comp _ Tab ].
@@ -102,12 +117,13 @@ Close Scope char_scope.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
+  seq (spawn _ IENVD CProc     tt                   i_cproc     (Logic.eq_refl _)) (
   seq (spawn _ IENVD Tab       (i_slit default_domain, tt) i_curtab    (Logic.eq_refl _)) (
   seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
   seq (send (i_envvar IENVD i_curtab) Go (i_slit default_url, tt)) (
   seq (stupd _ IENVD v_output (Term _ (base_term _ ) _ (Var _ IENVD i_output))) (
   seq (stupd _ IENVD v_curtab (Term _ (base_term _ ) _ (Var _ IENVD i_curtab))
-  ) nop))))).
+  ) nop)))))).
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=

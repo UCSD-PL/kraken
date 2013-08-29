@@ -33,6 +33,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition spawn := Spawn PAYD COMPT COMPS KSTD.
   Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
+  Definition complkup {term envd}:= CompLkup PAYD COMPT COMPS KSTD term envd.
 
   Definition stvar {cc envd m} v :=
     Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (StVar _ _ _ _ _ _ _ v).
@@ -94,8 +95,8 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   (Term COMPT _ _ (MVar PAYD COMPT COMPS KSTD ct t envd i)).
 
   Definition cconf
-  {envd} {t : fin NB_MSG} ct i :=
-  (Term COMPT _ _ (CConf PAYD COMPT COMPS KSTD ct t envd i)).
+  {envd} {t : fin NB_MSG} ct ct' i ce :=
+  (Term COMPT _ _ (CConf PAYD COMPT COMPS KSTD ct t envd ct' i ce)).
 
 (*Unfortunately, I need to put tactics here because one of them
   must refer to ite in a match.*)

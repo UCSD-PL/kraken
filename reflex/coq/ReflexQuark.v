@@ -22,7 +22,7 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 13.
+Definition NB_MSG : nat := 12.
 
 (*Cookies:
 For now, we won't have cookies go through the kernel. Instead, when
@@ -45,7 +45,6 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("Go",          [str_d])
   ; ("NewTab",      [])
   ; ("CProcFD", [fd_d])
-  ; ("TabFD", [fd_d])
   ].
 
 Notation Display     := 0%fin (only parsing).
@@ -60,7 +59,6 @@ Notation MouseClick  := 8%fin (only parsing).
 Notation Go          := 9%fin (only parsing).
 Notation NewTab      := 10%fin (only parsing).
 Notation CProcFD     := 11%fin (only parsing).
-Notation TabFD       := 12%fin (only parsing).
 
 Inductive COMPT' : Set := UserInput | Output | Tab | CProc | DomainBar.
 
@@ -75,19 +73,17 @@ Definition COMPS (t : COMPT) : compd :=
   match t with
   | UserInput => mk_compd "UserInput" (test_dir ++ "user-input.py")       [] (mk_vdesc [])
   | Output    => mk_compd "Output"    (test_dir ++ "screen.py")    [] (mk_vdesc [])
-  (*A tab's configuration contains it's domain and the fd of its cookie process.*)
-  | Tab       => mk_compd "Tab"       (test_dir ++ "tab.py")     [] (mk_vdesc [str_d; fd_d])
-  | CProc     => mk_compd "CProc"     (test_dir ++ "cproc.py")     [] (mk_vdesc [])
+  | Tab       => mk_compd "Tab"       (test_dir ++ "tab.py")     [] (mk_vdesc [str_d])
+  | CProc     => mk_compd "CProc"     (test_dir ++ "cproc.py")     [] (mk_vdesc [str_d])
   | DomainBar => mk_compd "DomainBar" (test_dir ++ "domainbar.py") [] (mk_vdesc [])
   end.
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
-  [ Comp _ Output; Comp _ Tab; Comp _ UserInput; Comp _ CProc ].
+  [ Comp _ Output; Comp _ Tab; Comp _ UserInput ].
 
-Notation i_output    := (None) (only parsing).
-Notation i_curtab    := (Some None) (only parsing).
-Notation i_userinput := (Some (Some None)) (only parsing).
-Notation i_cproc := (Some (Some (Some None))) (only parsing).
+Notation i_output    := 0%fin (only parsing).
+Notation i_curtab    := 1%fin (only parsing).
+Notation i_userinput := 2%fin (only parsing).
 
 Definition KSTD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Output; Comp _ Tab ].
@@ -117,28 +113,35 @@ Close Scope char_scope.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
-  seq (spawn _ IENVD CProc     tt                   i_cproc     (Logic.eq_refl _)) (
   seq (spawn _ IENVD Tab       (i_slit default_domain, tt) i_curtab    (Logic.eq_refl _)) (
   seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
   seq (send (i_envvar IENVD i_curtab) Go (i_slit default_url, tt)) (
   seq (stupd _ IENVD v_output (Term _ (base_term _ ) _ (Var _ IENVD i_output))) (
   seq (stupd _ IENVD v_curtab (Term _ (base_term _ ) _ (Var _ IENVD i_curtab))
-  ) nop)))))).
+  ) nop))))).
+
+Definition cur_tab_dom {t envd} :=
+  cconf (envd:=envd) (t:=t) Tab Tab 0%fin (CComp PAYD COMPT COMPS KSTD Tab t envd).
 
 Open Scope hdlr.
+Print complkup.
+Print mk_comp_pat.
+Print sdenote_desc_cfg_pat.
+Print payload_expr.
+Print expr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun t ct =>
   match ct as _ct, t as _t return
     {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
   with
-  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))) =>
+  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad))))))))))) =>
     match bad with end
 
   | Tab, ReqSocket =>
     [[ mk_vcdesc [] :
         ite (eq ccomp (stvar v_curtab))
             (
-              ite (eq (dom (mvar ReqSocket None)) (cconf Tab None))
+              ite (eq (dom (mvar ReqSocket None)) cur_tab_dom)
                   (
                     nop
                   )
@@ -163,7 +166,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | Tab, ReqResource =>
       let envd := mk_vcdesc [Desc _ fd_d] in
       [[ envd :
-         ite (eq (dom (mvar ReqResource None)) (cconf Tab None))
+         ite (eq (dom (mvar ReqResource None)) cur_tab_dom)
              (
                seq (call _ envd (slit (str_of_string (test_dir ++ "wget.py")))
                                  [mvar ReqResource None] None (Logic.eq_refl _))
@@ -174,6 +177,19 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                nop
              )
        ]]
+  | Tab, CProcFD =>
+      let envd := mk_vcdesc [Comp _ CProc] in
+      [[ envd :
+        complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some cur_tab_dom, tt))
+                 (send (ct:=CProc) (term:=mk_vcdesc [Comp _ CProc; Comp _ CProc])
+                   (envd:=hdlr_term SystemFeatures.PAYD
+                   SystemFeatures.COMPT SystemFeatures.COMPS
+                   SystemFeatures.KSTD Tab CProcFD)
+                   (envvar (cc:=Tab) (m:=CProcFD) (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
+                   CProcFD (mvar CProcFD 0%fin, tt))
+                 (seq (spawn _ envd CProc (cur_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
+                      (send (envvar envd 0%fin) CProcFD (mvar CProcFD 0%fin, tt))))
+      ]]
   | UserInput, KeyPress =>
       [[ mk_vcdesc [] :
       seq (send (stvar v_curtab) KeyPress (mvar KeyPress None, tt))
@@ -285,23 +301,133 @@ Definition clblr d (c : comp COMPT COMPS) :=
   with
   | Build_comp Tab _ cfg =>
     let cfgd := comp_conf_desc COMPT COMPS Tab in
-    if str_eq (dom' (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
-                               cfg None)) d
+    if str_eq (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
+                               cfg None) d
+    then true
+    else false
+  | Build_comp CProc _ cfg =>
+    let cfgd := comp_conf_desc COMPT COMPS Tab in
+    if str_eq (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
+                               cfg None) d
     then true
     else false
   | Build_comp UserInput _ _ => true
   | _ => false
   end.
 
+Lemma find_comp_suc_match :
+  forall COMPT COMPTDEC COMPS cp cs c,
+  find_comp COMPT COMPTDEC COMPS cp cs = Some c ->
+  match_comp COMPT COMPTDEC COMPS cp (projT1 c) = true.
+Proof.
+  intros COMPT COMPTDEC COMPS cp cs c Hfind.
+  induction cs; simpl in Hfind.
+    discriminate.
+
+    destruct (match_comp_pf COMPT COMPTDEC COMPS cp a)
+      as [? | ?]_eqn.
+      unfold match_comp. inversion Hfind. rewrite <- H0.
+      simpl. rewrite Heqo. auto.
+
+      auto.
+Qed.
+
 Definition vlblr (f : fin (projT1 KSTD)) := true.
 
 Local Opaque str_of_string.
 
-(*Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
+Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS (clblr d) vlblr.
 Proof.
   ni.
-Qed.*)
+
+unfold complkup. unfold kstate_run_prog. simpl.
+match goal with
+|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+  => destruct (find_comp a b c d e) as [? | ?]_eqn
+end; simpl; unfold high_out_eq; simpl; intros;
+repeat uninhabit; unfold ktr in *; rewrite H2 in H3; uninhabit.
+simpl in *.
+destruct s1. simpl. unfold clblr. destruct x. destruct comp_type; try discriminate.
+simpl in *.
+match goal with
+| [ Heqo : find_comp _ _ _ ?cp_f _ = _ |- _ ]
+  => apply find_comp_suc_match with (cp:=cp_f) in Heqo
+end.
+unfold match_comp, match_comp_pf in Heqo. simpl in Heqo.
+destruct comp_conf0. simpl in *. unfold dom'. simpl. destruct (str_eq a0 s1);
+destruct (str_eq a0 d); simpl in *; try discriminate. rewrite <- e0.
+destruct (str_eq a0 d); try contradiction. auto.
+
+simpl in *. destruct (str_eq a0 d); try discriminate. auto.
+
+unfold complkup. unfold kstate_run_prog. simpl.
+match goal with
+|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+  => destruct (find_comp a b c d e) as [? | ?]_eqn
+end; simpl; unfold vars_eq; simpl; auto.
+
+unfold complkup. unfold kstate_run_prog. simpl. unfold eval_hdlr_comp_pat. simpl.
+unfold eval_hdlr_payload_oexpr. simpl. unfold eval_payload_oexpr. simpl.
+erewrite hout_eq_find_eq with (s':=s2); eauto.
+match goal with
+|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+  => destruct (find_comp a b c d e) as [? | ?]_eqn
+end; simpl; unfold high_out_eq; simpl; intros;
+repeat uninhabit; simpl in *.
+destruct s3. simpl. unfold clblr. destruct x. destruct comp_type; try discriminate.
+match goal with
+| [ Heqo : find_comp _ _ _ ?cp_f _ = _ |- _ ]
+  => apply find_comp_suc_match with (cp:=cp_f) in Heqo
+end.
+unfold match_comp, match_comp_pf in Heqo. simpl in Heqo.
+destruct comp_conf0. simpl in *. simpl.
+destruct (str_eq a0 s3); destruct (str_eq a0 d); simpl in *; try discriminate.
+rewrite <- e0.
+destruct (str_eq a0 d); try contradiction.
+f_equal. apply H0; auto.
+
+rewrite H. f_equal. f_equal. apply H0; auto.
+
+unfold high_comp_pat. unfold clblr. unfold match_comp. simpl.
+unfold match_comp_pf. simpl. intros c Hmatch. destruct c. destruct comp_type; try discriminate.
+destruct comp_conf0. simpl in *. destruct (str_eq a0 s3); simpl in *; try discriminate.
+rewrite <- e. destruct (str_eq a0 d); try discriminate; auto.
+
+unfold complkup. unfold kstate_run_prog. simpl.
+repeat match goal with
+|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+  => destruct (find_comp a b c d e) as [? | ?]_eqn
+end; simpl; unfold vars_eq; simpl; auto.
+Qed.
+
+(*
+simpl in *. destruct s3. simpl. unfold clblr. destruct x. destruct comp_type; try discriminate.
+auto.
+
+simpl in *. destruct s3. simpl. unfold clblr. destruct x. destruct comp_type; try discriminate.
+auto.
+
+simpl in *. auto.
+
+unfold complkup. unfold kstate_run_prog. simpl.
+repeat match goal with
+|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+  => destruct (find_comp a b c d e) as [? | ?]_eqn
+end; simpl; unfold vars_eq; simpl; auto.
+
+
+
+apply find_comp_suc_match with
+  (cp:=(mk_comp_pat
+    (hdlr_term SystemFeatures.PAYD SystemFeatures.COMPT
+      SystemFeatures.COMPS SystemFeatures.KSTD Tab 11%fin)
+    (mk_vcdesc [Comp COMPT' CProc]) CProc 
+    (Some cur_tab_dom, tt))) 
+  in Heqo.
+simpl in Heqo.
+destruct s1.
+*)
 
 End Spec.
 

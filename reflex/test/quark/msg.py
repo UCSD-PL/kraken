@@ -94,7 +94,7 @@ def recv():
     5 : lambda : [ResSocket, recv_str()],
     6 : lambda : [SetDomain, recv_str()],
     7 : lambda : [KeyPress, recv_str()],
-    8 : lambda : [MouseClick, recv_str()],
+    8 : lambda : [MouseClick, recv_str(), recv_str(), recv_num()],
     9 : lambda : [Go, recv_str()],
    10 : lambda : [NewTab]
   }[tag]()
@@ -112,7 +112,7 @@ def send(*m):
     ResSocket   : lambda : [send_num(5), send_str(m[1])],
     SetDomain   : lambda : [send_num(6), send_str(m[1])],
     KeyPress    : lambda : [send_num(7), send_str(m[1])],
-    MouseClick  : lambda : [send_num(8), send_str(m[1])],
+    MouseClick  : lambda : [send_num(8), send_str(m[1]), send_str(m[2]), send_num(m[3])],
     Go          : lambda : [send_num(9), send_str(m[1])],
     NewTab      : lambda : [send_num(10)]
   }[tag]()

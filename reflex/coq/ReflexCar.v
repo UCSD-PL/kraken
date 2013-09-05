@@ -126,7 +126,7 @@ Local Opaque str_of_string.
 Theorem ni : NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS clblr vlblr.
 Proof.
-  ni.
+  Time ni.
 Qed.
 
 End Spec.

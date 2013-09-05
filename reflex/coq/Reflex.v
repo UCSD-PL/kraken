@@ -324,25 +324,26 @@ Definition in_if_fd_desc {n} {vd:svec desc n} (v:s[[vd]]) i fds : Prop :=
   | _    => fun _ => True
   end (shvec_ith sdenote_desc vd v i).
 
+Definition vdesc_fds_all_in {vd:vdesc} (v:s[[vd]]) fds :=
+  forall i, in_if_fd_desc v i fds.
+
+Definition comp_fds_in c fds :=
+  In (comp_fd c) fds /\ vdesc_fds_all_in (comp_conf c) fds.
+
 Definition in_if_fd_cdesc {n} {vd:svec cdesc n} (v:s[[vd]]) i fds : Prop :=
   match svec_ith vd i as __d return s[[__d]] -> Prop with
   | Desc d => match d as __d return s[[__d]] -> Prop with
               | fd_d => fun ith => In ith fds
               | _    => fun _ => True
               end
-  | Comp c => fun ith => In (comp_fd (projT1 ith)) fds
+  | Comp c => fun ith => comp_fds_in (projT1 ith) fds
   end (shvec_ith sdenote_cdesc vd v i).
-
-Definition vdesc_fds_all_in {vd:vdesc} (v:s[[vd]]) fds :=
-  forall i, in_if_fd_desc v i fds.
 
 Definition vcdesc_fds_all_in {vd:vcdesc} (v:s[[vd]]) fds :=
   forall i, in_if_fd_cdesc v i fds.
 
 Definition all_comp_fds_in cs fds :=
-  forall c, In c cs -> In (comp_fd c) fds /\ vdesc_fds_all_in (comp_conf c) fds.
-(*List.Forall
-  (fun x => In (comp_fd x) fds /\ vdesc_fds_all_in (comp_conf x) fds) cs.*)
+  forall c, In c cs -> comp_fds_in c fds.
 
 Definition recv_payload' :
   forall (f : fd) (n : nat) (pd : vdesc' n) (tr : [Trace]),
@@ -736,8 +737,9 @@ Inductive base_term envd : cdesc -> Set :=
 Inductive hdlr_term (ct : COMPT) (tag : fin NB_MSG) envd : cdesc -> Set :=
 | Base  : forall {d}, base_term envd d -> hdlr_term ct tag envd d
 | CComp   : hdlr_term ct tag envd (Comp ct)
-| CConf : forall (i : fin (projT1 (comp_conf_desc ct))),
-            hdlr_term ct tag envd (Desc (svec_ith (projT2 (comp_conf_desc ct)) i))
+| CConf : forall ct' (i : fin (projT1 (comp_conf_desc ct'))),
+            hdlr_term ct tag envd (Comp ct') ->
+            hdlr_term ct tag envd (Desc (svec_ith (projT2 (comp_conf_desc ct')) i))
 | MVar  : forall (i : fin (projT1 (lkup_tag tag))),
             hdlr_term ct tag envd (Desc (svec_ith (projT2 (lkup_tag tag)) i))
 | StVar : forall (i : fin KSTD_SIZE), hdlr_term ct tag envd (svec_ith KSTD_DESC i)
@@ -775,6 +777,31 @@ Fixpoint payload_expr' envd (n : nat) (pd : vdesc' n) : Type :=
 
 Definition payload_expr envd pd := payload_expr' envd (projT1 pd) (projT2 pd).
 
+Fixpoint payload_oexpr' envd (n : nat) (pd : vdesc' n) : Type :=
+  match n as _n return vdesc' _n -> Type with
+  | O => fun p => unit
+  | S n' => fun (pd : vdesc' (S n')) =>
+    match pd with
+    | (d, pd') => option (expr envd (Desc d)) * payload_oexpr' envd n' pd'
+    end
+  end%type pd.
+
+Definition payload_oexpr envd pd := payload_oexpr' envd (projT1 pd) (projT2 pd).
+
+Definition sdenote_desc_cfg_pat envd (d : desc) : Set := option (expr envd (Desc d)).
+
+Record comp_pat envd : Type :=
+{ comp_pat_type : COMPT
+; comp_pat_conf : payload_oexpr envd (comp_conf_desc comp_pat_type)
+}.
+
+Definition sdenote_desc_conc_pat (d : desc) : Set := option (s[[ d ]]).
+
+Record conc_pat : Set :=
+{ conc_pat_type : COMPT
+; conc_pat_conf : shvec sdenote_desc_conc_pat (projT2 (comp_conf_desc conc_pat_type))
+}.
+
 Section WITH_PROG_KST.
 
 Variable KST : s[[ KSTD ]].
@@ -789,12 +816,19 @@ Fixpoint eval_base_term {d} {envd : vcdesc} (env : s[[envd]]) (t : base_term env
   | CompFd ct t' => comp_fd (projT1 (eval_base_term env t'))
   end.
 
-Definition eval_hdlr_term {d envd} (t : hdlr_term CT CTAG envd d) env
+Fixpoint eval_hdlr_term {d envd} (t : hdlr_term CT CTAG envd d) env
   : s[[ d ]] :=
   match t with
   | Base _ bt => eval_base_term env bt
   | CComp       => existT _ CC (Logic.eq_refl CT)
-  | CConf i   => shvec_ith _ (projT2 CCONFD) (comp_conf CC) i
+  | CConf ct i c   => let cp := eval_hdlr_term c env in
+    match (projT2 cp) in _ = _ct return
+      forall (_i:fin (projT1 (comp_conf_desc _ct))),
+        s[[svec_ith (projT2 (comp_conf_desc _ct)) _i]]
+    with
+    | Logic.eq_refl => fun i =>
+      shvec_ith _ _ (comp_conf (projT1 cp)) i
+    end i
   | MVar i    => shvec_ith _ (projT2 CPAY) (pay CMSG) i
   | StVar i   => shvec_ith _ (projT2 KSTD) KST i
   end.
@@ -811,6 +845,12 @@ Fixpoint eval_expr {d envd} env (e : expr envd d) : s[[ d ]] :=
     let v1 := eval_expr env e1 in
     let v2 := eval_expr env e2 in
     eval_binop op v1 v2
+  end.
+
+Definition eval_oexpr {d envd} env (e : option (expr envd d)) : option s[[ d ]] :=
+  match e with
+  | Some e => Some (eval_expr env e)
+  | None   => None
   end.
 
 Fixpoint eval_payload_cexpr' envd env (n : nat) :
@@ -841,27 +881,31 @@ Fixpoint eval_payload_expr' envd env (n : nat) :
       (eval_expr env v, eval_payload_expr' envd env n' pd' e')
   end.
 
+Fixpoint eval_payload_oexpr' envd env (n : nat) :
+  forall (pd : vdesc' n), payload_oexpr' envd n pd -> shvec sdenote_desc_conc_pat pd :=
+  let res n pd := payload_oexpr' envd n pd -> shvec sdenote_desc_conc_pat pd in
+  match n as _n return
+    forall (pd : vdesc' _n), res _n pd
+  with
+  | O => fun _ _ => tt
+  | S n' => fun pd =>
+    let (d, pd') as _pd return res (S n') _pd := pd in
+    fun e =>
+      let (v, e') := e in
+      (eval_oexpr env v, eval_payload_oexpr' envd env n' pd' e')
+  end.
+
 Definition eval_payload_cexpr envd env (pd : vcdesc) (e : payload_cexpr envd pd) : s[[ pd ]] :=
   eval_payload_cexpr' envd env (projT1 pd) (projT2 pd) e.
 
 Definition eval_payload_expr envd env (pd : vdesc) (e : payload_expr envd pd) : s[[ pd ]] :=
   eval_payload_expr' envd env (projT1 pd) (projT2 pd) e.
 
-Definition sdenote_desc_cfg_pat envd (d : desc) : Set := option (expr envd (Desc d)).
+Definition eval_payload_oexpr envd env (pd : vdesc) (e : payload_oexpr envd pd)
+  : shvec sdenote_desc_conc_pat (projT2 pd) :=
+  eval_payload_oexpr' envd env (projT1 pd) (projT2 pd) e.
 
-Record comp_pat envd : Set :=
-{ comp_pat_type : COMPT
-; comp_pat_conf : shvec (sdenote_desc_cfg_pat envd) (projT2 (comp_conf_desc comp_pat_type))
-}.
-
-Definition sdenote_desc_conc_pat (d : desc) : Set := option (s[[ d ]]).
-
-Record conc_pat : Set :=
-{ conc_pat_type : COMPT
-; conc_pat_conf : shvec sdenote_desc_conc_pat (projT2 (comp_conf_desc conc_pat_type))
-}.
-
-Definition elt_match envd env (d : desc) (elt : s[[d]]) (elt' : sdenote_desc_cfg_pat envd d) : bool :=
+Definition elt_match (d : desc) (elt : s[[d]]) (elt' : sdenote_desc_conc_pat d) : bool :=
   match elt' with
   | None   => true
   | Some x =>
@@ -869,46 +913,46 @@ Definition elt_match envd env (d : desc) (elt : s[[d]]) (elt' : sdenote_desc_cfg
     | num_d => fun elt x => if num_eq x elt then true else false
     | str_d => fun elt x => if str_eq x elt then true else false
     | fd_d  => fun elt x => if fd_eq x elt then true else false
-    end elt (eval_expr env x)
+    end elt x
   end.
 
-Definition match_comp_pf envd env (cp : comp_pat envd) (c : comp)
-  : option (comp_type c = comp_pat_type _ cp) :=
-  match COMPTDEC (comp_type c) (comp_pat_type _ cp) with
+Definition match_comp_pf (cp : conc_pat) (c : comp)
+  : option (comp_type c = conc_pat_type cp) :=
+  match COMPTDEC (comp_type c) (conc_pat_type cp) with
   | left EQ =>
     match EQ in _ = _t return
-      shvec (sdenote_desc_cfg_pat envd) (projT2 (comp_conf_desc _t)) -> _
+      shvec sdenote_desc_conc_pat (projT2 (comp_conf_desc _t)) -> _
     with
     | Logic.eq_refl => fun cfgp =>
       if shvec_match (projT2 (comp_conf_desc (comp_type c)))
-                     sdenote_desc (sdenote_desc_cfg_pat envd)
-                     (elt_match envd env) (comp_conf c) cfgp
+                     sdenote_desc sdenote_desc_conc_pat
+                     elt_match (comp_conf c) cfgp
       then Some EQ
       else None
-    end (comp_pat_conf _ cp)
+    end (conc_pat_conf cp)
   | right _ => None
   end.
 
-Definition match_comp envd env (cp : comp_pat envd) (c : comp) : bool :=
-  if match_comp_pf envd env cp c
+Definition match_comp (cp : conc_pat) (c : comp) : bool :=
+  if match_comp_pf cp c
   then true
   else false.
 
-Fixpoint find_comp envd env (cp : comp_pat envd ) (comps : list comp)
-  : option (sigT (fun c : comp => comp_type c = comp_pat_type _ cp)) :=
+Fixpoint find_comp (cp : conc_pat) (comps : list comp)
+  : option (sigT (fun c : comp => comp_type c = conc_pat_type cp)) :=
   match comps with
   | nil => None
-  | c::comps' => match match_comp_pf envd env cp c with
+  | c::comps' => match match_comp_pf cp c with
                  | Some EQ => Some (existT _ c EQ)
-                 | None    => find_comp envd env cp comps'
+                 | None    => find_comp cp comps'
                  end
   end.
 
-Definition filter_comps envd env (cp : comp_pat envd) (comps : list comp) :=
-  filter (match_comp envd env cp) comps.
+Definition filter_comps (cp : conc_pat) (comps : list comp) :=
+  filter (match_comp cp) comps.
 
-Definition exists_comp envd env (cp : comp_pat envd) (comps : list comp) :=
-  match find_comp envd env cp comps with
+Definition exists_comp (cp : conc_pat) (comps : list comp) :=
+  match find_comp cp comps with
   | None   => false
   | Some _ => true
   end.
@@ -988,6 +1032,13 @@ Definition eval_base_payload_cexpr :=
 Definition eval_base_payload_expr :=
   eval_payload_expr base_term (fun d envd e => @eval_base_term d envd e).
 
+Definition eval_base_payload_oexpr :=
+  eval_payload_oexpr base_term (fun d envd e => @eval_base_term d envd e).
+
+Definition eval_base_comp_pat envd env cp :=
+  {| conc_pat_type := comp_pat_type _ _ cp;
+     conc_pat_conf := eval_base_payload_oexpr envd env _ (comp_pat_conf _ _ cp) |}.
+
 Definition eval_hdlr_expr {d} {envd : vcdesc} (s : s[[KSTD]])
   : s[[envd]] -> expr (hdlr_term CT CTAG) envd d -> s[[ d ]] :=
   eval_expr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
@@ -997,6 +1048,13 @@ Definition eval_hdlr_payload_cexpr s :=
 
 Definition eval_hdlr_payload_expr s :=
   eval_payload_expr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
+
+Definition eval_hdlr_payload_oexpr s :=
+  eval_payload_oexpr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
+
+Definition eval_hdlr_comp_pat s envd env cp :=
+  {| conc_pat_type := comp_pat_type _ _ cp;
+     conc_pat_conf := eval_hdlr_payload_oexpr s envd env _ (comp_pat_conf _ _ cp) |}.
 
 Definition ktrace_send_msgs (cps : list comp) (m : msg) : KTrace :=
   (map (fun c => KSend c m) cps).
@@ -1091,8 +1149,7 @@ Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd bas
      |}
 
   | CompLkup envd cp c1 c2 => fun s i =>
-    let ocdp := find_comp base_term (fun d envd e => @eval_base_term _ _ e) _ (init_env _ s)
-      cp (init_comps _ s) in
+    let ocdp := find_comp (eval_base_comp_pat _ (init_env _ s) cp) (init_comps _ s) in
     match ocdp with
     | Some cdp =>
       let c := projT1 cdp in
@@ -1192,8 +1249,7 @@ Fixpoint hdlr_state_run_cmd (envd : vcdesc) (s : hdlr_state envd) (cmd : cmd (hd
 
   | CompLkup envd cp c1 c2 => fun s i =>
     let (s', env) := s in
-    let ocdp := find_comp (hdlr_term CT CTAG)
-      (fun d envd e t => @eval_hdlr_term (kst s') d envd t e) _ env cp (kcs s') in
+    let ocdp := find_comp (eval_hdlr_comp_pat (kst s') _ env cp) (kcs s') in
     match ocdp with
     | Some cdp =>
       let c := projT1 cdp in
@@ -1622,6 +1678,29 @@ Proof.
   apply SUB. apply FdSet.add_spec. now left.
 Qed.*)
 
+Lemma base_expr_fds_lemma' : forall envd (e : s[[envd]]) fds
+  d (ce : expr base_term envd d),
+  vcdesc_fds_all_in (vd := envd) e fds ->
+  match d as _d return s[[_d]] -> Prop with
+  | Desc d => match d as _d return s[[Desc _d]] -> Prop with
+              | fd_d => fun v => In v fds
+              | _    => fun _ => True
+              end
+  | Comp c => fun v => comp_fds_in (projT1 v) fds
+  end (eval_base_expr e ce).
+Proof.
+  intros envd e fds d ce Hsub.
+  destruct ce.
+    unfold vcdesc_fds_all_in, in_if_fd_cdesc in Hsub.
+    induction b; simpl;
+      try solve [auto |
+        apply Hsub; auto ].
+        apply IHb.
+
+    destruct u; auto.
+    destruct b; auto.
+Qed.
+
 Lemma base_expr_fds_lemma : forall envd (e : s[[envd]]) fds
   d (ce : expr base_term envd d),
   vcdesc_fds_all_in (vd := envd) e fds ->
@@ -1633,25 +1712,9 @@ Lemma base_expr_fds_lemma : forall envd (e : s[[envd]]) fds
   | Comp c => fun v => In (comp_fd (projT1 v)) fds
   end (eval_base_expr e ce).
 Proof.
-  intros envd e fds d ce Hsub.
-  destruct ce.
-    unfold vcdesc_fds_all_in, in_if_fd_cdesc in Hsub.
-    destruct b; simpl;
-      solve [auto |
-        apply Hsub; auto |
-        dependent inversion_clear b with (
-          fun c b =>
-            match c as _c return s[[_c]] -> Prop with
-            | Comp _ => fun v => In (comp_fd (projT1 v)) fds
-            | Desc d => match d as _d return s[[Desc _d]] -> Prop with
-                        | fd_d => fun v => In v fds
-                        | _    => fun _ => True
-                        end
-            end (eval_base_term e b)
-        ); apply Hsub; auto].
-
-    destruct u; auto.
-    destruct b; auto.
+  intros envd e fds d ce Hall_in.
+  pose proof (base_expr_fds_lemma' envd e fds d ce Hall_in) as H'.
+  unfold comp_fds_in in H'. destruct d; intuition.
 Qed.
 
 Lemma base_pl_expr_fds_sub : forall envd (e:s[[envd]]) ct cfge fds,
@@ -1671,6 +1734,33 @@ Proof.
       apply base_expr_fds_lemma with (e:=e) (ce:=cfge0) (fds:=fds); auto.
 Qed.
 
+Lemma hdlr_expr_fds_lemma' : forall cc cm envd (e:s[[envd]]) (st:s[[KSTD]]) fds
+  d (ce : expr (hdlr_term (comp_type cc) (tag cm)) envd d),
+  vcdesc_fds_all_in (vd := envd) e fds ->
+  vcdesc_fds_all_in (vd := KSTD) st fds ->
+  vdesc_fds_all_in (pay cm) fds ->
+  vdesc_fds_all_in (comp_conf cc) fds ->
+  In (comp_fd cc) fds ->
+  match d as _d return s[[_d]] -> Prop with
+  | Desc d => match d as _d return s[[Desc _d]] -> Prop with
+              | fd_d => fun v => In v fds
+              | _    => fun _ => True
+              end
+  | Comp c => fun v => comp_fds_in (projT1 v) fds
+  end (eval_hdlr_expr cc cm st e ce).
+Proof.
+  intros cc cm envd e st fds d ce Hsub_e Hsub_st Hsub_cm Hsub_cc Hcc_in.
+  destruct ce. unfold comp_fds_in.
+    induction h; simpl; auto.
+      apply base_expr_fds_lemma' with (e:=e) (ce:=Term _ _ b) (fds:=fds); auto.
+      destruct (eval_hdlr_term cc cm st h e) as [cp pf]_eqn. simpl.
+      destruct pf. simpl in *. rewrite Heqs in IHh. simpl in *.
+      apply IHh. apply Hsub_cm. apply Hsub_st.
+
+    destruct u; auto.
+    destruct b; auto.
+Qed.
+
 Lemma hdlr_expr_fds_lemma : forall cc cm envd (e:s[[envd]]) (st:s[[KSTD]]) fds
   d (ce : expr (hdlr_term (comp_type cc) (tag cm)) envd d),
   vcdesc_fds_all_in (vd := envd) e fds ->
@@ -1687,36 +1777,9 @@ Lemma hdlr_expr_fds_lemma : forall cc cm envd (e:s[[envd]]) (st:s[[KSTD]]) fds
   end (eval_hdlr_expr cc cm st e ce).
 Proof.
   intros cc cm envd e st fds d ce Hsub_e Hsub_st Hsub_cm Hsub_cc Hcc_in.
-  destruct ce.
-    destruct d; simpl.
-      destruct d; simpl; try solve [auto ].
-        dependent inversion_clear h with (
-        fun c h =>
-          match c as _c return s[[_c]] -> Prop with
-          | Comp _ => fun v => In (comp_fd (projT1 v)) fds
-          | Desc d => match d as _d return s[[Desc _d]] -> Prop with
-                      | fd_d => fun v => In v fds
-                      | _    => fun _ => True
-                      end
-          end (eval_hdlr_term cc cm st h e)
-      ); try (apply base_expr_fds_lemma with (e:=e) (ce:=Term _ _ b) (fds:=fds); auto);
-        unfold vcdesc_fds_all_in, vdesc_fds_all_in, in_if_fd_cdesc, in_if_fd_desc in *;
-          simpl in *; try solve [apply Hsub_cc | apply Hsub_cm | apply Hsub_st].
-        dependent inversion_clear h with (
-        fun c h =>
-          match c as _c return s[[_c]] -> Prop with
-          | Comp _ => fun v => In (comp_fd (projT1 v)) fds
-          | Desc d => match d as _d return s[[Desc _d]] -> Prop with
-                      | fd_d => fun v => In v fds
-                      | _    => fun _ => True
-                      end
-          end (eval_hdlr_term cc cm st h e)
-      ); simpl; try solve [
-         apply base_expr_fds_lemma with (e:=e) (ce:=Term _ _ b) (fds:=fds); auto |
-         auto | apply Hsub_st].
-
-     destruct u; auto.
-     destruct b; auto.
+  pose proof (hdlr_expr_fds_lemma' cc cm envd e st fds d ce Hsub_e
+    Hsub_st Hsub_cm Hsub_cc Hcc_in) as H'. unfold comp_fds_in in H'.
+  destruct d; intuition.
 Qed.
 
 Lemma hdlr_pl_expr_fds_sub : forall cc cm st envd (e:s[[envd]]) ct cfge fds,
@@ -1780,7 +1843,7 @@ Proof.
   pose proof (fin_eq_dec i i') as Hfeq_dec.
   destruct Hfeq_dec as [Hfeq | Hfneq].
     rewrite <- Hfeq. rewrite shvec_ith_replace_ith.
-    apply base_expr_fds_lemma; auto.
+    apply base_expr_fds_lemma'; auto.
 
     rewrite shvec_ith_replace_other; auto.
     apply Hsub_st.
@@ -1801,7 +1864,7 @@ Proof.
   pose proof (fin_eq_dec i i') as Hfeq_dec.
   destruct Hfeq_dec as [Hfeq | Hfneq].
     rewrite <- Hfeq. rewrite shvec_ith_replace_ith.
-    apply hdlr_expr_fds_lemma; auto.
+    apply hdlr_expr_fds_lemma'; auto.
 
     rewrite shvec_ith_replace_other; auto.
     apply Hsub_st.
@@ -1882,100 +1945,6 @@ Proof.
         congruence | apply IHn; congruence].
 Qed.
 
-(*Lemma vcdesc_fds_all_in_rest : forall n (vd : vcdesc' n) vd0
-  (v : sdenote_vcdesc (existT vcdesc' n vd)) v0,
-  vcdesc_fds_all_in v (vcdesc_fds (existT vcdesc' n vd) v) ->
-  vcdesc_fds_all_in v (vcdesc_fds (existT vcdesc' (S n) (vd0, vd)) (v0, v)).
-Proof.
-  intros n vd vd0 v v0 Hrest.
-  unfold vcdesc_fds_all_in in *. intro i.
-  unfold in_if_fd_cdesc, vcdesc_fds in *.
-  destruct vd0; simpl in *.
-    destruct d; simpl in *; try apply Hrest.
-    Check (shvec_ith sdenote_cdesc vd v i).
-    set (d:=svec_ith vd i).
-    dependent inversion d with (
-      fun c:cdesc =>
-        match c as __d return (sdenote_cdesc __d -> Prop) with
-        | Desc d0 =>
-          match d0 as __d return (sdenote_desc __d -> Prop) with
-          | num_d => fun _ : num => True
-          | str_d => fun _ : str => True
-          | fd_d => fun ith : fd => v0 = ith \/ In ith (vcdesc_fds' n vd v)
-          end
-        | Comp c =>
-          fun ith =>
-            v0 = comp_fd (projT1 ith) \/
-            In (comp_fd (projT1 ith)) (vcdesc_fds' n vd v)
-        end (shvec_ith sdenote_cdesc vd v i)
-    ); simpl.
-    dependent inversion (svec_ith vd i).
-    destruct n; simpl in *; intuition.
-    destruct vd as [vd0' vd'].
-    destruct vd0'; simpl in *.
-      destruct d; simpl in *.
-*)
-
-  
-  
-
-(*Lemma vcdesc_fds_all_in_refl : forall vd (v:s[[vd]]),
-  vcdesc_fds_all_in v (vcdesc_fds _ v).
-Proof.
-  intros vd v.
-  destruct vd as [n vd].
-  induction n.
-    unfold vcdesc_fds_all_in. simpl. intuition.
-
-    intro i. destruct i; simpl in *. destruct vd as [vd0 vd']; simpl in *.
-      destruct v as [v0 v']; destruct vd0; simpl in *.
-        destruct d; simpl in *; try apply IHn.
-        specialize (IHn vd' v' f). destruct (svec_ith vd' f).*)
-
-Lemma in_if_fd_cdesc_right' : forall c v f fds,
-  match c as __d return (s[[__d]] -> Prop) with
-  | Desc d =>
-    match d as __d return (s[[__d]] -> Prop) with
-    | num_d => fun _ : s[[num_d]] => True
-    | str_d => fun _ : s[[str_d]] => True
-    | fd_d => fun v : s[[fd_d]] => In v fds
-    end
-  | Comp c => fun v : s[[Comp c]] => In (comp_fd (projT1 v)) fds
-  end v ->
-  match c as __d return (s[[__d]] -> Prop) with
-  | Desc d =>
-    match d as __d return (s[[__d]] -> Prop) with
-    | num_d => fun _ : s[[num_d]] => True
-    | str_d => fun _ : s[[str_d]] => True
-    | fd_d => fun v : s[[fd_d]] => In v (f :: fds)
-    end
-  | Comp c => fun v : s[[Comp c]] => In (comp_fd (projT1 v)) (f :: fds)
-  end v.
-Proof.
-  intros c v f fds Hin.
-  destruct c as [d | c].
-    destruct d; simpl; auto.
-
-    simpl; auto.
-Qed.
-
-Lemma in_if_fd_cdesc_right : forall n (vd:svec cdesc n) (v:s[[vd]]) i f fds,
-  in_if_fd_cdesc v i fds -> in_if_fd_cdesc v i (f :: fds).
-Proof.
-  intros n vd v i f fds Hin.
-  unfold in_if_fd_cdesc in *.
-  eapply in_if_fd_cdesc_right' in Hin; eauto.
-Qed.
-
-Lemma vcdesc_fds_sub : forall vd (v:s[[vd]]) f fds,
-  vcdesc_fds_all_in v fds ->
-  vcdesc_fds_all_in v (f::fds).
-Proof.
-  intros vd v f fds Hin.
-  unfold vcdesc_fds_all_in in *. intro i.
-  apply in_if_fd_cdesc_right; auto.
-Qed.
-
 Lemma in_if_fd_desc_right' : forall d v f fds,
   match d as __d return (s[[__d]] -> Prop) with
   | num_d => fun _ : s[[num_d]] => True
@@ -2009,8 +1978,56 @@ Proof.
   apply in_if_fd_desc_right; auto.
 Qed.
 
+Lemma in_if_fd_cdesc_right' : forall c v f fds,
+  match c as __d return (s[[__d]] -> Prop) with
+  | Desc d =>
+    match d as __d return (s[[__d]] -> Prop) with
+    | num_d => fun _ : s[[num_d]] => True
+    | str_d => fun _ : s[[str_d]] => True
+    | fd_d => fun v : s[[fd_d]] => In v fds
+    end
+  | Comp c => fun v : s[[Comp c]] => comp_fds_in (projT1 v) fds
+  end v ->
+  match c as __d return (s[[__d]] -> Prop) with
+  | Desc d =>
+    match d as __d return (s[[__d]] -> Prop) with
+    | num_d => fun _ : s[[num_d]] => True
+    | str_d => fun _ : s[[str_d]] => True
+    | fd_d => fun v : s[[fd_d]] => In v (f :: fds)
+    end
+  | Comp c => fun v : s[[Comp c]] => comp_fds_in (projT1 v) (f :: fds)
+  end v.
+Proof.
+  intros c v f fds Hin.
+  destruct c as [d | c].
+    destruct d; simpl; auto.
+
+    unfold comp_fds_in in *. split.
+      simpl; tauto.
+
+      apply vdesc_fds_sub; tauto.
+Qed.
+
+Lemma in_if_fd_cdesc_right : forall n (vd:svec cdesc n) (v:s[[vd]]) i f fds,
+  in_if_fd_cdesc v i fds -> in_if_fd_cdesc v i (f :: fds).
+Proof.
+  intros n vd v i f fds Hin.
+  unfold in_if_fd_cdesc in *.
+  eapply in_if_fd_cdesc_right' in Hin; eauto.
+Qed.
+
+Lemma vcdesc_fds_sub : forall vd (v:s[[vd]]) f fds,
+  vcdesc_fds_all_in v fds ->
+  vcdesc_fds_all_in v (f::fds).
+Proof.
+  intros vd v f fds Hin.
+  unfold vcdesc_fds_all_in in *. intro i.
+  apply in_if_fd_cdesc_right; auto.
+Qed.
+
 Lemma vcdesc_fds_set_replace_comp : forall ct envd i
   (EQ:svec_ith (projT2 envd) i = Comp ct) e c_fd cfg fds,
+  vdesc_fds_all_in cfg fds ->
   vcdesc_fds_all_in e fds ->
   vcdesc_fds_all_in (vd:=envd)
       (shvec_replace_cast EQ e
@@ -2019,12 +2036,15 @@ Lemma vcdesc_fds_set_replace_comp : forall ct envd i
           (Logic.eq_refl ct)))
     (c_fd :: fds).
 Proof.
-  intros ct envd i EQ e c_fd cfg fds Hall_in.
+  intros ct envd i EQ e c_fd cfg fds Hcfg_in Hall_in.
   unfold vcdesc_fds_all_in, in_if_fd_cdesc. intro i'.
   pose proof (fin_eq_dec i i') as Hfeq_dec.
   destruct Hfeq_dec as [Hfeq | Hfneq].
     rewrite <- Hfeq in *. rewrite shvec_ith_replace_cast_ith.
-    unfold vcdesc'. rewrite EQ. simpl. left. auto.
+    unfold vcdesc'. rewrite EQ. unfold comp_fds_in. split.
+      simpl. left. auto.
+
+      simpl. apply vdesc_fds_sub; auto.
 
     rewrite shvec_ith_replace_cast_other; auto.
     apply in_if_fd_cdesc_right; auto.
@@ -2049,9 +2069,7 @@ Proof.
 Qed.
 
 Lemma find_comp_suc : forall envd e cp cs c,
-  find_comp base_term
-    (fun (d : cdesc) (envd : vcdesc) (e : s[[envd]]) =>
-      eval_base_term e) envd e cp cs = Some c ->
+  find_comp (eval_base_comp_pat envd e cp) cs = Some c ->
   In (projT1 c) cs.
 Proof.
   intros envd e cp cs c.
@@ -2069,10 +2087,7 @@ Proof.
 Qed.
 
 Lemma find_comp_suc_hdlr : forall cc cm envd env st cp cs c,
-  find_comp (hdlr_term (comp_type cc) (tag cm))
-    (fun (d : cdesc) (envd : vcdesc) (e : sdenote_vcdesc envd)
-      (t : hdlr_term (comp_type cc) (tag cm) envd d) =>
-      eval_hdlr_term cc cm st t e) envd env cp cs = 
+  find_comp (eval_hdlr_comp_pat cc cm st envd env cp) cs = 
     Some c ->
   In (projT1 c) cs.
 Proof.
@@ -2127,7 +2142,7 @@ Qed.
 
 Lemma fds_all_in_shift : forall ct envd (e:shvec sdenote_cdesc (projT2 envd)) c fds,
   vcdesc_fds_all_in e fds ->
-  In (comp_fd (projT1 c)) fds ->
+  comp_fds_in (projT1 c) fds ->
   vcdesc_fds_all_in (vd:=(existT (svec cdesc) (S (projT1 envd))
                 (svec_shift _ (projT2 envd))))
     (shvec_shift sdenote_cdesc (Comp ct) c (projT2 envd) e) fds.
@@ -2221,8 +2236,7 @@ Qed.
 Lemma comp_in_cs : forall c cs fds,
   In c cs ->
   all_comp_fds_in cs fds ->
-  vdesc_fds_all_in (comp_conf c) fds /\
-  In (comp_fd c) fds.
+  comp_fds_in c fds.
 Proof.
   intros c cs fds Hin Hall_in.
   specialize (Hall_in c Hin).
@@ -2247,6 +2261,7 @@ Proof.
   intros c' Hin. destruct Hin.
   subst c'; simpl. split.
     left; auto.
+    unfold c, cfg. simpl.
     apply hdlr_pl_expr_fds_sub.
     apply vcdesc_fds_sub; auto.
     apply vcdesc_fds_sub; auto.
@@ -2285,13 +2300,13 @@ Ltac fd_exprs_in :=
           => apply hdlr_expr_fds_lemma with
             (cc:=cc_in) (cm:=cm_in) (st:=st_in) (e:=e_in)
             (ce:=ce_in) (fds:=fds_in); auto; try apply comp_in_cs with (cs:=cs_in)
-        | [ ocdp := find_comp _ _ _ ?env _ _,
+        | [ ocdp := find_comp _ _,
             Hall_in : all_comp_fds_in _ _ |- In (comp_fd _) fds_in ]
-          => apply Hall_in; (apply find_comp_suc with (e:=env) ||
+          => apply Hall_in; (eapply find_comp_suc ||
                eapply find_comp_suc_hdlr)
-        | [ _ : context [ find_comp _ _ _ ?env _ _ ],
+        | [ _ : context [ find_comp _ _ ],
             Hall_in : all_comp_fds_in _ _ |- In (comp_fd _) fds_in ]
-          => apply Hall_in; (apply find_comp_suc with (e:=env) ||
+          => apply Hall_in; (eapply find_comp_suc ||
                eapply find_comp_suc_hdlr)
         end
   end.
@@ -2306,12 +2321,23 @@ Ltac subst_states :=
 
 Ltac find_comp_rewrite :=
   try match goal with
-      | [ ocdp := find_comp _ _ _ _ _ _ |- _ ]
+      | [ ocdp := find_comp _ _ |- _ ]
         => unfold ocdp in *
       end;
   match goal with
-  | [ Heqo : find_comp _ _ _ _ _ _ = _ |- _ ]
+  | [ Heqo : find_comp _ _ = _ |- _ ]
     => rewrite Heqo
+  end.
+
+Ltac comp_fds_in :=
+  match goal with
+  | [ |- comp_fds_in ?c _ ]
+    => unfold c;
+    match goal with
+    | [ _ : find_comp _ _ = Some _,
+      H : all_comp_fds_in _ _ |- comp_fds_in (projT1 ?cdp) _ ]
+      => apply H; eapply find_comp_suc with (c:=cdp); eauto
+    end
   end.
 
 Ltac simplr_base :=
@@ -2333,8 +2359,11 @@ Ltac simplr_base :=
   try solve [apply stupd_sub_base; auto];
   try solve [apply stupd_sub_hdlr; auto];
   try solve [apply vdesc_fds_sub; auto];
+  try solve [apply base_pl_expr_fds_sub; auto];
+  try solve [apply hdlr_pl_expr_fds_sub; auto];
   try apply fds_all_in_shift;
   try apply fds_all_in_unshift;
+  try solve [comp_fds_in];
   try find_comp_rewrite.
 
 Definition run_init_cmd :
@@ -2479,7 +2508,7 @@ refine (
 
 (* CompLkup *)
 destruct s as [cs tr e st]_eqn; simpl.
-pose (ocdp := find_comp base_term (fun d envd e => eval_base_term e) envd e cp cs).
+pose (ocdp := find_comp (eval_base_comp_pat _ e cp) cs).
 destruct ocdp as [ cdp | ]_eqn.
 (*Component found*)
 refine (
@@ -2498,6 +2527,7 @@ refine (
              |}
   }}
 ); sep unfoldr simplr_base.
+unfold c; apply H; eapply find_comp_suc with (c:=cdp); eauto.
 
 (*Component not found*)
 refine (
@@ -2528,6 +2558,21 @@ Proof.
   simpl. sep'.
 Qed.
 
+Lemma default_payload_fds : forall vd,
+  vdesc_fds_all_in (default_payload vd)
+    (devnull::nil).
+Proof.
+  destruct vd as [n vd].
+  induction n.
+    unfold vdesc_fds_all_in; simpl; intuition.
+
+    destruct vd as [d rest].
+    unfold vdesc_fds_all_in, default_cpayload.
+    destruct i; destruct d; simpl in *; try apply IHn;
+      auto.
+      unfold in_if_fd_desc, comp_fds_in. simpl. auto.
+Qed.
+
 Lemma default_cpayload_fds : forall vd,
   vcdesc_fds_all_in (default_cpayload vd)
     (devnull::nil).
@@ -2546,7 +2591,10 @@ Proof.
       destruct d; simpl in *; auto.
       unfold in_if_fd_cdesc. simpl. auto.
 
-      unfold in_if_fd_cdesc. simpl. auto.
+      unfold in_if_fd_cdesc, comp_fds_in. simpl. split.
+        auto.
+
+        apply default_payload_fds.
 Qed.
 
 Ltac unfoldr_init :=
@@ -2707,6 +2755,9 @@ refine (
              |}
   }}
 ); sep unfoldr simplr_base.
+apply hdlr_pl_expr_fds_sub; auto.
+eapply comp_in_cs; eauto.
+eapply comp_in_cs; eauto.
 
 (*Call*)
 destruct s as [ [cs tr st] env]_eqn.
@@ -2744,8 +2795,7 @@ eapply comp_in_cs; eauto.
 
 (*CompLkup*)
 destruct s as [ [cs tr st] env]_eqn.
-pose (ocdp := find_comp (hdlr_term (comp_type cc) (tag cm))
-                        (fun d envd e t => @eval_hdlr_term _ _ st d envd t e) envd env cp cs).
+pose (ocdp := find_comp (eval_hdlr_comp_pat cc cm st envd env cp) cs).
 destruct ocdp as [ cdp | ]_eqn.
 (*Component found*)
 refine (
@@ -2770,7 +2820,7 @@ refine (
              |}
   }}
 ); sep unfoldr simplr_base.
-eauto.
+apply H0. unfold c0; eapply find_comp_suc_hdlr with (c:=cdp); eauto.
 
 (*Component not found*)
 refine (
@@ -3006,6 +3056,9 @@ Proof.
     end
 
   ); sep unfoldr_body simplr_body.
+
+  unfold comp_fds_in in *. sep'.
+  unfold comp_fds_in in *. sep'.
 
   rewrite trace_fds_dist. rewrite trace_recv_msg_fds.
   rewrite <- app_assoc. rewrite <- all_open_concat. rewrite <- all_open_rev.

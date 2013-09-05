@@ -88,7 +88,7 @@ Theorem recv_before : forall st tr m,
                                           None (Some m, tt))))
             tr.
 Proof.
-  crush.
+  Time crush.
 Qed.
 
 Require Import NIExists.

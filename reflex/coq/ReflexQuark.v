@@ -22,7 +22,15 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 11.
+Definition NB_MSG : nat := 12.
+
+(*Cookies:
+For now, we won't have cookies go through the kernel. Instead, when
+a tab is spawned for a new domain, a new cookie proc will be spawned for that
+domain. The fd for that cookie proc will be sent to the tab and the fd for the
+tab will be sent to the cookie proc. Each subsequent tab spawned for that domain
+will be sent the fd of the cookie proc and the cookie proc will be sent the fd
+of the new tab.*)
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [ ("Display",     [str_d])
@@ -33,9 +41,10 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("ResSocket",   [fd_d])
   ; ("SetDomain",   [str_d])
   ; ("KeyPress",    [str_d])
-  ; ("MouseClick",  [str_d])
+  ; ("MouseClick",  [str_d; str_d; num_d])
   ; ("Go",          [str_d])
   ; ("NewTab",      [])
+  ; ("CProcFD", [fd_d])
   ].
 
 Notation Display     := 0%fin (only parsing).
@@ -49,8 +58,9 @@ Notation KeyPress    := 7%fin (only parsing).
 Notation MouseClick  := 8%fin (only parsing).
 Notation Go          := 9%fin (only parsing).
 Notation NewTab      := 10%fin (only parsing).
+Notation CProcFD     := 11%fin (only parsing).
 
-Inductive COMPT' : Set := UserInput | Output | Tab | DomainBar.
+Inductive COMPT' : Set := UserInput | Output | Tab | CProc | DomainBar.
 
 Definition COMPT := COMPT'.
 
@@ -64,15 +74,16 @@ Definition COMPS (t : COMPT) : compd :=
   | UserInput => mk_compd "UserInput" (test_dir ++ "user-input.py")       [] (mk_vdesc [])
   | Output    => mk_compd "Output"    (test_dir ++ "screen.py")    [] (mk_vdesc [])
   | Tab       => mk_compd "Tab"       (test_dir ++ "tab.py")     [] (mk_vdesc [str_d])
+  | CProc     => mk_compd "CProc"     (test_dir ++ "cproc.py")     [] (mk_vdesc [str_d])
   | DomainBar => mk_compd "DomainBar" (test_dir ++ "domainbar.py") [] (mk_vdesc [])
   end.
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Output; Comp _ Tab; Comp _ UserInput ].
 
-Notation i_output    := (None) (only parsing).
-Notation i_curtab    := (Some None) (only parsing).
-Notation i_userinput := (Some (Some None)) (only parsing).
+Notation i_output    := 0%fin (only parsing).
+Notation i_curtab    := 1%fin (only parsing).
+Notation i_userinput := 2%fin (only parsing).
 
 Definition KSTD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Output; Comp _ Tab ].
@@ -109,20 +120,23 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (stupd _ IENVD v_curtab (Term _ (base_term _ ) _ (Var _ IENVD i_curtab))
   ) nop))))).
 
+Definition cur_tab_dom {t envd} :=
+  cconf (envd:=envd) (t:=t) Tab Tab 0%fin (CComp PAYD COMPT COMPS KSTD Tab t envd).
+
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun t ct =>
   match ct as _ct, t as _t return
     {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
   with
-  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad)))))))))) =>
+  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad))))))))))) =>
     match bad with end
 
   | Tab, ReqSocket =>
     [[ mk_vcdesc [] :
         ite (eq ccomp (stvar v_curtab))
             (
-              ite (eq (dom (mvar ReqSocket None)) (cconf Tab None))
+              ite (eq (dom (mvar ReqSocket None)) cur_tab_dom)
                   (
                     nop
                   )
@@ -147,7 +161,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | Tab, ReqResource =>
       let envd := mk_vcdesc [Desc _ fd_d] in
       [[ envd :
-         ite (eq (dom (mvar ReqResource None)) (cconf Tab None))
+         ite (eq (dom (mvar ReqResource None)) cur_tab_dom)
              (
                seq (call _ envd (slit (str_of_string (test_dir ++ "wget.py")))
                                  [mvar ReqResource None] None (Logic.eq_refl _))
@@ -158,13 +172,27 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                nop
              )
        ]]
+  | Tab, CProcFD =>
+      let envd := mk_vcdesc [Comp _ CProc] in
+      [[ envd :
+        complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some cur_tab_dom, tt))
+                 (send (ct:=CProc) (term:=mk_vcdesc [Comp _ CProc; Comp _ CProc])
+                   (envd:=hdlr_term SystemFeatures.PAYD
+                   SystemFeatures.COMPT SystemFeatures.COMPS
+                   SystemFeatures.KSTD Tab CProcFD)
+                   (envvar (cc:=Tab) (m:=CProcFD) (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
+                   CProcFD (mvar CProcFD 0%fin, tt))
+                 (seq (spawn _ envd CProc (cur_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
+                      (send (envvar envd 0%fin) CProcFD (mvar CProcFD 0%fin, tt))))
+      ]]
   | UserInput, KeyPress =>
       [[ mk_vcdesc [] :
       seq (send (stvar v_curtab) KeyPress (mvar KeyPress None, tt))
       nop ]]
   | UserInput, MouseClick =>
       [[ mk_vcdesc [] :
-      seq (send (stvar v_curtab) MouseClick (mvar MouseClick None, tt))
+      seq (send (stvar v_curtab) MouseClick
+        (mvar MouseClick 0%fin, (mvar MouseClick 1%fin, (mvar MouseClick 2%fin, tt))))
       nop ]]
   | UserInput, NewTab =>
       let envd := mk_vcdesc [Comp _ Tab] in
@@ -268,8 +296,14 @@ Definition clblr d (c : comp COMPT COMPS) :=
   with
   | Build_comp Tab _ cfg =>
     let cfgd := comp_conf_desc COMPT COMPS Tab in
-    if str_eq (dom' (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
-                               cfg None)) d
+    if str_eq (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
+                               cfg None) d
+    then true
+    else false
+  | Build_comp CProc _ cfg =>
+    let cfgd := comp_conf_desc COMPT COMPS Tab in
+    if str_eq (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
+                               cfg None) d
     then true
     else false
   | Build_comp UserInput _ _ => true
@@ -283,7 +317,7 @@ Local Opaque str_of_string.
 Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS (clblr d) vlblr.
 Proof.
-  ni.
+  Time ni.
 Qed.
 
 End Spec.

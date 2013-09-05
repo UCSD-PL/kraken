@@ -83,6 +83,7 @@ Definition NI clblr vlblr := forall s,
 
 Definition low_ok clblr vlblr := forall c m i s s',
   clblr c = false ->
+  Reach s ->
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m i s s' ->
   high_out_eq s s' clblr /\
   vars_eq s s' vlblr.
@@ -92,6 +93,7 @@ Definition high_ok clblr vlblr :=
     clblr c = true ->
     high_out_eq s1 s2 clblr ->
     vars_eq s1 s2 vlblr ->
+    Reach s1 -> Reach s2 ->
     ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m i s1 s1' ->
     ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m i s2 s2' ->
     high_out_eq s1' s2' clblr /\ vars_eq s1' s2' vlblr.
@@ -101,6 +103,233 @@ Ltac uninhabit :=
   | [ H : [_]%inhabited = [?tr]%inhabited |- _ ]
     => apply pack_injective in H; subst tr
   end.
+
+Definition high_comp_pat COMPT COMPTDEC COMPS cp clblr :=
+  forall c, match_comp COMPT COMPTDEC COMPS cp c = true ->
+    clblr c = true.
+
+Definition exec_comps (a : KAction) (l : list comp) : list comp :=
+  match a with
+  | Reflex.KExec _ _ c => c::l
+  | _           => l
+  end.
+
+Lemma hout_init' : forall clblr envd s cmd input tr tr',
+  init_ktr _ _ _ _ _ s = [tr]%inhabited ->
+  filter clblr (init_comps _ _ _ _ _ s) = fold_right exec_comps nil (outputs clblr tr) ->
+  let s' := init_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD envd s cmd input in
+  init_ktr _ _ _ _ _ s' = [tr']%inhabited ->
+  filter clblr (init_comps _ _ _ _ _ s') = fold_right exec_comps nil (outputs clblr tr').
+Proof.
+  intros clblr envd s cmd input tr tr' Htr Heq s' Htr'. subst s'.
+  generalize dependent s. generalize dependent tr. generalize dependent tr'.
+  induction cmd; simpl; intros tr' tr s Htr Heq Htr'.
+    rewrite Htr in Htr'. apply pack_injective in Htr'. subst tr'. auto.
+
+    destruct (init_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD envd s cmd1
+              (fst input)) as [? [itr] ? ?]_eqn.
+    apply IHcmd2 with (tr:=itr); auto.
+    rewrite <- Heqi.
+    apply IHcmd1 with (tr:=tr); auto.
+    rewrite Heqi. auto.
+
+    destruct (num_eq
+              (eval_base_expr COMPT COMPS
+                 (init_env PAYD COMPT COMPS KSTD envd s) e) FALSE).
+      apply IHcmd2 with (tr:=tr); auto.
+      apply IHcmd1 with (tr:=tr); auto.
+
+    rewrite Htr in *. simpl in *. apply pack_injective in Htr'.
+    subst tr'. simpl.
+    destruct (clblr
+           (projT1
+              (eval_base_expr COMPT COMPS
+                 (init_env PAYD COMPT COMPS KSTD envd s) e))); auto.
+
+    rewrite Htr in *. simpl in *. apply pack_injective in Htr'.
+    subst tr'. simpl.
+    destruct (clblr
+         {|
+         comp_type := t;
+         comp_fd := input;
+         comp_conf := eval_base_payload_expr COMPT COMPS envd
+                        (init_env PAYD COMPT COMPS KSTD envd s)
+                        (comp_conf_desc COMPT COMPS t) p |}); auto.
+    simpl. f_equal. auto.
+
+    rewrite Htr in *. simpl in *. apply pack_injective in Htr'.
+    subst tr'. simpl. auto.
+
+    rewrite Htr in Htr'. apply pack_injective in Htr'. subst tr'. auto.
+
+    destruct (find_comp COMPT COMPTDEC COMPS
+               (eval_base_comp_pat COMPT COMPS envd
+                  (init_env PAYD COMPT COMPS KSTD envd s) cp)
+               (init_comps PAYD COMPT COMPS KSTD envd s)).
+      apply IHcmd1 with (tr:=tr); auto.
+      apply IHcmd2 with (tr:=tr); auto.
+Qed.
+
+Lemma hout_init : forall clblr init i s tr,
+  InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init i s ->
+  ktr s = [tr]%inhabited ->
+  filter clblr (kcs _ _ _ _ s) = fold_right exec_comps nil (outputs clblr tr).
+Proof.
+  intros clblr init i s tr Hinit Htr.
+  inversion Hinit. subst s0.
+  destruct (initial_init_state PAYD COMPT COMPS KSTD IENVD) as [ics [itr] ? ?]_eqn.
+  assert (filter clblr ics = fold_right exec_comps nil (outputs clblr itr)).
+    unfold initial_init_state in *. inversion Heqi0.
+    apply f_equal with (f:=init_ktr _ _ _ _ _ ) in Heqi0.
+    simpl in Heqi0. apply pack_injective in Heqi0. subst itr. auto.
+  simpl. apply hout_init' with (tr:=itr); auto.
+  subst s. auto.
+Qed.
+
+Lemma hout_hdlr' : forall clblr envd cc m s cmd input tr tr',
+  ktr (hdlr_kst _ _ _ _ envd s) = [tr]%inhabited ->
+  filter clblr (kcs _ _ _ _ (hdlr_kst _ _ _ _ _ s)) = fold_right exec_comps nil (outputs clblr tr) ->
+  let s' := hdlr_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD cc m envd s cmd input in
+  ktr (hdlr_kst _ _ _ _ _ s') = [tr']%inhabited ->
+  filter clblr (kcs _ _ _ _ (hdlr_kst _ _ _ _ _ s')) = fold_right exec_comps nil (outputs clblr tr').
+Proof.
+  intros clblr envd cc m s cmd input tr tr' Htr Heq s' Htr'. subst s'.
+  generalize dependent s. generalize dependent tr. generalize dependent tr'.
+  induction cmd; simpl; intros tr' tr s Htr Heq Htr'.
+    rewrite Htr in Htr'. apply pack_injective in Htr'. subst tr'. auto.
+
+    destruct (hdlr_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD cc m envd s
+                 cmd1 (fst input)) as [ [? [itr] ?] ?]_eqn.
+    apply IHcmd2 with (tr:=itr); auto.
+    rewrite <- Heqh.
+    apply IHcmd1 with (tr:=tr); auto.
+    rewrite Heqh. auto.
+
+    destruct (num_eq
+                 (eval_hdlr_expr PAYD COMPT COMPS KSTD cc m
+                    (kst PAYD COMPT COMPS KSTD
+                       (hdlr_kst PAYD COMPT COMPS KSTD envd s))
+                    (hdlr_env PAYD COMPT COMPS KSTD envd s) e) FALSE).
+      apply IHcmd2 with (tr:=tr); auto.
+      apply IHcmd1 with (tr:=tr); auto.
+
+    
+    destruct s. simpl in *. unfold ktr in *. rewrite Htr in *. simpl in *.
+    apply pack_injective in Htr'. subst tr'. simpl.
+    destruct (clblr
+           (projT1
+              (eval_hdlr_expr PAYD COMPT COMPS KSTD cc m
+                 (kst PAYD COMPT COMPS KSTD hdlr_kst) hdlr_env e))); auto.
+
+    destruct s. simpl in *. unfold ktr in *. rewrite Htr in *. simpl in *.
+    apply pack_injective in Htr'. subst tr'. simpl.
+    destruct (clblr
+           {|
+           comp_type := t;
+           comp_fd := input;
+           comp_conf := eval_hdlr_payload_expr PAYD COMPT COMPS KSTD cc m
+                          (kst PAYD COMPT COMPS KSTD hdlr_kst) envd hdlr_env
+                          (comp_conf_desc COMPT COMPS t) p |}); auto.
+    simpl. f_equal. auto.
+
+    destruct s. simpl in *. unfold ktr in *. rewrite Htr in *. simpl in *.
+    apply pack_injective in Htr'. subst tr'. simpl. auto.
+
+    destruct s. simpl in *. unfold ktr in *. rewrite Htr in Htr'.
+    apply pack_injective in Htr'. subst tr'. auto.
+
+    destruct s. simpl in *.
+    destruct (find_comp COMPT COMPTDEC COMPS
+                  (eval_hdlr_comp_pat PAYD COMPT COMPS KSTD cc m
+                     (kst PAYD COMPT COMPS KSTD hdlr_kst) envd hdlr_env cp)
+                  (kcs PAYD COMPT COMPS KSTD hdlr_kst)).
+      apply IHcmd1 with (tr:=tr); auto.
+      apply IHcmd2 with (tr:=tr); auto.
+Qed.
+
+Lemma hout_hdlr : forall clblr cc m s s' input tr tr',
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS cc m input s s' ->
+  ktr s = [tr]%inhabited ->
+  filter clblr (kcs _ _ _ _ s) = fold_right exec_comps nil (outputs clblr tr) ->
+  ktr s' = [tr']%inhabited ->
+  filter clblr (kcs _ _ _ _ s') = fold_right exec_comps nil (outputs clblr tr').
+Proof.
+  intros clblr cc m s s' input tr tr' Hve Htr Heq Htr'.
+  inversion Hve. subst s'0. unfold kstate_run_prog.
+  destruct ((default_hdlr_state PAYD COMPT COMPS KSTD
+                 (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr0)
+                 (projT1 hdlrs))) as [ [ ? [itr] ? ] ? ]_eqn.
+    apply hout_hdlr' with (tr:=itr); auto.
+    rewrite <- Heqh. unfold default_hdlr_state, mk_inter_ve_st in Heqh.
+    apply f_equal with (f:=fun s => ktr (hdlr_kst _ _ _ _ _ s)) in Heqh.
+    simpl in *. apply pack_injective in Heqh. subst itr. simpl.
+    unfold ktr in Htr. rewrite H in Htr. apply pack_injective in Htr.
+    subst tr0. auto.
+    unfold kstate_run_prog in *. rewrite Heqh in *.
+    rewrite H2. auto.
+Qed.
+
+Lemma hout_hcs : forall clblr s tr,
+  Reach s ->
+  ktr s = [tr]%inhabited ->
+  filter clblr (kcs _ _ _ _ s) = fold_right exec_comps nil (outputs clblr tr).
+Proof.
+  intros clblr s tr HReach Htr.
+  generalize dependent tr.
+  induction HReach; intros tr Htr.
+    eapply hout_init; eauto.
+
+    destruct s as [? [itr] ?]_eqn.
+    eapply hout_hdlr; eauto.
+
+    inversion H. subst s'. simpl in *.
+    apply pack_injective in Htr. subst tr.
+    simpl. eapply IHHReach; eauto.
+Qed.
+
+Lemma hout_eq_hcs_eq : forall s s' clblr,
+  Reach s -> Reach s' ->
+  high_out_eq s s' clblr ->
+  filter clblr (kcs _ _ _ _ s) = filter clblr (kcs _ _ _ _ s').
+Proof.
+  intros s s' clblr HReach HReach' Hout_eq.
+  destruct s as [ ? [tr] ? ]; destruct s' as [ ? [tr'] ? ].
+  rewrite hout_hcs with (tr:=tr); auto.
+  rewrite hout_hcs with (tr:=tr'); auto.
+  rewrite Hout_eq; auto.
+Qed.
+
+Lemma hfind_cs_filter : forall cs clblr cp,
+  high_comp_pat COMPT COMPTDEC COMPS cp clblr ->
+  find_comp COMPT COMPTDEC COMPS cp cs = 
+  find_comp COMPT COMPTDEC COMPS cp (filter clblr cs).
+Proof.
+  intros cs clblr cp Hhigh.
+  induction cs.
+    auto.
+
+    simpl. destruct (clblr a) as [ | ]_eqn. simpl.
+    destruct (match_comp_pf COMPT COMPTDEC COMPS cp a)
+      as [ ? | ? ]_eqn; auto.
+    destruct (match_comp_pf COMPT COMPTDEC COMPS cp a)
+      as [ ? | ? ]_eqn.
+    unfold high_comp_pat, match_comp in Hhigh. specialize (Hhigh a).
+    rewrite Heqo in Hhigh. specialize (Hhigh (Logic.eq_refl _)). congruence.
+    auto.
+Qed.
+
+Lemma hout_eq_find_eq : forall cp s s' clblr,
+  Reach s -> Reach s' ->
+  high_out_eq s s' clblr ->
+  high_comp_pat COMPT COMPTDEC COMPS cp clblr ->
+  find_comp COMPT COMPTDEC COMPS cp (kcs _ _ _ _ s) = 
+  find_comp COMPT COMPTDEC COMPS cp (kcs _ _ _ _ s').
+Proof.
+  intros cp s s' clblr HReach HReach' Hout_eq Hcp.
+  rewrite hfind_cs_filter with (clblr:=clblr) (cs:=kcs _ _ _ _ s); auto.
+  rewrite hfind_cs_filter with (clblr:=clblr) (cs:=kcs _ _ _ _ s'); auto.
+  erewrite hout_eq_hcs_eq; auto.
+Qed.
 
 Lemma init_inputs_nil : forall init i s tr lblr,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init i s ->
@@ -491,7 +720,7 @@ Proof.
         eapply IHsnil; eauto.
 
         unfold low_ok in Hlow.
-        pose proof (Hlow c m input s s' Hclblr H) as Hss'.
+        pose proof (Hlow c m input s s' Hclblr HReach H) as Hss'.
         unfold high_out_eq in *. unfold vars_eq in *.
         destruct snil_ind as [csnil [trnil] stnil fdnil]_eqn.
         split.

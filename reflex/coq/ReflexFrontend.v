@@ -6,6 +6,7 @@ Require Import ReflexDenoted.
 Require Import ReflexFin.
 Require Import ReflexHVec.
 Require Import ReflexIO.
+Require Import ReflexFacts.
 Require Import NIExists.
 Require Import Ynot.
 Require Import PruneFacts.
@@ -168,12 +169,20 @@ Ltac destruct_comp_var :=
        (*discriminate prunes impossible ctypes*)
   end.
 
+Ltac destruct_kstate pay :=
+  match type of pay with
+  | unit => idtac
+  | _ => let a := fresh "a" in
+         let b := fresh "b" in
+         destruct pay as [a b]; simpl in a; destruct_pay b
+  end.
+
 Ltac destruct_state :=
   match goal with
   |- context[kst _ _ _ _ ?s]
     => let kvars := fresh "kvars" in
        set (kvars:=kst _ _ _ _ s);
-       destruct_pay kvars;
+       destruct_kstate kvars;
        repeat destruct_comp_var; simpl
   end.
 
@@ -181,6 +190,61 @@ Ltac destruct_cond :=
 match goal with
 |- context[ if ?e then _ else _ ] => destruct e
 end.
+
+Ltac destruct_find_comp :=
+  match goal with
+  |- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+    => let Heq := fresh "Heq" in
+       destruct (find_comp a b c d e) as [? | ?]_eqn:Heq; try rewrite Heq;
+       [apply find_comp_suc_match with (cp:=d) in Heq | ]
+  end.
+
+Ltac destruct_comp_pf :=
+  match goal with
+  | [ cpf : sigT (fun _ : Reflex.comp _ _ => _ = _ ) |- _ ]
+    => destruct cpf; destruct_comp
+  end.
+
+Ltac destruct_atom_eqs :=
+  repeat match goal with
+         | [ _ : context [str_eq ?a ?b] |- _ ]
+           => destruct (str_eq a b)
+         | [ |- context [str_eq ?a ?b] ]
+           => destruct (str_eq a b)
+         | [ _ : context [num_eq ?a ?b] |- _ ]
+           => destruct (num_eq a b)
+         | [ |- context [num_eq ?a ?b] ]
+           => destruct (num_eq a b)
+         | [ _ : context [fd_eq ?a ?b] |- _ ]
+           => destruct (fd_eq a b)
+         | [ |- context [fd_eq ?a ?b] ]
+           => destruct (fd_eq a b)
+         end.
+
+Ltac find_comp_tr_solve :=
+  repeat destruct_comp_pf; try discriminate;
+  unfold Reflex.match_comp, Reflex.match_comp_pf in *; simpl in *;
+  destruct_atom_eqs; try discriminate; try congruence.
+
+Ltac find_comp_eq :=
+  match goal with
+  | [ _ : vars_eq _ _ _ _ ?s1 ?s2 _ |-
+    context[match find_comp _ _ _ _ (kcs _ _ _ _ ?s1) with | Some _ => _ | None => _ end] ]
+    => unfold eval_hdlr_comp_pat, eval_hdlr_payload_oexpr, eval_payload_oexpr; simpl;
+       erewrite hout_eq_find_eq with (s':=s2); eauto;
+       match goal with
+       | [ |- high_comp_pat _ _ _ _ _ ]
+         => solve [unfold high_comp_pat, Reflex.match_comp, match_comp_pf; intros;
+            destruct_comp; try discriminate; simpl in *;
+            destruct_atom_eqs; try discriminate; try congruence]
+       | [ |- high_out_eq _ _ _ _ _ _ _ /\ vars_eq _ _ _ _ _ _ _ ]
+         => idtac
+       | [ |- high_out_eq _ _ _ _ _ _ _ ]
+         => idtac
+       | [ |- vars_eq _ _ _ _ _ _ _ ]
+         => idtac
+       end
+  end.
 
 Ltac vars_eq_tac :=
   match goal with
@@ -201,13 +265,23 @@ Ltac state_var_branch :=
        end
   end.
 
+Ltac destruct_comp_st_vars :=
+  match goal with
+  |- context [projT1 ?e]
+    => match type of e with
+       | sigT (fun _ : Reflex.comp _ _ => _ = _)
+         => destruct e as [ [ct ? ?] ?]; destruct ct; try discriminate; simpl
+       end
+  end.
+
 Ltac ho_eq_tac tac Hlblr :=
   unfold high_out_eq; simpl; intros;
   repeat remove_redundant_ktr;
   repeat uninhabit; simpl;
   simpl in Hlblr; try rewrite Hlblr;
   try solve[tac | destruct_cond; tac
-    | state_var_branch | repeat destruct_state; tac]
+    | state_var_branch | find_comp_tr_solve; tac
+    | repeat destruct_comp_st_vars; tac ]
   (*destruct_state is expensive, so try it only as
      a last resort*).
 
@@ -225,12 +299,15 @@ Ltac ho_eq_solve_low :=
 Ltac low_step :=
   unfold low_ok; intros;
   match goal with
-  | [ Hve : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+  | [ Hve : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s _,
       Hlow : _ = false |- _ ]
-    => destruct_msg; destruct_comp; try discriminate;
+    => destruct_msg; destruct_comp;
+       try discriminate;
        try solve [eapply prune_nop_1; eauto];
-       inversion Hve; repeat subst_inter_st; simpl;
-       try destruct_ite; split;
+       inversion Hve; repeat subst_inter_st; 
+       unfold kstate_run_prog; simpl;
+       repeat destruct_find_comp; repeat destruct_cond;
+       split;
        try abstract (
        match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
@@ -250,14 +327,18 @@ Ltac ho_eq_solve_high :=
 Ltac high_steps :=
   unfold high_ok; intros;
   match goal with
-  | [ Hve1 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
-      Hve2 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _,
+  | [ Hve1 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s1 _,
+      Hve2 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s2 _,
       Hhigh : _ = true |- _ ]
-    => destruct_msg; destruct_comp; try discriminate;
+    => destruct_msg; destruct_comp;
+       try discriminate;
        try solve [eapply prune_nop_2; eauto];
        inversion Hve1; inversion Hve2;
-       repeat subst_inter_st; simpl;
-       try destruct_ite; split;
+       repeat subst_inter_st; unfold kstate_run_prog;
+       simpl;
+       repeat find_comp_eq; repeat destruct_find_comp;
+       repeat destruct_cond;
+       split;
        try abstract (
        match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]

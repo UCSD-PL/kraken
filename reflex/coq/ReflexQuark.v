@@ -124,11 +124,6 @@ Definition cur_tab_dom {t envd} :=
   cconf (envd:=envd) (t:=t) Tab Tab 0%fin (CComp PAYD COMPT COMPS KSTD Tab t envd).
 
 Open Scope hdlr.
-Print complkup.
-Print mk_comp_pat.
-Print sdenote_desc_cfg_pat.
-Print payload_expr.
-Print expr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun t ct =>
   match ct as _ct, t as _t return
@@ -315,23 +310,6 @@ Definition clblr d (c : comp COMPT COMPS) :=
   | _ => false
   end.
 
-Lemma find_comp_suc_match :
-  forall COMPT COMPTDEC COMPS cp cs c,
-  find_comp COMPT COMPTDEC COMPS cp cs = Some c ->
-  match_comp COMPT COMPTDEC COMPS cp (projT1 c) = true.
-Proof.
-  intros COMPT COMPTDEC COMPS cp cs c Hfind.
-  induction cs; simpl in Hfind.
-    discriminate.
-
-    destruct (match_comp_pf COMPT COMPTDEC COMPS cp a)
-      as [? | ?]_eqn.
-      unfold match_comp. inversion Hfind. rewrite <- H0.
-      simpl. rewrite Heqo. auto.
-
-      auto.
-Qed.
-
 Definition vlblr (f : fin (projT1 KSTD)) := true.
 
 Local Opaque str_of_string.
@@ -339,95 +317,8 @@ Local Opaque str_of_string.
 Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS (clblr d) vlblr.
 Proof.
-  ni.
-
-unfold complkup. unfold kstate_run_prog. simpl.
-match goal with
-|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-  => destruct (find_comp a b c d e) as [? | ?]_eqn
-end; simpl; unfold high_out_eq; simpl; intros;
-repeat uninhabit; unfold ktr in *; rewrite H2 in H3; uninhabit.
-simpl in *.
-destruct s1. simpl. unfold clblr. destruct x. destruct comp_type; try discriminate.
-simpl in *.
-match goal with
-| [ Heqo : find_comp _ _ _ ?cp_f _ = _ |- _ ]
-  => apply find_comp_suc_match with (cp:=cp_f) in Heqo
-end.
-unfold match_comp, match_comp_pf in Heqo. simpl in Heqo.
-destruct comp_conf0. simpl in *. unfold dom'. simpl. destruct (str_eq a0 s1);
-destruct (str_eq a0 d); simpl in *; try discriminate. rewrite <- e0.
-destruct (str_eq a0 d); try contradiction. auto.
-
-simpl in *. destruct (str_eq a0 d); try discriminate. auto.
-
-unfold complkup. unfold kstate_run_prog. simpl.
-match goal with
-|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-  => destruct (find_comp a b c d e) as [? | ?]_eqn
-end; simpl; unfold vars_eq; simpl; auto.
-
-unfold complkup. unfold kstate_run_prog. simpl. unfold eval_hdlr_comp_pat. simpl.
-unfold eval_hdlr_payload_oexpr. simpl. unfold eval_payload_oexpr. simpl.
-erewrite hout_eq_find_eq with (s':=s2); eauto.
-match goal with
-|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-  => destruct (find_comp a b c d e) as [? | ?]_eqn
-end; simpl; unfold high_out_eq; simpl; intros;
-repeat uninhabit; simpl in *.
-destruct s3. simpl. unfold clblr. destruct x. destruct comp_type; try discriminate.
-match goal with
-| [ Heqo : find_comp _ _ _ ?cp_f _ = _ |- _ ]
-  => apply find_comp_suc_match with (cp:=cp_f) in Heqo
-end.
-unfold match_comp, match_comp_pf in Heqo. simpl in Heqo.
-destruct comp_conf0. simpl in *. simpl.
-destruct (str_eq a0 s3); destruct (str_eq a0 d); simpl in *; try discriminate.
-rewrite <- e0.
-destruct (str_eq a0 d); try contradiction.
-f_equal. apply H0; auto.
-
-rewrite H. f_equal. f_equal. apply H0; auto.
-
-unfold high_comp_pat. unfold clblr. unfold match_comp. simpl.
-unfold match_comp_pf. simpl. intros c Hmatch. destruct c. destruct comp_type; try discriminate.
-destruct comp_conf0. simpl in *. destruct (str_eq a0 s3); simpl in *; try discriminate.
-rewrite <- e. destruct (str_eq a0 d); try discriminate; auto.
-
-unfold complkup. unfold kstate_run_prog. simpl.
-repeat match goal with
-|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-  => destruct (find_comp a b c d e) as [? | ?]_eqn
-end; simpl; unfold vars_eq; simpl; auto.
+  Time ni.
 Qed.
-
-(*
-simpl in *. destruct s3. simpl. unfold clblr. destruct x. destruct comp_type; try discriminate.
-auto.
-
-simpl in *. destruct s3. simpl. unfold clblr. destruct x. destruct comp_type; try discriminate.
-auto.
-
-simpl in *. auto.
-
-unfold complkup. unfold kstate_run_prog. simpl.
-repeat match goal with
-|- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-  => destruct (find_comp a b c d e) as [? | ?]_eqn
-end; simpl; unfold vars_eq; simpl; auto.
-
-
-
-apply find_comp_suc_match with
-  (cp:=(mk_comp_pat
-    (hdlr_term SystemFeatures.PAYD SystemFeatures.COMPT
-      SystemFeatures.COMPS SystemFeatures.KSTD Tab 11%fin)
-    (mk_vcdesc [Comp COMPT' CProc]) CProc 
-    (Some cur_tab_dom, tt))) 
-  in Heqo.
-simpl in Heqo.
-destruct s1.
-*)
 
 End Spec.
 

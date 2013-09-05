@@ -236,7 +236,7 @@ Definition System_pat : conc_pat COMPT COMPS :=
                                          SCreatePtyerReq (Some u, tt))))
           tr.
 Proof.
-  crush.
+  Time crush.
 Qed.*)
 
 (*Ltac releaser_match :=

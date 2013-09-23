@@ -91,26 +91,6 @@ Proof.
   Time crush.
 Qed.
 
-Require Import NIExists.
-
-Require Import Ynot.
-Require Import NITactics.
-
-Definition clblr (c : comp COMPT COMPS) :=
-  match comp_type _ _ c with
-  | Echo1 => true
-  | Echo2 => false
-  end.
-
-Definition vlblr (f : fin (projT1 KSTD)) : bool :=
-  match f with end.
-
-Theorem ni : NI PAYD COMPT COMPTDEC COMPS
-  IENVD KSTD INIT HANDLERS clblr vlblr.
-Proof.
-  ni.
-Qed.
-
 (*
 unfold NIWeak'.
 unfold NonInterference'.

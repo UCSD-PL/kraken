@@ -8,6 +8,9 @@ all:
 	$(MAKE) coq
 	$(MAKE) extract
 
+bench:
+	for i in `find . -name "bench-*"`; do make policies -C $$i; done
+
 depend: $(FILES)
 	$(COQDEP) $(INCLUDES) $^ > .depend
 

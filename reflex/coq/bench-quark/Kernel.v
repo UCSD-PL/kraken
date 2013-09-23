@@ -143,8 +143,8 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                   (
                     nop
                   )
-            ) 
-            ( 
+            )
+            (
               nop
             )
     ]]
@@ -166,7 +166,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                seq (call _ envd (slit (str_of_string (test_dir ++ "wget.py")))
                                  [mvar ReqResource None] None (Logic.eq_refl _))
                    (send ccomp ResResource (envvar envd None, tt))
-                  
+
              )
              (
                nop
@@ -206,6 +206,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     [[ mk_vcdesc [] : nop ]]
   end.
 Close Scope hdlr.
+
 (*Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   (fun m cc =>
      let (ct, cf, cconf) := cc in
@@ -282,45 +283,4 @@ Close Scope hdlr.
   ).
 *)
 
-
-Require Import NIExists.
-
-Open Scope char_scope.
-Definition dom' s :=
-  let url_end := snd (splitAt "." s) in
-  fst (splitAt "/" url_end).
-Close Scope char_scope.
-
-Definition clblr d (c : comp COMPT COMPS) :=
-  match c
-  with
-  | Build_comp Tab _ cfg =>
-    let cfgd := comp_conf_desc COMPT COMPS Tab in
-    if str_eq (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
-                               cfg None) d
-    then true
-    else false
-  | Build_comp CProc _ cfg =>
-    let cfgd := comp_conf_desc COMPT COMPS Tab in
-    if str_eq (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
-                               cfg None) d
-    then true
-    else false
-  | Build_comp UserInput _ _ => true
-  | _ => false
-  end.
-
-Definition vlblr (f : fin (projT1 KSTD)) := true.
-
-Local Opaque str_of_string.
-
-Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
-  IENVD KSTD INIT HANDLERS (clblr d) vlblr.
-Proof.
-  Time ni.
-Qed.
-
 End Spec.
-
-Module Main := MkMain(Spec).
-Import Main.

@@ -568,10 +568,11 @@ Ltac match_releases :=
 
 Ltac act_match :=
   match goal with
-  | [ |- AMatch ?pdv ?compt ?comps ?comptdec ?oact ?act ]
-      => let H := fresh "H" in
-         pose proof (decide_act pdv compt comps comptdec oact act) as H;
-         destruct H; [ assumption | contradiction ]
+  | [ |- AMatch ?pdv ?compt ?comps ?comptdec ?oact ?act ] =>
+    let H := fresh "H" in
+    let A := fresh "A" in
+    pose proof (decide_act pdv compt comps comptdec oact act) as H;
+    destruct H as [A|A]; repeat autounfold in A; [ assumption | tauto ]
   end.
 
 Ltac match_immbefore :=
@@ -584,18 +585,18 @@ Ltac match_immbefore :=
                        ImmBefore _ _ _ _ ?oact_b ?oact_a tr'
                        |- ImmBefore _ _ _ _ ?oact_b ?oact_a ?tr ]
       => auto
-  | [ |- ImmBefore ?pdv ?compt ?comps ?comptdec _ ?oact_a (?act::_) ]
-     => let H := fresh "H" in
-        pose proof (decide_act pdv compt comps comptdec oact_a act) as H;
-        destruct H;
-        [ contradiction ||
-          (apply IB_A; [ match_immbefore | act_match ])
-        | contradiction ||
-          (apply IB_nA; [ match_immbefore | assumption ]) ]
-         (*In some cases, one branch is impossible, so contradiction
-           solves the goal immediately.
-           In other cases, there are variables in the message payloads,
-           so both branches are possible.*)
+  | [ |- ImmBefore ?pdv ?compt ?comps ?comptdec _ ?oact_a (?act::_) ] =>
+    let H := fresh "H" in
+    let A := fresh "A" in
+    pose proof (decide_act pdv compt comps comptdec oact_a act) as H;
+    destruct H as [A|A]; simpl in A; repeat autounfold in A;
+    [ tauto || (apply IB_A; [ match_immbefore | act_match ])
+    | tauto || (apply IB_nA; [ match_immbefore | assumption ])
+    ]
+  (* In some cases, one branch is impossible, so tauto solves it
+     /!\ contradiction is not powerful enough to handle ~(True /\ True)
+     In other cases, there are variables in the message payloads,
+     so both branches are possible.*)
   end.
 
 Ltac crush :=

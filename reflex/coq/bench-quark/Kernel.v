@@ -43,8 +43,8 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("KeyPress",    [str_d])
   ; ("MouseClick",  [str_d; str_d; num_d])
   ; ("Go",          [str_d])
-  ; ("NewTab",      [])
-  ; ("CProcFD", [fd_d])
+  ; ("NewTab",      [str_d])
+  ; ("CKChan",      [fd_d])
   ].
 
 Notation Display     := 0%fin (only parsing).
@@ -58,7 +58,7 @@ Notation KeyPress    := 7%fin (only parsing).
 Notation MouseClick  := 8%fin (only parsing).
 Notation Go          := 9%fin (only parsing).
 Notation NewTab      := 10%fin (only parsing).
-Notation CProcFD     := 11%fin (only parsing).
+Notation CKChan      := 11%fin (only parsing).
 
 Inductive COMPT' : Set := UserInput | Output | Tab | CProc | DomainBar.
 
@@ -79,11 +79,13 @@ Definition COMPS (t : COMPT) : compd :=
   end.
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
-  [ Comp _ Output; Comp _ Tab; Comp _ UserInput ].
+  [ Comp _ Output; Comp _ Tab; Comp _ UserInput; Comp _ CProc; Desc _ fd_d ].
 
 Notation i_output    := 0%fin (only parsing).
 Notation i_curtab    := 1%fin (only parsing).
 Notation i_userinput := 2%fin (only parsing).
+Notation i_ckproc    := 3%fin (only parsing).
+Notation i_ckchan    := 4%fin (only parsing).
 
 Definition KSTD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Output; Comp _ Tab ].
@@ -114,11 +116,15 @@ Close Scope char_scope.
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
   seq (spawn _ IENVD Tab       (i_slit default_domain, tt) i_curtab    (Logic.eq_refl _)) (
+  seq (spawn _ IENVD CProc     (i_slit default_domain, tt) i_ckproc    (Logic.eq_refl _)) (
+  seq (call _ IENVD (i_slit (str_of_string (test_dir ++ "ckchan.py"))) [] i_ckchan (Logic.eq_refl _)) (
+  seq (send (i_envvar IENVD i_curtab) CKChan (i_envvar IENVD i_ckchan, tt)) (
+  seq (send (i_envvar IENVD i_ckproc) CKChan (i_envvar IENVD i_ckchan, tt)) (
   seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
   seq (send (i_envvar IENVD i_curtab) Go (i_slit default_url, tt)) (
   seq (stupd _ IENVD v_output (Term _ (base_term _ ) _ (Var _ IENVD i_output))) (
   seq (stupd _ IENVD v_curtab (Term _ (base_term _ ) _ (Var _ IENVD i_curtab))
-  ) nop))))).
+  ) nop))))))))).
 
 Definition cur_tab_dom {t envd} :=
   cconf (envd:=envd) (t:=t) Tab Tab 0%fin (CComp PAYD COMPT COMPS KSTD Tab t envd).
@@ -172,19 +178,18 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                nop
              )
        ]]
-  | Tab, CProcFD =>
-      let envd := mk_vcdesc [Comp _ CProc] in
-      [[ envd :
-        complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some cur_tab_dom, tt))
-                 (send (ct:=CProc) (term:=mk_vcdesc [Comp _ CProc; Comp _ CProc])
-                   (envd:=hdlr_term SystemFeatures.PAYD
-                   SystemFeatures.COMPT SystemFeatures.COMPS
-                   SystemFeatures.KSTD Tab CProcFD)
-                   (envvar (cc:=Tab) (m:=CProcFD) (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
-                   CProcFD (mvar CProcFD 0%fin, tt))
-                 (seq (spawn _ envd CProc (cur_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
-                      (send (envvar envd 0%fin) CProcFD (mvar CProcFD 0%fin, tt))))
-      ]]
+  | Tab, CKChan =>
+    let envd := mk_vcdesc [Comp _ CProc; Desc _ fd_d] in
+    [[ envd :
+       seq (call _ envd (slit (str_of_string (test_dir ++ "ckchan.py"))) []
+              1%fin (Logic.eq_refl _)) (
+       seq (send ccomp CKChan (envvar envd 1%fin, tt)) (
+           (complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some (cur_tab_dom), tt))
+             (send (envvar (mk_vcdesc [Comp _ CProc; Desc _ fd_d; Comp _ CProc]) 2%fin)
+                CKChan (envvar (mk_vcdesc [Comp _ CProc; Desc _ fd_d; Comp _ CProc]) 1%fin, tt))
+             (seq (spawn _ envd CProc (cur_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
+                  (send (envvar envd 0%fin) CKChan (envvar envd 1%fin, tt)))))))
+    ]]
   | UserInput, KeyPress =>
       [[ mk_vcdesc [] :
       seq (send (stvar v_curtab) KeyPress (mvar KeyPress None, tt))
@@ -197,90 +202,14 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | UserInput, NewTab =>
       let envd := mk_vcdesc [Comp _ Tab] in
       [[ envd :
-         seq (spawn _ envd Tab (slit default_domain, tt) None (Logic.eq_refl _)) (
-         seq (stupd _ envd v_curtab (envvar envd None)) (
-         seq (send (stvar v_curtab) Go (slit default_url, tt))
+         seq (spawn _ envd Tab (dom (mvar NewTab 0%fin), tt) 0%fin (Logic.eq_refl _)) (
+         seq (stupd _ _ v_curtab (envvar envd 0%fin)) (
+         seq (send (envvar envd 0%fin) Go (mvar NewTab 0%fin, tt))
              nop))
       ]]
   | _, _ =>
     [[ mk_vcdesc [] : nop ]]
   end.
 Close Scope hdlr.
-
-(*Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
-  (fun m cc =>
-     let (ct, cf, cconf) := cc in
-     match ct, tag PAYD m as _tm return
-       @sdenote _ SDenoted_vdesc (lkup_tag PAYD _tm) -> _
-     with
-
-     | Tab, Display => fun pl =>
-       let envd := mk_vcdesc [] in
-       match pl with (disp, _) =>
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-            if fd_eq cf (comp_fd (kst_ith st0 v_curtab))
-            then
-              [ fun s => sendall envd _
-                                 (mk_comp_pat
-                                    Tab
-                                    (Some (comp_fd s##v_output%kst))
-                                    (None, tt)
-                                 )
-                                 Display (slit disp, tt)
-              ]
-            else
-              []
-         )
-       end
-
-     | Tab, Navigate => fun pl =>
-       let envd := mk_vcdesc [Comp _ Tab] in
-       match pl with (url, _) =>
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (fun st0 =>
-            if fd_eq cf (comp_fd (kst_ith st0 v_curtab))
-            then
-              if str_eq (dom url)
-                        (
-                          shvec_ith (n := (projT1 (compd_conf (COMPS Tab))))
-                            sdenote_desc
-                            (projT2 (compd_conf (COMPS Tab)))
-                            (comp_conf (st0##v_curtab%kst))
-                            None
-                        )
-              then
-                [ fun s => spawn envd _ Tab (dom url, tt) None (Logic.eq_refl _)
-                ; fun s => stupd envd _ v_curtab (envvar envd None)
-                ; fun s => sendall envd _
-                             (mk_comp_pat
-                                Tab
-                                (Some (comp_fd s##v_curtab%kst))
-                                (None, tt)
-                             )
-                             Go (slit url, tt)
-                ]
-              else
-                []
-            else
-              []
-         )
-       end
-
-     | Tab, ReqResource => fun pl =>
-       let envd := mk_vcdesc [] in
-       match pl with (url, _) =>
-       existT
-         (fun d => hdlr_prog PAYD COMPT COMPS KSTD cc m d) envd
-         (
-           nop
-         )
-       end
-
-    end (pay PAYD m)
-  ).
-*)
 
 End Spec.

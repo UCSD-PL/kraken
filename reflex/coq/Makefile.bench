@@ -9,10 +9,20 @@ all:
 	$(MAKE) depend
 	$(MAKE) kernel
 
+build:
+	$(MAKE) kernel
+	cp -r ../../ml/ .
+	$(MAKE) extract
+	$(MAKE) -C ml
+
 depend: $(COQFILES)
 	$(COQDEP) $(INCLUDES) $^ > .depend
 
 kernel: Kernel.vo
+
+extract:
+	cp ../Extract.v .
+	$(COQC) $(INCLUDES) Extract.v
 
 # hmm, putting a clean here for benchmarking, but this might be done better
 # differently...
@@ -23,7 +33,8 @@ policies: clean kernel $(POLICIES:.v=.vo)
 
 clean:
 	rm -f *.vo *.glob
-	rm -f ../ml/*.vo ../ml/*.ml ../ml/*.mli
+	rm -rf ml
+	rm -f Extract.v
 
 -include .depend
 

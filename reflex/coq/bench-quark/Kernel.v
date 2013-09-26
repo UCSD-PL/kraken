@@ -213,3 +213,6 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
 Close Scope hdlr.
 
 End Spec.
+
+Module Main := MkMain(Spec).
+

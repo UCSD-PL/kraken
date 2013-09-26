@@ -1,6 +1,6 @@
-include ../../Makefile.config
+include $(KRAKEN)/Makefile.config
 
-SODIR := $(CURDIR)/../c-stubs
+SODIR := $(KRAKEN)/reflex/c-stubs
 SOBJS := $(wildcard $(SODIR)/*.c)
 SOBJS := $(notdir $(basename $(SOBJS)))
 SOBJS := $(patsubst %,-dllib\ -l%,$(SOBJS))
@@ -14,11 +14,9 @@ FLAGS := \
 
 all:
 	cp primitives/* .
-	cp ReflexEcho.ml Foo.ml
-	sed "s/COMPT'/COMPT/g" < Foo.ml > ReflexEcho.ml
 	$(OCAMLBUILD) $(FLAGS) Main.byte
 	cp _build/Main.byte kernel
-  
+
 clean:
 	$(OCAMLBUILD) $(FLAGS) -clean
 	rm -f kernel

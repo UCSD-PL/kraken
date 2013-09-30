@@ -2,7 +2,11 @@ all:
 	touch coq/.depend
 	$(MAKE) -C coq
 	$(MAKE) -C c-stubs
-	$(MAKE) -C ml
+
+build:
+	touch coq/.depend
+	$(MAKE) -C c-stubs
+	$(MAKE) build -C coq NAME=$(NAME)
 
 clean:
 	$(MAKE) -C coq clean

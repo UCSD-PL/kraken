@@ -222,9 +222,6 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     | _, _ => [[ mk_vcdesc [] : nop ]]
     end.
 
-Require Import PolLang.
-Require Import ActionMatch.
-
 Local Opaque str_of_string.
 
 Definition AC_pat : conc_pat COMPT COMPS :=
@@ -235,30 +232,6 @@ Definition Client_pat u a : conc_pat COMPT COMPS :=
 
 Definition D_pat : conc_pat COMPT COMPS :=
   Build_conc_pat COMPT COMPS Disk tt.
-
-Theorem auth_correct : forall st tr u a,
-  Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
-  ktr _ _ _ _ st = inhabits tr ->
-  Enables PAYD COMPT COMPS COMPTDEC
-    (KORecv PAYD COMPT COMPS (Some AC_pat)
-      (Some (Build_opt_msg PAYD
-        ACLoginResT (Some u, (Some a, tt)))))
-    (KOExec PAYD COMPT COMPS None None (Some (Client_pat u a)))
-    tr.
-Admitted.
-
-Theorem access_correct : forall st tr u a r,
-  Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
-  ktr _ _ _ _ st = inhabits tr ->
-  Enables PAYD COMPT COMPS COMPTDEC
-    (KORecv PAYD COMPT COMPS (Some AC_pat)
-      (Some (Build_opt_msg PAYD
-        ACFileResT (Some u, (Some a, (Some r, tt))))))
-    (KOSend PAYD COMPT COMPS (Some D_pat)
-      (Some (Build_opt_msg PAYD
-        DFileReq (Some u, (Some a, (Some r, tt))))))
-    tr.
-Admitted.
 
 End Spec.
 

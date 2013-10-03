@@ -4,6 +4,7 @@
 # adapted from "pg" script in CompCert
 
 YNOT=$KRAKEN/dep/ynot/src/coq
+REFLEX=$KRAKEN/reflex/coq
 
 function error {
   echo ERROR : $*
@@ -38,7 +39,7 @@ function setup_paths {
 }
 
 COQTOP="coqtop"
-COQARGS=$(quote -R $YNOT Ynot)
+COQARGS=$(quote -R $YNOT Ynot -I $REFLEX)
 
 $EMACS \
   -eval "(setq coq-prog-name \"$COQTOP\")" \

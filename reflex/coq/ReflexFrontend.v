@@ -137,6 +137,24 @@ Ltac destruct_comp :=
          destruct ct; destruct_pay cfg
   end.
 
+Ltac destruct_msg' :=
+  match goal with
+  | [ m : msg _ |- _ ]
+      => let tag := fresh "tag" in
+         let pay := fresh "pay" in
+         destruct m as [tag pay]; destruct_fin tag
+  end.
+
+Ltac destruct_comp' :=
+  match goal with
+  | [ c : Reflex.comp _ _ |- _ ]
+      => let ct := fresh "ct" in
+         let cfd := fresh "cfd" in
+         let cfg := fresh "cfg" in
+         destruct c as [ct cfd cfg];
+         destruct ct
+  end.
+
 Ltac remove_redundant_ktr :=
   unfold NIExists.ktr in *;
   match goal with
@@ -275,13 +293,15 @@ Ltac destruct_comp_st_vars :=
   end.
 
 Ltac ho_eq_tac tac Hlblr :=
+  idtac "ho_eq_tac";
   unfold high_out_eq; simpl; intros;
   repeat remove_redundant_ktr;
   repeat uninhabit; simpl;
   simpl in Hlblr; try rewrite Hlblr;
-  try solve[tac | destruct_cond; tac
-    | state_var_branch | find_comp_tr_solve; tac
-    | repeat destruct_comp_st_vars; tac ]
+    match goal with |- ?G => idtac G end;
+  try solve[idtac "tac"; tac | idtac "dc"; destruct_cond; tac
+    | idtac "svb"; state_var_branch | idtac "fctr"; find_comp_tr_solve; tac
+    | idtac "dcs"; repeat destruct_comp_st_vars; tac ]
   (*destruct_state is expensive, so try it only as
      a last resort*).
 
@@ -297,23 +317,23 @@ Ltac ho_eq_solve_low :=
   simpl; auto.
 
 Ltac low_step :=
-  unfold low_ok; intros;
+  unfold low_ok'; intros;
   match goal with
-  | [ Hve : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s _,
-      Hlow : _ = false |- _ ]
-    => destruct_msg; destruct_comp;
+  | [ Hlow : _ = false |- _ ]
+    => destruct_msg'; destruct_comp';
        try discriminate;
-       try solve [eapply prune_nop_1; eauto];
-       inversion Hve; repeat subst_inter_st; 
+       try solve [eapply prune_nop_1'; eauto];
        unfold kstate_run_prog; simpl;
        repeat destruct_find_comp; repeat destruct_cond;
        split;
        try abstract (
        match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
-         => ho_eq_tac ho_eq_solve_low Hlow
+         => match goal with |- ?G => 
+              idtac "low ho_eq" G; ho_eq_tac ho_eq_solve_low Hlow end
        | [ |- vars_eq _ _ _ _ _ _ _ ]
-         => auto
+         => match goal with |- ?G =>
+              idtac "low vars_eq" G; auto end
        | _ => idtac
        end)
   end.
@@ -325,32 +345,60 @@ Ltac ho_eq_solve_high :=
          end.
 
 Ltac high_steps :=
-  unfold high_ok; intros;
+  unfold high_ok'; intros;
   match goal with
-  | [ Hve1 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s1 _,
-      Hve2 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s2 _,
-      Hhigh : _ = true |- _ ]
-    => destruct_msg; destruct_comp;
+  | [ Hhigh : _ = true |- _ ]
+    => idtac "high"; destruct_msg'; destruct_comp';
        try discriminate;
-       try solve [eapply prune_nop_2; eauto];
-       inversion Hve1; inversion Hve2;
-       repeat subst_inter_st; unfold kstate_run_prog;
-       simpl;
-       repeat find_comp_eq; repeat destruct_find_comp;
+       try solve [eapply prune_nop_2'; eauto];
+       idtac "unfold krp"; unfold kstate_run_prog;
+       idtac "simpl"; simpl;
+       idtac "fc_eq"; repeat find_comp_eq; idtac "dfc"; repeat destruct_find_comp;
        repeat destruct_cond;
        split;
        try abstract (
        match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
-         => ho_eq_tac ho_eq_solve_high Hhigh
+         => match goal with |- ?G =>
+              idtac "high ho_eq" G; ho_eq_tac ho_eq_solve_high Hhigh end
        | [ |- vars_eq _ _ _ _ _ _ _ ]
-         => vars_eq_tac
+         => match goal with |- ?G =>
+              idtac "high vars_eq" G; vars_eq_tac end
        | _ => idtac
        end)
   end.
 
+(*Ltac high_steps :=
+  unfold high_ok; intros;
+  match goal with
+  | [ Hve1 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s1 _,
+      Hve2 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s2 _,
+      Hhigh : _ = true |- _ ]
+    => idtac "high"; destruct_msg; destruct_comp;
+       try discriminate;
+       try solve [eapply prune_nop_2; eauto];
+       match goal with |- ?G => idtac "inv" G end; inversion Hve1;
+       match goal with |- ?G => idtac "inv 2" G end; inversion Hve2;
+       match goal with |- ?G => idtac "subst_inter_st" G end; repeat subst_inter_st;
+       idtac "unfold krp"; unfold kstate_run_prog;
+       idtac "simpl"; simpl;
+       idtac "fc_eq"; repeat find_comp_eq; idtac "dfc"; repeat destruct_find_comp;
+       repeat destruct_cond;
+       split;
+       try abstract (
+       match goal with
+       | [ |- high_out_eq _ _ _ _ _ _ _ ]
+         => match goal with |- ?G =>
+              idtac "high ho_eq" G; ho_eq_tac ho_eq_solve_high Hhigh end
+       | [ |- vars_eq _ _ _ _ _ _ _ ]
+         => match goal with |- ?G =>
+              idtac "high vars_eq" G; vars_eq_tac end
+       | _ => idtac
+       end)
+  end.*)
+
 Ltac ni :=
-  intros; apply ni_suf; [low_step | high_steps].
+  intros; apply ni_suf'; [low_step | high_steps].
 
 (*Policy language tactics*)
 

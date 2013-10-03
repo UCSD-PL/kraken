@@ -905,7 +905,7 @@ Definition eval_payload_oexpr envd env (pd : vdesc) (e : payload_oexpr envd pd)
   : shvec sdenote_desc_conc_pat (projT2 pd) :=
   eval_payload_oexpr' envd env (projT1 pd) (projT2 pd) e.
 
-Definition elt_match (d : desc) (elt : s[[d]]) (elt' : sdenote_desc_conc_pat d) : bool :=
+Definition elt_match (d : desc) (elt : s[[Desc d]]) (elt' : sdenote_desc_conc_pat d) : bool :=
   match elt' with
   | None   => true
   | Some x =>

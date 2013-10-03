@@ -26,6 +26,16 @@ Definition KTrace := KTrace PAYD COMPT COMPS.
 Definition KAction := KAction PAYD COMPT COMPS.
 Definition kstate := kstate PAYD COMPT COMPS KSTD.
 Definition ktr := ktr PAYD COMPT COMPS KSTD.
+Definition match_comp := match_comp COMPT COMPTDEC COMPS.
+
+Definition lblr_match_comp
+  (lblr:forall (ct:COMPT),
+    shvec sdenote_desc_conc_pat
+    (projT2 (comp_conf_desc COMPT COMPS ct))) c :=
+  match_comp (Build_conc_pat COMPT COMPS
+    (comp_type COMPT COMPS c)
+    (lblr (comp_type COMPT COMPS c))) c.
+  (*existsb (fun cp => match_comp cp c) lblr.*)
 
 Definition is_input labeler (act : KAction) :=
   match act with
@@ -73,6 +83,7 @@ Definition low_in_nil (s : kstate) clblr :=
     inputs (fun c => negb (clblr c)) tr = nil.
 
 Definition NI clblr vlblr := forall s,
+  let clblr := lblr_match_comp clblr in
   Reach s ->
   (exists snil,
     Reach snil /\
@@ -82,6 +93,7 @@ Definition NI clblr vlblr := forall s,
     vars_eq s snil vlblr).
 
 Definition low_ok clblr vlblr := forall c m i s s',
+  let clblr := lblr_match_comp clblr in
   clblr c = false ->
   Reach s ->
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m i s s' ->
@@ -89,6 +101,7 @@ Definition low_ok clblr vlblr := forall c m i s s',
   vars_eq s s' vlblr.
 
 Definition high_ok clblr vlblr :=
+  let clblr := lblr_match_comp clblr in
   forall c m i s1 s1' s2 s2',
     clblr c = true ->
     high_out_eq s1 s2 clblr ->
@@ -104,8 +117,8 @@ Ltac uninhabit :=
     => apply pack_injective in H; subst tr
   end.
 
-Definition high_comp_pat COMPT COMPTDEC COMPS cp clblr :=
-  forall c, match_comp COMPT COMPTDEC COMPS cp c = true ->
+Definition high_comp_pat cp clblr :=
+  forall c, match_comp cp c = true ->
     clblr c = true.
 
 Definition exec_comps (a : KAction) (l : list comp) : list comp :=
@@ -300,7 +313,7 @@ Proof.
 Qed.
 
 Lemma hfind_cs_filter : forall cs clblr cp,
-  high_comp_pat COMPT COMPTDEC COMPS cp clblr ->
+  high_comp_pat cp clblr ->
   find_comp COMPT COMPTDEC COMPS cp cs = 
   find_comp COMPT COMPTDEC COMPS cp (filter clblr cs).
 Proof.
@@ -312,16 +325,16 @@ Proof.
     destruct (match_comp_pf COMPT COMPTDEC COMPS cp a)
       as [ ? | ? ]_eqn; auto.
     destruct (match_comp_pf COMPT COMPTDEC COMPS cp a)
-      as [ ? | ? ]_eqn.
-    unfold high_comp_pat, match_comp in Hhigh. specialize (Hhigh a).
-    rewrite Heqo in Hhigh. specialize (Hhigh (Logic.eq_refl _)). congruence.
-    auto.
+      as [ ? | ? ]_eqn; auto.
+    unfold high_comp_pat, match_comp, Reflex.match_comp in Hhigh. 
+    specialize (Hhigh a). rewrite Heqo in Hhigh. specialize (Hhigh (Logic.eq_refl _)).
+    congruence.
 Qed.
 
 Lemma hout_eq_find_eq : forall cp s s' clblr,
   Reach s -> Reach s' ->
   high_out_eq s s' clblr ->
-  high_comp_pat COMPT COMPTDEC COMPS cp clblr ->
+  high_comp_pat cp clblr ->
   find_comp COMPT COMPTDEC COMPS cp (kcs _ _ _ _ s) = 
   find_comp COMPT COMPTDEC COMPS cp (kcs _ _ _ _ s').
 Proof.
@@ -659,7 +672,7 @@ Proof.
       reflexivity.
 
     destruct IHHReach as [snil_ind IHsnil].
-    case_eq (clblr c); intro Hclblr.
+    case_eq (lblr_match_comp clblr c); intro Hclblr.
       match goal with
       | [ H : ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
         => inversion H
@@ -669,9 +682,6 @@ Proof.
          (projT1 hdlrs) (mk_inter_ve_st _ _ _ _ c m snil_ind trnil)
          (projT2 hdlrs) input).
       exists snil_next; unfold snil_next.
-(*      exists (kstate_run_prog PAYD COMPT COMPTDEC COMPS KSTD c m 
-         (projT1 hdlrs) (mk_inter_ve_st _ _ _ _ c m snil_ind trnil)
-         (projT2 hdlrs) input).*)
       assert (ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input snil_ind
         (kstate_run_prog PAYD COMPT COMPTDEC COMPS KSTD c m 
           (projT1 hdlrs)
@@ -726,7 +736,7 @@ Proof.
         split.
           intros.
           destruct s. destruct ktr0.
-          assert (outputs clblr k = outputs clblr tr) as Heq.
+          assert (outputs (lblr_match_comp clblr) k = outputs (lblr_match_comp clblr) tr) as Heq.
              eapply Hlow; eauto.
           rewrite <- Heq.
           eapply IHsnil; eauto.
@@ -744,7 +754,7 @@ Proof.
       => inversion H
     end.
     destruct IHHReach as [snil_ind IHsnil].
-    case_eq (clblr c); intro Hlblr.
+    case_eq (lblr_match_comp clblr c); intro Hlblr.
       destruct snil_ind as [csnil [trnil] stnil fdnil]_eqn.
       exists (mk_bogus_st PAYD COMPT COMPS KSTD c bmsg snil_ind trnil).
         split.
@@ -801,6 +811,66 @@ Proof.
 
         unfold mk_bogus_st. simpl.
         eapply IHsnil; eauto.
+Qed.
+
+Definition low_ok' clblr vlblr := forall c m i s tr,
+  let clblr := lblr_match_comp clblr in
+  clblr c = false ->
+  Reach s ->
+  Reflex.ktr _ _ _ _ s = [tr]%inhabited ->
+  high_out_eq s
+    (kstate_run_prog PAYD COMPT COMPTDEC COMPS KSTD c m
+    (projT1 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)))
+    (mk_inter_ve_st PAYD COMPT COMPS KSTD c m s tr)
+    (projT2 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c))) i) clblr /\
+  vars_eq s 
+    (kstate_run_prog PAYD COMPT COMPTDEC COMPS KSTD c m
+    (projT1 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)))
+    (mk_inter_ve_st PAYD COMPT COMPS KSTD c m s tr)
+    (projT2 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c))) i) vlblr.
+
+Definition high_ok' clblr vlblr :=
+  let clblr := lblr_match_comp clblr in
+  forall c m i s1 s2 tr1 tr2,
+    clblr c = true ->
+    high_out_eq s1 s2 clblr ->
+    vars_eq s1 s2 vlblr ->
+    Reach s1 -> Reach s2 ->
+    Reflex.ktr _ _ _ _ s1 = [tr1]%inhabited ->
+    Reflex.ktr _ _ _ _ s2 = [tr2]%inhabited ->
+    high_out_eq
+      (kstate_run_prog PAYD COMPT COMPTDEC COMPS KSTD c m
+      (projT1 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)))
+      (mk_inter_ve_st PAYD COMPT COMPS KSTD c m s1 tr1)
+      (projT2 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c))) i)
+      (kstate_run_prog PAYD COMPT COMPTDEC COMPS KSTD c m
+      (projT1 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)))
+      (mk_inter_ve_st PAYD COMPT COMPS KSTD c m s2 tr2)
+      (projT2 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c))) i)
+      clblr /\
+    vars_eq
+      (kstate_run_prog PAYD COMPT COMPTDEC COMPS KSTD c m
+      (projT1 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)))
+      (mk_inter_ve_st PAYD COMPT COMPS KSTD c m s1 tr1)
+      (projT2 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c))) i)
+      (kstate_run_prog PAYD COMPT COMPTDEC COMPS KSTD c m
+      (projT1 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)))
+      (mk_inter_ve_st PAYD COMPT COMPS KSTD c m s2 tr2)
+      (projT2 (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c))) i)
+      vlblr.
+
+Theorem ni_suf' : forall clblr vlblr,
+  low_ok' clblr vlblr ->
+  high_ok' clblr vlblr ->
+  NI clblr vlblr.
+Proof.
+  intros; apply ni_suf.
+    unfold low_ok, low_ok' in *. intros.
+    inversion H3. subst s'0. apply H; auto.
+
+    unfold high_ok, high_ok' in *. intros.
+    inversion H6. inversion H7.
+    subst s'. subst s'0. apply H0; auto.
 Qed.
 
 End NI.

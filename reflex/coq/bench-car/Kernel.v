@@ -110,6 +110,51 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
      | _, _ => [[ mk_vcdesc [] : nop ]]
     end.
 
+<<<<<<< Updated upstream:reflex/coq/bench-car/Kernel.v
+=======
+Require Import NIExists.
+Require Import PruneFacts.
+
+Definition clblr :=
+  [Build_conc_pat COMPT COMPS Engine tt].
+
+Definition vlblr (f : fin (projT1 KSTD)) := false.
+
+Local Opaque str_of_string.
+
+Theorem ni : NI PAYD COMPT COMPTDEC COMPS
+  IENVD KSTD INIT HANDLERS clblr vlblr.
+Proof.
+  intros; apply ni_suf_all.
+Local Opaque cmd_ok_low.
+    Time unfold low_ok''; intros;
+    destruct_msg'; destruct_comp';
+    try discriminate; simpl;
+      repeat first [apply nop_low
+        | apply seq_low
+        | apply ite_low
+        | apply stupd_low
+        | solve [apply send_low_ccomp]
+        | apply send_low
+        | apply call_low
+        | solve [auto] ].
+
+Local Opaque all_cmd_ok_high.
+    Time unfold high_ok_all; intros;
+    destruct_msg'; destruct_comp';
+    try discriminate; simpl;
+      repeat first [apply nop_high_all
+        | apply seq_high_all
+        | apply ite_high_all
+        | apply stupd_high_all
+        | solve [apply send_high_all_low_comp; auto]
+        | apply send_high_all
+        | apply spawn_high_all
+        | apply call_high_all
+        | solve [auto ] ].
+Qed.
+
+>>>>>>> Stashed changes:reflex/coq/ReflexCar.v
 End Spec.
 
 Module Main := MkMain(Spec).

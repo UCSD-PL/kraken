@@ -1,0 +1,42 @@
+# this will be called from a bench- subdirectory, so one more ..
+include ../../../Makefile.config
+
+INCLUDES := -R $(YNOT) Ynot -I . -I ..
+POLICIES := $(wildcard Policy*.v)
+COQFILES := Kernel.v $(POLICIES)
+
+all:
+	$(MAKE) depend
+	$(MAKE) kernel
+
+build:
+	$(MAKE) kernel
+	cp -r ../../ml/ .
+	$(MAKE) extract
+	$(MAKE) -C ml
+
+depend: $(COQFILES)
+	$(COQDEP) $(INCLUDES) $^ > .depend
+
+kernel: Kernel.vo
+
+extract:
+	cp ../Extract.v .
+	$(COQC) $(INCLUDES) Extract.v
+
+# hmm, putting a clean here for benchmarking, but this might be done better
+# differently...
+policies: clean kernel $(POLICIES:.v=.vo)
+
+%.vo: %.v
+	timeout --foreground 1h $(COQC) $(INCLUDES) $*.v
+
+clean:
+	rm -f *.vo *.glob
+	rm -rf ml
+	rm -f Extract.v
+
+-include .depend
+
+.PHONY: all depend kernel policies clean
+

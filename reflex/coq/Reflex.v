@@ -559,6 +559,10 @@ Inductive unop : cdesc -> cdesc -> Set :=
 | Not : unop (Desc num_d) (Desc num_d)
 | SplitFst : ascii -> unop (Desc str_d) (Desc str_d)
 | SplitSnd : ascii -> unop (Desc str_d) (Desc str_d)
+| UnopNum : forall (d:cdesc), (s[[d]] -> num) ->
+              unop d (Desc num_d)
+| UnopStr : forall (d:cdesc), (s[[d]] -> str) ->
+              unop d (Desc str_d)
 .
 
 Definition splitAt c s :=
@@ -578,6 +582,8 @@ Definition eval_unop
     fst (splitAt c v)
   | SplitSnd c => fun v : str =>
     snd (splitAt c v)
+  | UnopNum _ op => fun v => op v
+  | UnopStr _ op => fun v => op v
   end v.
 
 Implicit Arguments eval_unop.
@@ -588,6 +594,10 @@ Inductive binop : cdesc -> cdesc -> cdesc -> Set :=
 | Sub   : binop (Desc num_d) (Desc num_d) (Desc num_d)
 | Mul   : binop (Desc num_d) (Desc num_d) (Desc num_d)
 | Cat   : binop (Desc str_d) (Desc str_d) (Desc str_d)
+| BinopNum : forall (d1 d2:cdesc), (s[[d1]] -> s[[d2]] -> num) ->
+               binop d1 d2 (Desc num_d)
+| BinopStr : forall (d1 d2:cdesc), (s[[d1]] -> s[[d2]] -> str) ->
+               binop d1 d2 (Desc str_d)
 .
 
 Definition eval_binop
@@ -616,6 +626,8 @@ Definition eval_binop
     num_of_nat (mult (nat_of_num v1) (nat_of_num v2))
   | Cat => fun v1 v2 : str =>
     v1 ++ v2
+  | BinopNum _ _ op => fun v1 v2 => op v1 v2
+  | BinopStr _ _ op => fun v1 v2 => op v1 v2
   end v1 v2.
 
 Implicit Arguments eval_binop.

@@ -68,6 +68,8 @@ Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
 Proof. decide equality. Defined.
 
 Definition test_dir := "../test/quark/".
+Definition create_socket := "createsocket.py".
+Definition wget := "wget.py".
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
@@ -109,6 +111,10 @@ Include SystemFeatures.
 Open Scope char_scope.
 Definition dom {envd term} s :=
   (splitfst envd term "/" (splitsnd envd term "." s)).
+
+Definition dom' s :=
+  let url_end := snd (splitAt "." s) in
+  fst (splitAt "/" url_end).
 Close Scope char_scope.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
@@ -133,20 +139,17 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     match bad with end
 
   | Tab, ReqSocket =>
-    [[ mk_vcdesc [] :
-        ite (eq ccomp (stvar v_curtab))
-            (
-              ite (eq (dom (mvar ReqSocket None)) cur_tab_dom)
-                  (
-                    nop
-                  )
-                  (
-                    nop
-                  )
-            )
-            (
-              nop
-            )
+    let envd := mk_vcdesc [Desc _ fd_d] in
+    [[ envd :
+       ite (eq (dom (mvar ReqSocket None)) cur_tab_dom)
+       (
+         seq (call _ envd (slit (str_of_string (create_socket)))
+                                [mvar ReqSocket 0%fin] 0%fin (Logic.eq_refl _))
+             (send ccomp ResSocket (envvar envd None, tt))
+       )
+       (
+         nop
+       )
     ]]
   | Tab, Display =>
       [[ mk_vcdesc [] :
@@ -163,7 +166,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       [[ envd :
          ite (eq (dom (mvar ReqResource None)) cur_tab_dom)
              (
-               seq (call _ envd (slit (str_of_string (test_dir ++ "wget.py")))
+               seq (call _ envd (slit (str_of_string (wget)))
                                  [mvar ReqResource None] None (Logic.eq_refl _))
                    (send ccomp ResResource (envvar envd None, tt))
 

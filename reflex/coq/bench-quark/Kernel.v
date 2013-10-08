@@ -43,7 +43,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("KeyPress",    [str_d])
   ; ("MouseClick",  [str_d; str_d; num_d])
   ; ("Go",          [str_d])
-  ; ("NewTab",      [])
+  ; ("NewTab",      [str_d])
   ; ("CProcFD", [fd_d])
   ].
 
@@ -179,11 +179,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       let envd := mk_vcdesc [Comp _ CProc] in
       [[ envd :
         complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some cur_tab_dom, tt))
-                 (send (ct:=CProc) (term:=mk_vcdesc [Comp _ CProc; Comp _ CProc])
-                   (envd:=hdlr_term SystemFeatures.PAYD
-                   SystemFeatures.COMPT SystemFeatures.COMPS
-                   SystemFeatures.KSTD Tab CProcFD)
-                   (envvar (cc:=Tab) (m:=CProcFD) (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
+                 (send (envvar (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
                    CProcFD (mvar CProcFD 0%fin, tt))
                  (seq (spawn _ envd CProc (cur_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
                       (send (envvar envd 0%fin) CProcFD (mvar CProcFD 0%fin, tt))))
@@ -200,8 +196,8 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | UserInput, NewTab =>
       let envd := mk_vcdesc [Comp _ Tab] in
       [[ envd :
-         seq (spawn _ envd Tab (slit default_domain, tt) None (Logic.eq_refl _)) (
-         seq (stupd _ envd v_curtab (envvar envd None)) (
+         seq (spawn _ envd Tab (mvar NewTab 0%fin, tt) 0%fin (Logic.eq_refl _)) (
+         seq (stupd _ envd v_curtab (envvar envd 0%fin)) (
          seq (send (stvar v_curtab) Go (slit default_url, tt))
              nop))
       ]]

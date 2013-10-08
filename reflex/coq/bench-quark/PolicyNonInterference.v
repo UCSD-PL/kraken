@@ -1,11 +1,5 @@
 Require Import Kernel NIExists Reflex ReflexBase ReflexFin ReflexHVec.
 
-Open Scope char_scope.
-Definition dom' s :=
-  let url_end := snd (splitAt "." s) in
-  fst (splitAt "/" url_end).
-Close Scope char_scope.
-
 Import SystemFeatures.
 
 Definition clblr d (c : comp COMPT COMPS) :=

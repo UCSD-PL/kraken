@@ -18,6 +18,19 @@ Definition splitAt c s :=
     end
   in splitAt_aux c s nil.
 
+Definition dom (s:str) :=
+  let fix dom_aux s n res :=
+    match s with
+    | nil => List.rev res
+    | h::s' => if Ascii.ascii_dec h "."
+               then match n with
+                    | O => List.rev res
+                    | S n' => dom_aux s' n' (h::res)
+                    end
+               else dom_aux s' n (h::res)
+    end in
+  List.rev (dom_aux (List.rev (fst (splitAt "/" s))) 1 nil).
+
 Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
@@ -108,26 +121,22 @@ Module Spec <: SpecInterface.
 
 Include SystemFeatures.
 
-Open Scope char_scope.
-Definition dom {envd term} s :=
-  (splitfst envd term "/" (splitsnd envd term "." s)).
-
-Definition dom' s :=
-  let url_end := snd (splitAt "." s) in
-  fst (splitAt "/" url_end).
-Close Scope char_scope.
-
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
   seq (spawn _ IENVD Tab       (i_slit default_domain, tt) i_curtab    (Logic.eq_refl _)) (
   seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
   seq (send (i_envvar IENVD i_curtab) Go (i_slit default_url, tt)) (
-  seq (stupd _ IENVD v_output (Term _ (base_term _ ) _ (Var _ IENVD i_output))) (
-  seq (stupd _ IENVD v_curtab (Term _ (base_term _ ) _ (Var _ IENVD i_curtab))
-  ) nop))))).
+  seq (stupd _ IENVD v_output (i_envvar IENVD i_output)) (
+      (stupd _ IENVD v_curtab (i_envvar IENVD i_curtab))))))).
 
-Definition cur_tab_dom {t envd} :=
+Definition hdlr_tab_dom {t envd} :=
   cconf (envd:=envd) (t:=t) Tab Tab 0%fin (CComp PAYD COMPT COMPS KSTD Tab t envd).
+
+Definition cur_tab_dom {t envd ct} :=
+  cconf (envd:=envd) (t:=t) ct Tab 0%fin (StVar _ _ _ KSTD _ _ _ v_curtab).
+
+Definition dom_op {envd term} e :=
+  unop_str envd term (Desc _ str_d) dom e.
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -135,13 +144,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   match ct as _ct, t as _t return
     {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
   with
-  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad))))))))))) =>
-    match bad with end
-
   | Tab, ReqSocket =>
     let envd := mk_vcdesc [Desc _ fd_d] in
     [[ envd :
-       ite (eq (dom (mvar ReqSocket None)) cur_tab_dom)
+       ite (eq (dom_op (mvar ReqSocket None)) hdlr_tab_dom)
        (
          seq (call _ envd (slit (str_of_string (create_socket)))
                                 [mvar ReqSocket 0%fin] 0%fin (Logic.eq_refl _))
@@ -164,7 +170,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | Tab, ReqResource =>
       let envd := mk_vcdesc [Desc _ fd_d] in
       [[ envd :
-         ite (eq (dom (mvar ReqResource None)) cur_tab_dom)
+         ite (eq (dom_op (mvar ReqResource None)) hdlr_tab_dom)
              (
                seq (call _ envd (slit (str_of_string (wget)))
                                  [mvar ReqResource None] None (Logic.eq_refl _))
@@ -178,10 +184,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | Tab, CProcFD =>
       let envd := mk_vcdesc [Comp _ CProc] in
       [[ envd :
-        complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some cur_tab_dom, tt))
+        complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some hdlr_tab_dom, tt))
                  (send (envvar (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
                    CProcFD (mvar CProcFD 0%fin, tt))
-                 (seq (spawn _ envd CProc (cur_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
+                 (seq (spawn _ envd CProc (hdlr_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
                       (send (envvar envd 0%fin) CProcFD (mvar CProcFD 0%fin, tt))))
       ]]
   | UserInput, KeyPress =>
@@ -197,10 +203,18 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       let envd := mk_vcdesc [Comp _ Tab] in
       [[ envd :
          seq (spawn _ envd Tab (mvar NewTab 0%fin, tt) 0%fin (Logic.eq_refl _)) (
-         seq (stupd _ envd v_curtab (envvar envd 0%fin)) (
-         seq (send (stvar v_curtab) Go (slit default_url, tt))
-             nop))
+             (stupd _ envd v_curtab (envvar envd 0%fin)))
       ]]
+  | UserInput, Navigate =>
+     [[ mk_vcdesc [] :
+        ite (eq (dom_op (mvar Navigate 0%fin)) cur_tab_dom)
+            (
+              send (stvar v_curtab) Go (mvar Navigate 0%fin, tt)
+            )
+            (
+              nop
+            )
+     ]]
   | _, _ =>
     [[ mk_vcdesc [] : nop ]]
   end.

@@ -8,28 +8,7 @@ Require Import ReflexFrontend.
 Require Import ReflexHVec.
 Require Import ReflexIO.
 Require Import ReflexVec.
-
-Definition splitAt c s :=
-  let fix splitAt_aux c s r_res :=
-    match s with
-    | nil    => (List.rev r_res, nil)
-    | h :: t =>
-      if Ascii.ascii_dec h c then (List.rev r_res, t) else splitAt_aux c t (h :: r_res)
-    end
-  in splitAt_aux c s nil.
-
-Definition dom (s:str) :=
-  let fix dom_aux s n res :=
-    match s with
-    | nil => List.rev res
-    | h::s' => if Ascii.ascii_dec h "."
-               then match n with
-                    | O => List.rev res
-                    | S n' => dom_aux s' n' (h::res)
-                    end
-               else dom_aux s' n (h::res)
-    end in
-  List.rev (dom_aux (List.rev (fst (splitAt "/" s))) 1 nil).
+Require Import Misc.
 
 Open Scope string_scope.
 

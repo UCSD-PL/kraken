@@ -91,6 +91,20 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition splitsnd envd term c s :=
     UnOp COMPT COMPS term envd (SplitSnd _ _ c) s.
 
+  Definition unop_num envd term (d:cdesc COMPT) (op:s[[d]] -> num) e :=
+    UnOp COMPT COMPS term envd (UnopNum COMPT COMPS d op) e.
+
+  Definition unop_str envd term (d:cdesc COMPT) (op:s[[d]] -> str) e :=
+    UnOp COMPT COMPS term envd (UnopStr COMPT COMPS d op) e.
+
+  Definition binop_num envd term (d1 d2:cdesc COMPT)
+             (op:s[[d1]] -> s[[d2]] -> num) e1 e2 :=
+    BinOp COMPT COMPS term envd (BinopNum COMPT COMPS d1 d2 op) e1 e2.
+
+  Definition binop_str envd term (d1 d2:cdesc COMPT)
+             (op:s[[d1]] -> s[[d2]] -> str) e1 e2 :=
+    BinOp COMPT COMPS term envd (BinopStr COMPT COMPS d1 d2 op) e1 e2.
+
   Definition mvar
   {envd} (t : fin NB_MSG) {ct} i :=
   (Term COMPT COMPS _ _ (MVar PAYD COMPT COMPS KSTD ct t envd i)).

@@ -62,6 +62,7 @@ Proof. decide equality. Defined.
 Definition test_dir := "../test/quark/".
 Definition create_socket := "createsocket.py".
 Definition wget := "wget.py".
+Definition create_ckchan := "create_ckchan.py".
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
@@ -73,11 +74,13 @@ Definition COMPS (t : COMPT) : compd :=
   end.
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
-  [ Comp _ Output; Comp _ Tab; Comp _ UserInput ].
+  [ Comp _ Output; Comp _ Tab; Comp _ UserInput; Comp _ CProc; Desc _ fd_d ].
 
 Notation i_output    := 0%fin (only parsing).
 Notation i_curtab    := 1%fin (only parsing).
 Notation i_userinput := 2%fin (only parsing).
+Notation i_cproc := 3%fin (only parsing).
+Notation i_ckchan := 4%fin (only parsing).
 
 Definition KSTD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Output; Comp _ Tab ].
@@ -103,10 +106,14 @@ Include SystemFeatures.
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
   seq (spawn _ IENVD Tab       (i_slit default_domain, tt) i_curtab    (Logic.eq_refl _)) (
+  seq (spawn _ IENVD CProc     (i_slit default_domain, tt) i_cproc (Logic.eq_refl _)) (
+  seq (call _ IENVD (i_slit (str_of_string create_ckchan)) [] i_ckchan (Logic.eq_refl _)) (
+  seq (send (i_envvar IENVD i_curtab) CProcFD (i_envvar IENVD i_ckchan, tt)) (
+  seq (send (i_envvar IENVD i_cproc) CProcFD (i_envvar IENVD i_ckchan, tt)) (
   seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
   seq (send (i_envvar IENVD i_curtab) Go (i_slit default_url, tt)) (
   seq (stupd _ IENVD v_output (i_envvar IENVD i_output)) (
-      (stupd _ IENVD v_curtab (i_envvar IENVD i_curtab))))))).
+      (stupd _ IENVD v_curtab (i_envvar IENVD i_curtab))))))))))).
 
 Definition hdlr_tab_dom {t envd} :=
   cconf (envd:=envd) (t:=t) Tab Tab 0%fin (CComp PAYD COMPT COMPS KSTD Tab t envd).
@@ -123,6 +130,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   match ct as _ct, t as _t return
     {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
   with
+  | _, Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some bad))))))))))) =>
+    match bad with end
+
   | Tab, ReqSocket =>
     let envd := mk_vcdesc [Desc _ fd_d] in
     [[ envd :
@@ -160,15 +170,6 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                nop
              )
        ]]
-  | Tab, CProcFD =>
-      let envd := mk_vcdesc [Comp _ CProc] in
-      [[ envd :
-        complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some hdlr_tab_dom, tt))
-                 (send (envvar (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
-                   CProcFD (mvar CProcFD 0%fin, tt))
-                 (seq (spawn _ envd CProc (hdlr_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
-                      (send (envvar envd 0%fin) CProcFD (mvar CProcFD 0%fin, tt))))
-      ]]
   | UserInput, KeyPress =>
       [[ mk_vcdesc [] :
       seq (send (stvar v_curtab) KeyPress (mvar KeyPress None, tt))
@@ -179,10 +180,21 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
         (mvar MouseClick 0%fin, (mvar MouseClick 1%fin, (mvar MouseClick 2%fin, tt))))
       nop ]]
   | UserInput, NewTab =>
-      let envd := mk_vcdesc [Comp _ Tab] in
+      let envd := mk_vcdesc [Comp _ Tab; Desc _ fd_d; Comp _ CProc] in
       [[ envd :
-         seq (spawn _ envd Tab (mvar NewTab 0%fin, tt) 0%fin (Logic.eq_refl _)) (
-             (stupd _ envd v_curtab (envvar envd 0%fin)))
+         seq (spawn _ envd Tab (mvar NewTab 0%fin, tt) None (Logic.eq_refl _)) (
+         seq (call _ envd (slit (str_of_string create_ckchan)) [] 1%fin (Logic.eq_refl _)) (
+         seq (send (envvar envd 0%fin) CProcFD (envvar envd 1%fin, tt)) (
+         seq (complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some (mvar NewTab 0%fin), tt))
+                 (send (envvar
+                    (mk_vcdesc
+                       [Comp _ Tab; Desc _ fd_d; Comp _ CProc; Comp _ CProc]) 3%fin)
+                   CProcFD (envvar
+                     (mk_vcdesc
+                        [Comp _ Tab; Desc _ fd_d; Comp _ CProc; Comp _ CProc]) 1%fin, tt))
+                 (seq (spawn _ envd CProc (mvar NewTab 0%fin, tt) 2%fin (Logic.eq_refl _)) (
+                      (send (envvar envd 2%fin) CProcFD (envvar envd 1%fin, tt))))) (
+            (stupd _ envd v_curtab (envvar envd 0%fin))))))
       ]]
   | UserInput, Navigate =>
      [[ mk_vcdesc [] :

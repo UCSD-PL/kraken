@@ -68,7 +68,7 @@ Fixpoint hdlr_term_ok_high ct mt envd c (t:hdlr_term ct mt envd c) vlblr llblr :
   end.
 
 Fixpoint hdlr_expr_ok_high ct mt envd c
-  (e:expr COMPT (hdlr_term ct mt) envd c) vlblr llblr :=
+  (e:expr COMPT COMPS (hdlr_term ct mt) envd c) vlblr llblr :=
   match e with
   | Term _ t => hdlr_term_ok_high _ _ _ _ t vlblr llblr
   | UnOp _ _ _ e' => hdlr_expr_ok_high _ _ _ _ e' vlblr llblr
@@ -77,7 +77,7 @@ Fixpoint hdlr_expr_ok_high ct mt envd c
   end.
 
 Definition hdlr_oexpr_ok_high ct mt envd c
-  (oe:option (expr COMPT (hdlr_term ct mt) envd c))
+  (oe:option (expr COMPT COMPS (hdlr_term ct mt) envd c))
   vlblr llblr :=
   match oe with
   | Some e => hdlr_expr_ok_high ct mt envd c e vlblr llblr
@@ -85,19 +85,19 @@ Definition hdlr_oexpr_ok_high ct mt envd c
   end.
 
 Definition expr_list_ok_high ct mt envd c
-  (es:list (expr COMPT (hdlr_term ct mt) envd c)) vlblr llblr :=
+  (es:list (expr COMPT COMPS (hdlr_term ct mt) envd c)) vlblr llblr :=
   fold_right (fun e => andb
     (hdlr_expr_ok_high ct mt envd c e vlblr llblr)) true es.
 
 Fixpoint pl_expr_ok_high ct mt envd n vd
-  (ple:payload_expr' COMPT (hdlr_term ct mt) envd n vd) vlblr llblr :=
+  (ple:payload_expr' COMPT COMPS (hdlr_term ct mt) envd n vd) vlblr llblr :=
   match n as _n return
-    forall (_vd:vdesc' _n) (ple:payload_expr' COMPT (hdlr_term ct mt) envd _n _vd), _
+    forall (_vd:vdesc' _n) (ple:payload_expr' COMPT COMPS (hdlr_term ct mt) envd _n _vd), _
   with
   | O => fun _ _ => true
   | S n' => fun vd =>
     match vd as _vd return
-      payload_expr' COMPT (hdlr_term ct mt) envd (S n') _vd -> _
+      payload_expr' COMPT COMPS (hdlr_term ct mt) envd (S n') _vd -> _
     with
     | (vd0, vd') =>
       fun ple =>
@@ -107,14 +107,14 @@ Fixpoint pl_expr_ok_high ct mt envd n vd
   end vd ple.
 
 Fixpoint pl_oexpr_ok_high ct mt envd n vd
-  (ple:payload_oexpr' COMPT (hdlr_term ct mt) envd n vd) vlblr llblr :=
+  (ple:payload_oexpr' COMPT COMPS (hdlr_term ct mt) envd n vd) vlblr llblr :=
   match n as _n return
-    forall (_vd:vdesc' _n) (ple:payload_oexpr' COMPT (hdlr_term ct mt) envd _n _vd), _
+    forall (_vd:vdesc' _n) (ple:payload_oexpr' COMPT COMPS (hdlr_term ct mt) envd _n _vd), _
   with
   | O => fun _ _ => true
   | S n' => fun vd =>
     match vd as _vd return
-      payload_oexpr' COMPT (hdlr_term ct mt) envd (S n') _vd -> _
+      payload_oexpr' COMPT COMPS (hdlr_term ct mt) envd (S n') _vd -> _
     with
     | (vd0, vd') =>
       fun ple =>
@@ -241,7 +241,7 @@ Proof.
     right. intro H. apply elt_incl_iff in H. destruct H; discriminate.
 
     left. apply elt_incl_iff. auto.
-Qed.
+Defined.
 
 Definition default_desc (d:desc) : s[[d]] :=
 match d with
@@ -371,7 +371,7 @@ Proof.
       rewrite UIP_refl with (p:=e) in *. unfold elt_match in *.
       rewrite Hv in *. discriminate.
       contradict n1. auto.
-Qed.
+Defined.
 
 (*Definition high_cp_dec cp clblr :
   decide (high_comp_pat COMPT COMPTDEC COMPS cp
@@ -467,7 +467,7 @@ Lemma compcd_inj : forall ct ct',
   ct = ct'.
 Proof.
   intros. injection H. auto.
-Qed.
+Defined.
 
 Definition peval_hdlr_term {cd envd} ct mt (t : hdlr_term ct mt envd cd)
   (v:shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))))
@@ -723,7 +723,7 @@ end
 Qed.
 
 Definition peval_expr {cd envd} ct mt
-  (e:expr COMPT (hdlr_term ct mt) envd cd)
+  (e:expr COMPT COMPS (hdlr_term ct mt) envd cd)
   (v:shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))))
   : option (sdenote_cdesc COMPT COMPS cd).
 induction e.
@@ -742,7 +742,7 @@ induction e.
 Defined.
 
 Lemma peval_expr_sound : forall cd envd ct mt
-  (e:expr COMPT (hdlr_term ct mt) envd cd) cfgp v cfg f pl,
+  (e:expr COMPT COMPS (hdlr_term ct mt) envd cd) cfgp v cfg f pl,
   peval_expr ct mt e cfgp = Some v ->
   (forall i v,
     shvec_ith sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))) cfgp i =
@@ -768,7 +768,7 @@ Proof.
 Qed.
 
 Definition peval_oexpr {cd envd} ct mt
-  (oe:option (expr COMPT (hdlr_term ct mt) envd cd))
+  (oe:option (expr COMPT COMPS (hdlr_term ct mt) envd cd))
   (v:shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))))
   : option (sdenote_cdesc COMPT COMPS cd).
 destruct oe.
@@ -777,7 +777,7 @@ destruct oe.
 Defined.
 
 Lemma peval_oexpr_sound : forall cd envd ct mt
-  (oe:option (expr COMPT (hdlr_term ct mt) envd cd)) cfgp v cfg f pl,
+  (oe:option (expr COMPT COMPS (hdlr_term ct mt) envd cd)) cfgp v cfg f pl,
   peval_oexpr ct mt oe cfgp = Some v ->
   (forall i v,
     shvec_ith sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))) cfgp i =
@@ -798,7 +798,7 @@ Proof.
 Qed.
 
 Fixpoint peval_payload_oexpr ct mt envd n : forall (vd:svec desc n),
-  payload_oexpr' COMPT (hdlr_term ct mt) envd n vd ->
+  payload_oexpr' COMPT COMPS (hdlr_term ct mt) envd n vd ->
   shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))) ->
   shvec sdenote_desc_conc_pat vd.
 intros vd cfgpe cfgp.
@@ -810,7 +810,7 @@ induction n.
 Defined.
 
 Lemma peval_payload_oexpr_sound : forall envd ct mt vd
-  (cfgpe:payload_oexpr' COMPT (hdlr_term ct mt) envd (projT1 vd) (projT2 vd))
+  (cfgpe:payload_oexpr' COMPT COMPS (hdlr_term ct mt) envd (projT1 vd) (projT2 vd))
   cfgp cfg f pl,
   (forall i v,
     shvec_ith sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))) cfgp i =
@@ -924,6 +924,7 @@ Lemma is_high_comp_pat_sound : forall c m envd cp cfgp clblr,
       (eval_hdlr_comp_pat PAYD COMPT COMPS KSTD c m st envd env cp)
       (lblr_match_comp COMPT COMPTDEC COMPS clblr).
 Proof.
+  Local Opaque cp_incl_dec.
   intros c m envd cp cfgp clblr Hmatch Hcfgp Hhigh st env.
   unfold is_high_comp_pat in Hhigh.
   destruct cp as [cpt cpfg]. destruct c as [ct f cfg].
@@ -1089,7 +1090,7 @@ Proof.
 Qed.
 
 Lemma hdlr_expr_ok_high_correct : forall c m (envd:vcdesc COMPT) cd
-  (e:expr _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd cd)
+  (e:expr _ _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd cd)
   clblr vlblr llblr s1 s2 (env1 env2:sdenote_vcdesc _ _ envd),
   hdlr_expr_ok_high _ _ _ _ e vlblr llblr = true ->
   states_ok s1 s2 clblr vlblr ->
@@ -1118,7 +1119,7 @@ Proof.
 Qed.
 
 Lemma hdlr_oexpr_ok_high_correct : forall c m (envd:vcdesc COMPT) cd
-  (oe:option (expr _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd cd))
+  (oe:option (expr _ _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd cd))
   clblr vlblr llblr s1 s2 (env1 env2:sdenote_vcdesc _ _ envd),
   hdlr_oexpr_ok_high _ _ _ _ oe vlblr llblr = true ->
   states_ok s1 s2 clblr vlblr ->
@@ -1142,7 +1143,7 @@ Proof.
 Qed.
 
 Lemma expr_list_ok_high_correct : forall c m (envd:vcdesc COMPT) cd
-  (es:list (expr _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd cd))
+  (es:list (expr _ _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd cd))
   clblr vlblr llblr s1 s2 (env1 env2:sdenote_vcdesc _ _ envd),
   expr_list_ok_high _ _ _ _ es vlblr llblr = true ->
   states_ok s1 s2 clblr vlblr ->
@@ -1163,7 +1164,7 @@ Proof.
 Qed.
 
 Lemma pl_hdlr_expr_ok_high_correct : forall c m (envd:vcdesc COMPT) vd
-  (e:payload_expr _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd vd)
+  (e:payload_expr _ _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd vd)
   clblr vlblr llblr s1 s2 (env1 env2:sdenote_vcdesc _ _ envd),
   pl_expr_ok_high _ _ _ _ (projT2 vd) e vlblr llblr = true ->
   states_ok s1 s2 clblr vlblr ->
@@ -1185,7 +1186,7 @@ Proof.
 Qed.
 
 Lemma pl_hdlr_oexpr_ok_high_correct : forall c m (envd:vcdesc COMPT) vd
-  (oe:payload_oexpr _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd vd)
+  (oe:payload_oexpr _ _ (hdlr_term (CT _ COMPS c) (CTAG PAYD m)) envd vd)
   clblr vlblr llblr s1 s2 (env1 env2:sdenote_vcdesc _ _ envd),
   pl_oexpr_ok_high _ _ _ _ (projT2 vd) oe vlblr llblr = true ->
   states_ok s1 s2 clblr vlblr ->
@@ -1545,7 +1546,7 @@ Proof.
 Qed.
 
 Lemma stupd_high : forall c m envd i clblr vlblr llblr
-  (e:expr COMPT (hdlr_term (CT _ _ c) (CTAG _ m)) envd _) Hmatch,
+  (e:expr COMPT COMPS (hdlr_term (CT _ _ c) (CTAG _ m)) envd _) Hmatch,
   vlblr i = false \/
   hdlr_expr_ok_high _ _ _ _ e vlblr llblr = true ->
   cmd_ok_high c m envd (StUpd (hdlr_term (CT _ _ c) (CTAG _ m)) envd i e)
@@ -1610,7 +1611,7 @@ Proof.
 Qed.
 
 Lemma stupd_high_all : forall c m envd i clblr vlblr llblr
-  (e:expr COMPT (hdlr_term (CT _ _ c) (CTAG _ m)) envd _) Hmatch,
+  (e:expr COMPT COMPS (hdlr_term (CT _ _ c) (CTAG _ m)) envd _) Hmatch,
   vlblr i = false \/
   hdlr_expr_ok_high _ _ _ _ e vlblr llblr = true ->
   all_cmd_ok_high c m envd (StUpd (hdlr_term (CT _ _ c) (CTAG _ m)) envd i e)
@@ -1683,7 +1684,7 @@ Qed.*)
 
 Lemma send_low_ccomp : forall c m envd clblr vlblr t ple,
   cmd_ok_low c m envd (Send _ envd _
-    (Term _ _ _ (CComp _ _ _ _ _ _ _)) t ple) clblr vlblr.
+    (Term _ _ _ _ (CComp _ _ _ _ _ _ _)) t ple) clblr vlblr.
 Proof.
   intros c m envd clblr vlblr t ple.
   unfold cmd_ok_low, states_ok. intros.

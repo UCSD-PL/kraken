@@ -164,7 +164,8 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       let envd := mk_vcdesc [Comp _ CProc] in
       [[ envd :
         complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some hdlr_tab_dom, tt))
-                 (send (envvar (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
+                 0%fin (Logic.eq_refl _)
+                 (send (envvar envd 0%fin)
                    CProcFD (mvar CProcFD 0%fin, tt))
                  (seq (spawn _ envd CProc (hdlr_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
                       (send (envvar envd 0%fin) CProcFD (mvar CProcFD 0%fin, tt))))

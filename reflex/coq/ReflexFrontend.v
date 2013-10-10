@@ -37,20 +37,20 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition complkup {term envd}:= CompLkup PAYD COMPT COMPS KSTD term envd.
 
   Definition stvar {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (StVar _ _ _ _ _ _ _ v).
+    Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (StVar _ _ _ _ _ _ _ v).
   Definition i_envvar envd i :=
-    Term COMPT (base_term _) envd (Var _ envd i).
+    Term COMPT COMPS (base_term _) envd (Var _ envd i).
   Definition envvar {cc m} envd i :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd
+    Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd
          (Base _ _ _ _ _ _ _ (Var _ envd i)).
   Definition slit {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (SLit _ _ v)).
+    Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (SLit _ _ v)).
   Definition nlit {cc envd m} v :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (NLit _ _ v)).
+    Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (NLit _ _ v)).
   Definition ccomp {cc envd m} :=
-    Term COMPT (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (CComp _ _ _ _ _ _ _).
-  Definition i_slit v := Term COMPT (base_term _) IENVD (SLit _ _ v).
-  Definition i_nlit v := Term COMPT (base_term _) IENVD (NLit _ _ v).
+    Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (CComp _ _ _ _ _ _ _).
+  Definition i_slit v := Term COMPT COMPS (base_term _) IENVD (SLit _ _ v).
+  Definition i_nlit v := Term COMPT COMPS (base_term _) IENVD (NLit _ _ v).
   Definition mk_comp_pat := Build_comp_pat COMPT COMPS.
 
 (*
@@ -82,22 +82,36 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Delimit Scope kst with kst.
 
   Definition eq {term d envd} e1 e2 :=
-    BinOp COMPT term envd
-          (Eq _ d) e1 e2.
+    BinOp COMPT COMPS term envd
+          (Eq _ _ d) e1 e2.
 
   Definition splitfst envd term c s :=
-    UnOp COMPT term envd (SplitFst _ c) s.
+    UnOp COMPT COMPS term envd (SplitFst _ _ c) s.
 
   Definition splitsnd envd term c s :=
-    UnOp COMPT term envd (SplitSnd _ c) s.
+    UnOp COMPT COMPS term envd (SplitSnd _ _ c) s.
+
+  Definition unop_num envd term (d:cdesc COMPT) (op:s[[d]] -> num) e :=
+    UnOp COMPT COMPS term envd (UnopNum COMPT COMPS d op) e.
+
+  Definition unop_str envd term (d:cdesc COMPT) (op:s[[d]] -> str) e :=
+    UnOp COMPT COMPS term envd (UnopStr COMPT COMPS d op) e.
+
+  Definition binop_num envd term (d1 d2:cdesc COMPT)
+             (op:s[[d1]] -> s[[d2]] -> num) e1 e2 :=
+    BinOp COMPT COMPS term envd (BinopNum COMPT COMPS d1 d2 op) e1 e2.
+
+  Definition binop_str envd term (d1 d2:cdesc COMPT)
+             (op:s[[d1]] -> s[[d2]] -> str) e1 e2 :=
+    BinOp COMPT COMPS term envd (BinopStr COMPT COMPS d1 d2 op) e1 e2.
 
   Definition mvar
   {envd} (t : fin NB_MSG) {ct} i :=
-  (Term COMPT _ _ (MVar PAYD COMPT COMPS KSTD ct t envd i)).
+  (Term COMPT COMPS _ _ (MVar PAYD COMPT COMPS KSTD ct t envd i)).
 
   Definition cconf
   {envd} {t : fin NB_MSG} ct ct' i ce :=
-  (Term COMPT _ _ (CConf PAYD COMPT COMPS KSTD ct t envd ct' i ce)).
+  (Term COMPT COMPS _ _ (CConf PAYD COMPT COMPS KSTD ct t envd ct' i ce)).
 
 (*Unfortunately, I need to put tactics here because one of them
   must refer to ite in a match.*)

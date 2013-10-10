@@ -15,7 +15,7 @@ Theorem enable : forall st tr url f,
   ktr _ _ _ _ st = inhabits tr ->
   Enables PAYD COMPT COMPS COMPTDEC
     (KOCall PAYD COMPT COMPS (Some (str_of_string (create_socket))) (Some (Some url::nil)) (Some f))
-    (KOSend PAYD COMPT COMPS (Some (Tab_pat (dom' url)))
+    (KOSend PAYD COMPT COMPS (Some (Tab_pat (dom url)))
       (Some (Build_opt_msg PAYD
         ResSocket (Some f, tt))))
           tr.

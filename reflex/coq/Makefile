@@ -1,14 +1,22 @@
 include ../../Makefile.config
 
-INCLUDES := -R $(YNOT) Ynot -I .
-FILES    := $(filter-out Extract.v,$(wildcard *.v))
+INCLUDES      := -R $(YNOT) Ynot -I .
+BENCHINCLUDES := $(INCLUDES) -I ..
+FILES         := $(filter-out Extract.v,$(wildcard *.v))
 
 all:
 	$(MAKE) depend
 	$(MAKE) coq
 
-bench:
-	for i in `find . -name "bench-*"`; do make policies -C $$i; done
+BENCHNAME := benchmark-$(shell date +"%y-%m-%d-%H:%M:%S")
+BENCHDIR  := benchmarks
+BENCHFULL := $(BENCHDIR)/$(BENCHNAME)
+
+bench: all
+	./bench.sh $(COQC) $(YNOT)
+
+ubench:
+	for i in `find . -name "ubench-*"`; do make policies -C $$i; done
 
 build:
 	$(MAKE) depend
@@ -30,4 +38,5 @@ clean:
 
 include .depend
 
-.PHONY: all depend coq clean
+.PHONY: all depend coq clean bench ubench
+

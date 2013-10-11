@@ -274,8 +274,19 @@ Ltac state_var_branch :=
     => match goal with
        | [ _ : Reflex.ktr _ _ _ _ s1 = inhabits ?tr1,
            _ : Reflex.ktr _ _ _ _ s2 = inhabits ?tr2 |- _ ]
-         => rewrite Hout with (tr:=tr1) (tr':=tr2); auto;
-            inversion Hvars; auto
+         => try rewrite Hout with (tr:=tr1) (tr':=tr2); auto;
+            inversion Hvars; auto;
+            (*rewrite any equalities created by inverting Hvars*)
+            repeat match goal with
+                   | [ Heq : ?l = _ |- _ ]
+                     => match l with
+                        | fst ?e =>
+                          match e with
+                          | context [ Reflex.kst _ _ _ _ _ ] =>
+                            rewrite Heq in *; clear Heq
+                          end
+                        end
+                   end; auto; try contradiction
        end
   end.
 

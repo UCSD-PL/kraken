@@ -26,7 +26,7 @@ Definition vlblr (f : fin (projT1 KSTD)) := true.
 Local Opaque str_of_string.
 
 Import Language Spec.
-Hint Unfold Misc.dom.
+
 Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS (clblr d) vlblr.
 Proof.

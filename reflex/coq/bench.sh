@@ -33,9 +33,9 @@ do (
     else
       if [[ -z "$coqtime" ]];
       then
-        echo $coqres
-          | tr -d '"'
-          | sed -e 's/_/\\_/'
+        echo $coqres\
+          | tr -d '"'\
+          | sed -e 's/_/\\_/'\
           | sed -r 's/(.*)/{\1}/' >> ../$BENCHFULL.csv;
       else echo {$coqtime} >> ../$BENCHFULL.csv;
       fi;

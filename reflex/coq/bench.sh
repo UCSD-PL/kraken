@@ -22,7 +22,7 @@ do (
   do (
     echo `basename $b .v`;
     echo -n `basename $d`,`basename $b .v`, >> ../$BENCHFULL.csv;
-    coqres=`timeout --foreground 5s $COQC $BENCHINCLUDES $b 2>&1`;
+    coqres=`timeout --foreground 1h $COQC $BENCHINCLUDES $b 2>&1`;
     status=$?;
     coqtime=`echo "$coqres" \
       | grep "Finished transaction" \

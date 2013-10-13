@@ -40,7 +40,7 @@ Definition elt_match := Reflex.elt_match COMPT COMPS.
 
 Definition locals_eq (envd:vcdesc COMPT)
   (env1 env2 : sdenote_vcdesc COMPT COMPS envd)
-  (lblr : fin (projT1 envd) -> bool) :=  
+  (lblr : fin (projT1 envd) -> bool) :=
   shvec_erase _ lblr _ env1 = shvec_erase _ lblr _ env2.
 
 Definition ve_st c m envd cmd i s :=
@@ -251,7 +251,7 @@ Proof.
 Qed.
 
 Definition cfgp_incl (cfgd:vdesc) cfgp1 cfgp2 :=
-  forall cfg, implb 
+  forall cfg, implb
     (shvec_match (projT2 cfgd)
       sdenote_desc sdenote_desc_conc_pat elt_match
       cfg cfgp1)
@@ -276,7 +276,7 @@ Proof.
         destruct (elt_match d elt oelt1).
           destruct (elt_match d elt oelt2); try discriminate.
           simpl. auto.
-          
+
           auto.
 
         right. intro.
@@ -301,7 +301,7 @@ Definition cp_incl_dec cp1 cp2 : decide (cp_incl cp1 cp2).
 Proof.
   destruct cp1 as [ct1 cfg1]; destruct cp2 as [ct2 cfg2].
   destruct (COMPTDEC ct1 ct2).
-    subst ct1. 
+    subst ct1.
     destruct (cfgp_incl_dec _ cfg1 cfg2).
       left. unfold cp_incl, match_comp, Reflex.match_comp, match_comp_pf.
       simpl. intro cp.
@@ -395,7 +395,7 @@ Fixpoint get_llblr ct mt envd cmd vlblr llblr :=
   list (shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct)))) :=
   match clblr with
   | nil => nil
-  | a::clblr' => 
+  | a::clblr' =>
     match COMPTDEC ct (conc_pat_type _ COMPS a) with
     | left EQ =>
       match EQ in _ = _ct return
@@ -457,38 +457,64 @@ Definition merge_all_cfgps ct cfgps cfgp0 :=
    ; conc_pat_conf:=fold_right
        (merge_cfgps _ (projT2 (compd_conf (COMPS ct))))
        cfgp0 cfgps |}.*)
-
+(*
 Lemma compcd_inj : forall ct ct',
   Comp COMPT ct = Comp COMPT ct' ->
   ct = ct'.
 Proof.
   intros. injection H. auto.
 Qed.
+*)
+
+Definition peval_hdlr_term' {cd envd} ct mt (t : hdlr_term ct mt envd cd)
+  (v:shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))))
+  : option (sdenote_cdesc COMPT COMPS cd).
+  destruct t.
+  exact None.
+  exact None.
+  inversion t.
+  exact None.
+  subst. exact (shvec_ith _ _ v i).
+  exact None.
+  exact None.
+  exact None.
+Defined.
+
+Definition uncomp a b : Comp COMPT a = Comp COMPT b -> a = b.
+Proof.
+  inversion 1. reflexivity.
+Defined.
 
 Definition peval_hdlr_term {cd envd} ct mt (t : hdlr_term ct mt envd cd)
   (v:shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))))
   : option (sdenote_cdesc COMPT COMPS cd).
-  destruct t.
-    exact None.
-    exact None.
 refine (
-  match t in Reflex.hdlr_term _ _ _ _ _ _ _ _c return
-      _c = Comp COMPT ct' -> _
+  match t in Reflex.hdlr_term _ _ _ _ _ _ _ d return
+    option (sdenote_cdesc COMPT COMPS d)
   with
-  | CComp => fun EQ =>
-    match compcd_inj _ _ EQ in _ = _ct return
-      forall (i:fin (projT1 (comp_conf_desc COMPT COMPS _ct))),
-      option
-      (sdenote_cdesc COMPT COMPS
-       (Desc COMPT (svec_ith (projT2 (comp_conf_desc COMPT COMPS _ct)) i)))
+  | Base _ _ => None
+  | CComp => None
+  | CConf ct i t' =>
+    match t' in Reflex.hdlr_term _ _ _ _ _ _ _ d return
+      d = Comp COMPT ct ->
+      option (sdenote_cdesc COMPT COMPS
+        (Desc COMPT (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct)) i)))
     with
-    | Logic.eq_refl => fun i =>
-      shvec_ith _ _ v i
-    end i
-  | _ => fun _ => None
-  end (Logic.eq_refl _)).
-      exact None.
-    exact None.
+    | Base d b => fun _ => None
+    | CComp => fun EQ =>
+      shvec_ith _ _
+                match uncomp _ _ EQ in _ = _ct return
+                  shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS _ct)))
+                with eq_refl => v end
+                i
+    | CConf ct' i t' => fun _ => None
+    | MVar i => fun _ => None
+    | StVar i => fun _ => None
+    end (eq_refl _)
+  | MVar i => None
+  | StVar i => None
+  end
+).
 Defined.
 
 Lemma peval_hdlr_term_sound : forall cd envd ct mt
@@ -503,219 +529,116 @@ Lemma peval_hdlr_term_sound : forall cd envd ct mt
     (Build_comp COMPT COMPS ct f cfg)
     (Build_msg PAYD mt pl) st t env = v).
 Proof.
-  intros cd envd ct mt t cfgp v cfg f pl Hpeval Hcfgp st env. Require Import Program.
-  generalize dependent v. dependent inversion t; try discriminate.
-  dependent destruction h; try discriminate. admit.
-  generalize dependent h0. (* rewrite <- x.
-  rewrite <- x0. generalize (Comp COMPT ct').
-
-revert x0. generalize (svec_ith (projT2 KSTD) i0).
-  intros c Heqc. dependent rewrite <- Heqc in h0.
-  dependent rewrite <- x0 in h0.
+  intros cd envd ct mt t cfgp v cfg f pl Hpeval Hcfgp st env.
+  generalize dependent v.
+  dependent inversion t; try discriminate.
+  clear H.
   generalize dependent i.
-  simpl.
+  generalize dependent cfgp.
+
+  unfold eval_hdlr_term.
+  fold (eval_hdlr_term PAYD COMPT COMPS KSTD
+                       {| comp_type := ct; comp_fd := f; comp_conf := cfg |}
+                       {| tag := mt; pay := pl |} st h env).
+  unfold peval_hdlr_term.
+
+  pattern (eval_hdlr_term PAYD COMPT COMPS KSTD
+                       {| comp_type := ct; comp_fd := f; comp_conf := cfg |}
+                       {| tag := mt; pay := pl |} st h env).
 
 dependent inversion h with (fun (hndx : cdesc COMPT)
-(hterm : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct mt envd hndx) =>
+  (hterm : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct mt envd hndx) =>
 
 match hndx as _hndx return
+  hndx = _hndx ->
   sdenote_cdesc COMPT COMPS _hndx ->
   Prop
 with
-| Comp ct1 => fun x =>
+| Comp ct1 => fun EQndx x =>
 
-forall (i : fin (projT1 (comp_conf_desc COMPT COMPS ct1)))
-     (v : sdenote_desc (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct1)) i)),
-   match
-     h in (Reflex.hdlr_term _ _ _ _ _ _ _ _c)
+  (fun s : sdenote_cdesc COMPT COMPS (Comp COMPT ct1) =>
+    forall
+      (cfgp : shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct)))),
+      (forall (i : fin (projT1 (compd_conf (COMPS ct))))
+              (v : s[[svec_ith (projT2 (compd_conf (COMPS ct))) i]]),
+         shvec_ith sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct))) cfgp i =
+         Some v ->
+         shvec_ith sdenote_desc (projT2 (compd_conf (COMPS ct))) cfg i = v) ->
+      forall
+      (i : fin (projT1 (comp_conf_desc COMPT COMPS ct1)))
+      (v : sdenote_cdesc COMPT COMPS
+             (Desc COMPT
+                (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct1)) i))),
+
+match
+     hterm in (Reflex.hdlr_term _ _ _ _ _ _ _ d)
      return
-       (_c = Comp COMPT ct' ->
+       (d = Comp COMPT ct1 ->
         option
-          (sdenote_desc
-             (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct1)) i)))
+          (sdenote_cdesc COMPT COMPS
+             (Desc COMPT
+                (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct1)) i))))
    with
-   | Base d _ => fun _ : d = Comp COMPT ct' => None
+   | Base d _ => fun _ : d = Comp COMPT ct1 => None
    | CComp =>
-       fun EQ : Comp COMPT ct = Comp COMPT ct' =>
-       match
-         compcd_inj ct ct' EQ in (_ = _ct)
-         return
-           (forall i0 : fin (projT1 (comp_conf_desc COMPT COMPS _ct)),
-            option
-              (sdenote_desc
-                 (svec_ith (projT2 (comp_conf_desc COMPT COMPS _ct)) i0)))
-       with
-       | eq_refl =>
-           fun i0 : fin (projT1 (comp_conf_desc COMPT COMPS ct)) =>
-           shvec_ith sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct)))
-             cfgp i0
-       end i
+       fun EQ : Comp COMPT ct = Comp COMPT ct1 =>
+       shvec_ith sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct1)))
+         match
+           uncomp ct ct1 EQ in (_ = _ct)
+           return
+             (shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS _ct))))
+         with
+         | eq_refl => cfgp
+         end i
    | CConf ct'0 i0 _ =>
        fun
          _ : Desc COMPT
                (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct'0)) i0) =
-             Comp COMPT ct' => None
+             Comp COMPT ct1 => None
    | MVar i0 =>
        fun
          _ : Desc COMPT (svec_ith (projT2 (lkup_tag PAYD mt)) i0) =
-             Comp COMPT ct' => None
-   | StVar i0 => fun _ : svec_ith (projT2 KSTD) i0 = Comp COMPT ct' => None
-   end (eq_refl (Comp COMPT ct')) = Some v ->
-   match
-     projT2
-       x in (_ = _ct)
-     return
-       (forall _i : fin (projT1 (comp_conf_desc COMPT COMPS _ct)),
-        sdenote_desc (svec_ith (projT2 (comp_conf_desc COMPT COMPS _ct)) _i))
-   with
-   | eq_refl =>
-       fun
-         i0 : fin
-                (projT1
-                   (comp_conf_desc COMPT COMPS
-                      (comp_type COMPT COMPS
-                         (projT1
-                            x)))) =>
-       shvec_ith sdenote_desc
-         (projT2
-            (comp_conf_desc COMPT COMPS
-               (comp_type COMPT COMPS
-                  (projT1
-                     x))))
-         (comp_conf COMPT COMPS
-            (projT1
-               x)) i0
-   end i = v
+             Comp COMPT ct1 => None
+   | StVar i0 => fun _ : svec_ith (projT2 KSTD) i0 = Comp COMPT ct1 => None
+   end (*eq_refl (Comp COMPT ct1)*) EQndx = Some v ->
 
-| _ => fun _ => True
+    match
+      projT2 s in (_ = _ct)
+      return
+        (forall _i : fin (projT1 (comp_conf_desc COMPT COMPS _ct)),
+         s[[svec_ith (projT2 (comp_conf_desc COMPT COMPS _ct)) _i]])
+    with
+    | eq_refl =>
+        fun
+          i0 : fin
+                 (projT1
+                    (comp_conf_desc COMPT COMPS
+                       (comp_type COMPT COMPS (projT1 s)))) =>
+        shvec_ith sdenote_desc
+          (projT2
+             (comp_conf_desc COMPT COMPS (comp_type COMPT COMPS (projT1 s))))
+          (comp_conf COMPT COMPS (projT1 s)) i0
+    end i = v)
+  x
+
+| _ => fun _ _ => True
 end
 
-(eval_hdlr_term PAYD COMPT COMPS KSTD
-                  {| comp_type := ct; comp_fd := f; comp_conf := cfg |}
-                  {| tag := mt; pay := pl |} st h env)
-
-).
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-forall i : fin (projT1 (comp_conf_desc COMPT COMPS ct1)),
-   Desc COMPT (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct1)) i) = cd ->
-   forall
-     v : sdenote_cdesc COMPT COMPS
-           (Desc COMPT (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct1)) i)),
-   y = Some v ->
-match
-     projT2 x in (_ = _ct)
-     return
-       (forall _i : fin (projT1 (comp_conf_desc COMPT COMPS _ct)),
-        sdenote_desc (svec_ith (projT2 (comp_conf_desc COMPT COMPS _ct)) _i))
-   with
-   | eq_refl =>
-       fun
-         i0 : fin
-                (projT1
-                   (comp_conf_desc COMPT COMPS
-                      (comp_type COMPT COMPS
-                         (projT1 x)))) =>
-       shvec_ith sdenote_desc
-         (projT2
-            (comp_conf_desc COMPT COMPS
-               (comp_type COMPT COMPS
-                  (projT1 x))))
-         (comp_conf COMPT COMPS
-            (projT1 x)) i0
-   end i = v
-
-| _ => fun _ => True
-end
+(eq_refl hndx)
 
 (eval_hdlr_term PAYD COMPT COMPS KSTD
-                  {| comp_type := ct; comp_fd := f; comp_conf := cfg |}
-                  {| tag := mt; pay := pl |} st hterm env)
+                {| comp_type := ct; comp_fd := f; comp_conf := cfg |}
+                {| tag := mt; pay := pl |} st hterm env)
 
-). simpl. discriminate. simpl. admit. simpl. generalize (shvec_ith (sdenote_cdesc COMPT COMPS) (projT2 KSTD) st i). generalize (svec_ith (projT2 KSTD) i).
+); try discriminate; simpl.
 
-  unfold eval_hdlr_term. simpl.
-  simpl. Require Import Program. simpl. dependent destruction h; try discriminate. admit. dependent inversion h. unfold eval_hdlr_term; simpl
-  intros v. 
-  rewrite UIP_refl with (p:=compcd_inj ct' ct' eq_refl). intro Hpeval. simpl in *. auto.
-(*apply JMeq_eq_dep in x; auto. apply eq_dep_eq_sigT in x. SearchAbout existT.
-   inversion x.*)*)
-  admit.
+intros.
+apply H.
+easy.
+
+generalize (shvec_ith (sdenote_cdesc COMPT COMPS) (projT2 KSTD) st i).
+rewrite H0.
+discriminate.
 Qed.
 
 Definition peval_expr {cd envd} ct mt
@@ -724,7 +647,7 @@ Definition peval_expr {cd envd} ct mt
   : option (sdenote_cdesc COMPT COMPS cd).
 induction e.
   exact (peval_hdlr_term ct mt t v).
-  
+
   destruct IHe.
     exact (Some (eval_unop COMPT COMPS _ _ u s)).
     exact None.
@@ -753,7 +676,7 @@ Proof.
 
   induction e; simpl in *.
     eapply peval_hdlr_term_sound with (v:=v); eauto.
-    
+
     destruct (peval_expr ct mt e cfgp); try discriminate.
     inversion Hpeval. rewrite IHe with (v:=s); auto.
 
@@ -838,7 +761,7 @@ Qed.
 
 Definition is_high_comp_pat ct mt envd cp clblr : bool :=
   let conf := peval_payload_oexpr ct _ _ _ _
-    (comp_pat_conf COMPT COMPS (hdlr_term ct mt) envd cp) 
+    (comp_pat_conf COMPT COMPS (hdlr_term ct mt) envd cp)
     (clblr ct) in
   let cpt := comp_pat_type _ _ _ _ cp in
   (projT1 (bool_of_sumbool (cp_incl_dec (Build_conc_pat COMPT COMPS cpt conf)
@@ -916,7 +839,7 @@ Proof.
         end.
 Qed.
 apply high_comp_cfgp_sound' with (v:=
-  
+
 pose (
 fun v0 : sigT vdesc' =>
  forall cfg : sdenote_vdesc v0,
@@ -952,13 +875,13 @@ fun v0 : sigT vdesc' =>
       auto.
 
       destruct cfgd. destruct cpfg. destruct cfg'. simpl in *.
-      destruct o. simpl in *. 
+      destruct o. simpl in *.
 dependent inversion e with (
   fun (c : cdesc COMPT)
    (e : expr COMPT (Reflex.hdlr_term PAYD COMPT COMPS KSTD ct (tag PAYD m))
           envd c) =>
  (let (elt', rest') :=
-      get_conc_pat_conf ct (tag PAYD m) envd (S n) 
+      get_conc_pat_conf ct (tag PAYD m) envd (S n)
         (d, s) (Some e, p) (clblr ct) in
   (elt_match d s0 elt' &&
    shvec_match s sdenote_desc sdenote_desc_conc_pat elt_match s1 rest')%bool) =
@@ -1180,7 +1103,7 @@ dependent inversion e with (
      sdenote_desc_conc_pat elt_match (s0, s1)
      (get_conc_pat_conf ct (tag PAYD m) envd
         (projT1 (existT vdesc' (S n) (d, s)))
-        (projT2 (existT vdesc' (S n) (d, s))) (Some e, p) 
+        (projT2 (existT vdesc' (S n) (d, s))) (Some e, p)
         (clblr ct)) = true).
 
 
@@ -1312,7 +1235,7 @@ fun (d:desc)
                    eq_rec
                      (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct'0)) i)
                      (fun d1 : desc =>
-                      Reflex.hdlr_term PAYD COMPT COMPS KSTD ct 
+                      Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
                         (tag PAYD m) envd (Comp COMPT ct'0) ->
                       sdenote_desc_conc_pat d1 *
                       shvec sdenote_desc_conc_pat s)
@@ -1365,13 +1288,13 @@ fun (d:desc)
                                        (projT1
                                           (comp_conf_desc COMPT COMPS ct)))
                                (_ : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
-                                      (tag PAYD m) envd 
+                                      (tag PAYD m) envd
                                       (Comp COMPT ct))
                                (_ : svec_ith
                                       (projT2 (comp_conf_desc COMPT COMPS ct))
                                       i0 = d) =>
                              (shvec_ith sdenote_desc_conc_pat
-                                (projT2 (compd_conf (COMPS ct))) 
+                                (projT2 (compd_conf (COMPS ct)))
                                 (clblr ct) i0,
                              get_conc_pat_conf ct (tag PAYD m) envd n s p
                                (clblr ct))) ct'0
@@ -1584,8 +1507,8 @@ Variable  s1 : (fix shvec (n : nat) : svec desc n -> Set :=
           end) n s.
 Variable  e : expr COMPT (Reflex.hdlr_term PAYD COMPT COMPS KSTD ct (tag PAYD m))
         envd (Desc COMPT d).
-Variable  p : (fix payload_oexpr' (envd : vcdesc COMPT) (n : nat) 
-                          (pd : vdesc' n) {struct n} : 
+Variable  p : (fix payload_oexpr' (envd : vcdesc COMPT) (n : nat)
+                          (pd : vdesc' n) {struct n} :
        Type :=
          match n as _n return (vdesc' _n -> Type) with
          | 0 => fun _ : unit => unit
@@ -1653,7 +1576,7 @@ fun (c : cdesc COMPT)
                  eq_rec
                    (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct')) i)
                    (fun d0 : desc =>
-                    Reflex.hdlr_term PAYD COMPT COMPS KSTD ct 
+                    Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
                       (tag PAYD m) envd (Comp COMPT ct') ->
                     sdenote_desc_conc_pat d0 * shvec sdenote_desc_conc_pat s)
                    (fun
@@ -1702,13 +1625,13 @@ fun (c : cdesc COMPT)
                              (i0 : fin
                                      (projT1 (comp_conf_desc COMPT COMPS ct)))
                              (_ : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
-                                    (tag PAYD m) envd 
+                                    (tag PAYD m) envd
                                     (Comp COMPT ct))
                              (_ : svec_ith
                                     (projT2 (comp_conf_desc COMPT COMPS ct))
                                     i0 = d) =>
                            (shvec_ith sdenote_desc_conc_pat
-                              (projT2 (compd_conf (COMPS ct))) 
+                              (projT2 (compd_conf (COMPS ct)))
                               (clblr ct) i0,
                            get_conc_pat_conf ct (tag PAYD m) envd n s p
                              (clblr ct))) ct'
@@ -1898,7 +1821,7 @@ fun (c : cdesc COMPT)
               (Reflex.hdlr_term PAYD COMPT COMPS KSTD ct (CTAG PAYD m))
               (fun (d : cdesc COMPT) (envd : vcdesc COMPT)
                  (e0 : sdenote_vcdesc COMPT COMPS envd)
-                 (t : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct 
+                 (t : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
                         (CTAG PAYD m) envd d) =>
                eval_hdlr_term PAYD COMPT COMPS KSTD
                  {| comp_type := ct; comp_fd := comp_fd; comp_conf := cfg |}
@@ -1908,7 +1831,7 @@ fun (c : cdesc COMPT)
               (Reflex.hdlr_term PAYD COMPT COMPS KSTD ct (CTAG PAYD m))
               (fun (d : cdesc COMPT) (envd : vcdesc COMPT)
                  (e0 : sdenote_vcdesc COMPT COMPS envd)
-                 (t : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct 
+                 (t : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
                         (CTAG PAYD m) envd d) =>
                eval_hdlr_term PAYD COMPT COMPS KSTD
                  {| comp_type := ct; comp_fd := comp_fd; comp_conf := cfg |}
@@ -1964,7 +1887,7 @@ fun (c : cdesc COMPT)
                  eq_rec
                    (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct')) i)
                    (fun d0 : desc =>
-                    Reflex.hdlr_term PAYD COMPT COMPS KSTD ct 
+                    Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
                       (tag PAYD m) envd (Comp COMPT ct') ->
                     sdenote_desc_conc_pat d0 * shvec sdenote_desc_conc_pat s)
                    (fun
@@ -2013,13 +1936,13 @@ fun (c : cdesc COMPT)
                              (i0 : fin
                                      (projT1 (comp_conf_desc COMPT COMPS ct)))
                              (_ : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
-                                    (tag PAYD m) envd 
+                                    (tag PAYD m) envd
                                     (Comp COMPT ct))
                              (_ : svec_ith
                                     (projT2 (comp_conf_desc COMPT COMPS ct))
                                     i0 = d) =>
                            (shvec_ith sdenote_desc_conc_pat
-                              (projT2 (compd_conf (COMPS ct))) 
+                              (projT2 (compd_conf (COMPS ct)))
                               (clblr ct) i0,
                            get_conc_pat_conf ct (tag PAYD m) envd n s p
                              (clblr ct))) ct'
@@ -2252,7 +2175,7 @@ Definition blah :=
                  eq_rec
                    (svec_ith (projT2 (comp_conf_desc COMPT COMPS ct')) i)
                    (fun d0 : desc =>
-                    Reflex.hdlr_term PAYD COMPT COMPS KSTD ct 
+                    Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
                       (tag PAYD m) envd (Comp COMPT ct') ->
                     sdenote_desc_conc_pat d0 * shvec sdenote_desc_conc_pat s)
                    (fun
@@ -2301,13 +2224,13 @@ Definition blah :=
                              (i0 : fin
                                      (projT1 (comp_conf_desc COMPT COMPS ct)))
                              (_ : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct
-                                    (tag PAYD m) envd 
+                                    (tag PAYD m) envd
                                     (Comp COMPT ct))
                              (_ : svec_ith
                                     (projT2 (comp_conf_desc COMPT COMPS ct))
                                     i0 = d) =>
                            (shvec_ith sdenote_desc_conc_pat
-                              (projT2 (compd_conf (COMPS ct))) 
+                              (projT2 (compd_conf (COMPS ct)))
                               (clblr ct) i0,
                            get_conc_pat_conf ct (tag PAYD m) envd n s p
                              (clblr ct))) ct'
@@ -2517,7 +2440,7 @@ Definition blah :=
     destruct (COMPTDEC (comp_type COMPT COMPS c1)
                     (comp_pat_type COMPT COMPS
                        (Reflex.hdlr_term PAYD COMPT COMPS KSTD
-                          (comp_type COMPT COMPS c) 
+                          (comp_type COMPT COMPS c)
                           (tag PAYD m)) envd cp)); try discriminate.
     simpl in *. destruct c1. destruct cp. simpl in *. destruct e.
     cut (shvec_match (projT2 (comp_conf_desc COMPT COMPS comp_type))
@@ -2548,7 +2471,7 @@ Definition blah :=
            (tag PAYD m)) envd cp) in Hmatch'.
     induction l.
       simpl in *.
-    
+
     destruct ((cp_incl_dec
                {|
                conc_pat_type := comp_pat_type COMPT COMPS
@@ -2571,7 +2494,7 @@ Definition blah :=
                                   (comp_pat_conf COMPT COMPS
                                      (hdlr_term (comp_type COMPT COMPS c)
                                         (tag PAYD m)) envd cp)
-                                  (merge_all_cfgps 
+                                  (merge_all_cfgps
                                      (comp_type COMPT COMPS c) l s) |} x))).
   destruct (hd_error
     (get_candidate_pats clblr
@@ -2657,7 +2580,7 @@ Proof.
       destruct vd; destruct i; simpl in *.
         destruct v1; destruct v2; simpl in *.
       apply IHn with (vlblr:=fun f => vlblr (shift_fin f));
-        auto. 
+        auto.
       match goal with
       | [ _ : context [ if ?e then _ else _ ] |- _ ]
         => destruct e
@@ -2835,7 +2758,7 @@ Proof.
       simpl in *. subst env1'. subst env2'. destruct i. simpl.
       specialize (IHcmd1 llblr Hall_ok1 env1 env2 s1 s2 s H H0). apply IHcmd1; auto.
 
-    intros. destruct (hdlr_expr_ok_high (CT COMPT COMPS c) 
+    intros. destruct (hdlr_expr_ok_high (CT COMPT COMPS c)
     (CTAG PAYD m) envd (Desc COMPT num_d) e vlblr llblr) as [? | ?]_eqn.
     destruct Hall_ok as [Hall_ok1 Hall_ok2].
       erewrite hdlr_expr_ok_high_correct; eauto.
@@ -2888,7 +2811,7 @@ Proof.
 
     intros. split.
       unfold cmd_ok_high in *. simpl in *. auto.
-    
+
       unfold locals_eq in *.
       apply shvec_erase_ith.
       intros i' ?.
@@ -2965,7 +2888,7 @@ Proof.
       intros i' ?. destruct (fin_eq_dec i0 i'); try discriminate; try contradiction.
       repeat rewrite shvec_ith_replace_cast_other; auto. rewrite shvec_erase_ith in Hlocals.
       auto.
-    
+
     (*Call*)
     simpl. unfold locals_eq in *.
     apply shvec_erase_ith.
@@ -3040,18 +2963,18 @@ Proof.
         inversion H2. f_equal. destruct st1. destruct st2.
         simpl. apply IHn; auto.
         rewrite <- vlblr_shift; auto.
-        
+
         inversion H2. f_equal. destruct st1. destruct st2.
         simpl. apply IHn; auto.
         rewrite <- vlblr_shift; auto.
-        
+
         unfold fin in *. rewrite Hlblr in *.
         inversion H2. simpl. f_equal. auto.
-        
+
     split.
 
       unfold states_ok, high_out_eq in *. simpl. apply H0.
-      
+
       unfold vars_eq in *; simpl.
       erewrite hdlr_expr_ok_high_correct
         with (env1:=env1) (env2:=env2); eauto.
@@ -3063,7 +2986,7 @@ Proof.
       simpl in *. intros.
       induction n.
         auto.
-        
+
         destruct kstd.
         destruct i; simpl in *;
           match goal with
@@ -3137,13 +3060,13 @@ Proof.
 
     unfold lblr_match_comp in *.
     unfold ct_not_in_clblr in Hnot_in. simpl in *. apply andb_prop in Hnot_in.
-    destruct Hnot_in. 
+    destruct Hnot_in.
     unfold NIExists.match_comp, Reflex.match_comp, match_comp_pf in *.
     destruct c. simpl in *. subst comp_type.
     destruct (COMPTDEC ct (conc_pat_type COMPT COMPS a)); try discriminate.
     rewrite Bool.orb_false_r. auto.
 Qed.
-  
+
 Lemma send_low : forall c m envd clblr vlblr ct
   ce t ple,
   ct_not_in_clblr ct clblr ->
@@ -3438,9 +3361,9 @@ Lemma prune_nop_1 : forall clblr vlblr c m i s s',
 Proof.
   intros clblr vlblr c m i s s' Hve Hnop.
   inversion Hve. clear Hve.
-    subst s'0. unfold hdlrs. generalize i. rewrite Hnop. 
+    subst s'0. unfold hdlrs. generalize i. rewrite Hnop.
     intros. simpl. unfold kstate_run_prog. unfold hdlr_state_run_cmd.
-    simpl. split. 
+    simpl. split.
       unfold high_out_eq. intros. simpl in *.
       uninhabit. simpl. remove_redundant_ktr. auto.
 
@@ -3479,9 +3402,9 @@ Lemma prune_nop_2 : forall clblr vlblr c m i s1 s1' s2 s2',
 Proof.
   intros clblr vlblr c m i s1 s2 s1' s2' Hve1 Hve2 Hnop Hout Hvars.
   inversion Hve1. inversion Hve2. clear Hve1. clear Hve2.
-    subst s'0. subst s'. unfold hdlrs. unfold hdlrs0. generalize i. rewrite Hnop. 
+    subst s'0. subst s'. unfold hdlrs. unfold hdlrs0. generalize i. rewrite Hnop.
     intros. unfold kstate_run_prog. unfold hdlr_state_run_cmd.
-    simpl. split. 
+    simpl. split.
       unfold high_out_eq. intros. simpl in *.
       repeat uninhabit. simpl. auto.
 
@@ -3572,7 +3495,7 @@ Proof.
   inversion Hve1. inversion Hve2. clear Hve1. clear Hve2.
     subst s'0. subst s'. unfold hdlrs. unfold hdlrs0.
     unfold kstate_run_prog. unfold hdlr_state_run_cmd.
-        
+
 *)
 
 Theorem ni_suf'' : forall clblr vlblr,

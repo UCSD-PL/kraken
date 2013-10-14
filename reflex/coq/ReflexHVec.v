@@ -265,11 +265,13 @@ Fixpoint shvec_match_prop {desc:Set} {n:nat} (vd:svec desc n)
       Prop
     with
     | (t, vd') => fun v v' =>
-      match v, v' with
+        (elt_match t (fst v) (fst v')) /\
+        (shvec_match_prop vd' sdenote_desc sdenote_desc' elt_match (snd v) (snd v'))
+(*      match v, v' with
       | (elt, rest), (elt', rest') =>
         (elt_match t elt elt') /\
         (shvec_match_prop vd' sdenote_desc sdenote_desc' elt_match rest rest')
-      end
+      end*)
     end v v'
   end vd v v'.
 

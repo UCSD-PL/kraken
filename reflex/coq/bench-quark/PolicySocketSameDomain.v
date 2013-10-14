@@ -1,7 +1,7 @@
 Require Import String.
 Require Import Reflex ReflexBase.
 Require Import PolLang ActionMatch.
-Require Import Kernel.
+Require Import Kernel Misc.
 
 Local Opaque str_of_string.
 

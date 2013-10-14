@@ -274,8 +274,19 @@ Ltac state_var_branch :=
     => match goal with
        | [ _ : Reflex.ktr _ _ _ _ s1 = inhabits ?tr1,
            _ : Reflex.ktr _ _ _ _ s2 = inhabits ?tr2 |- _ ]
-         => rewrite Hout with (tr:=tr1) (tr':=tr2); auto;
-            inversion Hvars; auto
+         => try rewrite Hout with (tr:=tr1) (tr':=tr2); auto;
+            inversion Hvars; auto;
+            (*rewrite any equalities created by inverting Hvars*)
+            repeat match goal with
+                   | [ Heq : ?l = _ |- _ ]
+                     => match l with
+                        | fst ?e =>
+                          match e with
+                          | context [ Reflex.kst _ _ _ _ _ ] =>
+                            rewrite Heq in *; clear Heq
+                          end
+                        end
+                   end; auto; try contradiction
        end
   end.
 
@@ -392,7 +403,9 @@ Ltac unpack :=
        end
   | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
     => inversion H; subst s
-  end; simpl; try destruct_ite_pol; simpl; intros; uninhabit.
+  end; simpl; unfold kstate_run_prog in *; simpl in *;
+       repeat destruct_find_comp; repeat destruct_cond;
+       simpl in *; intros; try uninhabit.
 
 Ltac clear_useless_hyps :=
   repeat match goal with
@@ -472,10 +485,11 @@ Ltac destruct_neg_conjuncts H :=
 Ltac destruct_action_matches :=
   repeat match goal with
          | [ H : ActionMatch.AMatch _ _ _ _ ?future ?act |- _ ]
-           => compute in H (*maybe produces a conjunction of Props*);
+           => simpl in H; unfold msgMatch, msgMatch' in H;
+              simpl in H (*maybe produces a conjunction of Props*);
               decompose [and] H
          | [ H : ~ActionMatch.AMatch _ _ _ _ ?future ?act |- _ ]
-           => compute in H
+           => simpl in H; unfold msgMatch, msgMatch' in H; simpl in H
               (*maybe produces a negated conjunction of decidable Props*);
               destruct_neg_conjuncts H
          end.
@@ -495,7 +509,7 @@ Ltac releaser_match :=
   simpl;
   repeat match goal with
          | [ |- exists past : Reflex.KAction _ _ _, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
-           => (exists act; compute; tauto) ||
+           => solve [exists act; unfold msgMatch, msgMatch'; simpl; intuition; congruence] ||
               apply cut_exists
          end.
 
@@ -520,8 +534,40 @@ Ltac impossible :=
   | [ H : _ <> _ |- _ ] => contradict H; solve [auto]
   end.
 
+Ltac destruct_comp_var_pay :=
+  match goal with
+  | [ cp : sigT (fun (c : Reflex.comp _ _) => _) |- _ ]
+    => let pf := fresh "pf" in
+       let ct := fresh "ct" in
+       let f := fresh "f" in
+       let cfg := fresh "cfg" in
+       destruct cp as [ [ct f cfg] pf];
+       destruct ct; try discriminate; destruct_pay cfg
+       (*discriminate prunes impossible ctypes*)
+  end.
+
+Ltac extract_match_facts :=
+  repeat destruct_comp_var_pay; unfold Reflex.match_comp, Reflex.match_comp_pf in *;
+  simpl in *; destruct_atom_eqs; try discriminate; simpl in *.
+
 Ltac exists_past :=
   destruct_action_matches;
+  extract_match_facts;
+  (*There may be conditions on s' (the intermediate state). We want
+    to use these conditions to derive conditions on s.*)
+  (*subst_states;*)
+  (*Try to match stuff at head of trace.*)
+  releaser_match;
+  (*This may not clear the old induction hypothesis. Does it matter?*)
+  clear_useless_hyps;
+  (*Should this take s as an argument?*)
+  reach_induction;
+  try solve [ impossible
+            | use_IH_releases
+            | releaser_match
+            | auto].
+(*  destruct_action_matches;
+  extract_match_facts;
   (*There may be conditions on s' (the intermediate state). We want
     to use these conditions to derive conditions on s.*)
   (*subst_states;*)
@@ -547,7 +593,7 @@ Ltac exists_past :=
   | [ _ : Reflex.BogusExchange _ _ _ _ _ _ _ _ |- _ ]
     => try subst; simpl in *; use_IH_releases
   | _ => idtac
-  end.
+  end.*)
 
 Ltac match_releases :=
   match goal with
@@ -571,7 +617,7 @@ Ltac match_releases :=
          pose proof (decide_act pdv compt comps comptdec future act) as H;
          destruct H;
          [ first [ contradiction | destruct_action_matches; contradiction |
-           (apply E_future; [ match_releases | try exists_past ]) ]
+           (apply E_future; [ match_releases | try solve [exists_past] ]) ]
          | first [ contradiction | destruct_action_matches; contradiction |
            (apply E_not_future; [ match_releases | assumption ]) ] ]
          (*In some cases, one branch is impossible, so contradiction
@@ -618,7 +664,7 @@ Ltac crush :=
   | [ |- ImmBefore _ _ _ _ _ _ _ ]
      => try abstract match_immbefore
   | [ |- Enables _ _ _ _ _ _ _ ]
-     => try abstract match_releases
+     => try match_releases
   end.
 
 End MkLanguage.

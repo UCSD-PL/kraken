@@ -627,13 +627,7 @@ Ltac match_releases :=
   end.
 
 Ltac act_match :=
-  match goal with
-  | [ |- AMatch ?pdv ?compt ?comps ?comptdec ?oact ?act ] =>
-    let H := fresh "H" in
-    let A := fresh "A" in
-    pose proof (decide_act pdv compt comps comptdec oact act) as H;
-    destruct H as [A|A]; repeat autounfold in A; [ assumption | tauto ]
-  end.
+  simpl in *; repeat destruct_comp_st_vars; intuition.
 
 Ltac match_immbefore :=
   match goal with
@@ -659,11 +653,40 @@ Ltac match_immbefore :=
      so both branches are possible.*)
   end.
 
+Ltac match_immafter :=
+  match goal with
+  | [ |- ImmAfter _ _ _ _ _ _ nil ]
+      => constructor
+  | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
+      IH : forall tr', Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
+                       ImmAfter _ _ _ _ ?oact_a ?oact_b tr'
+                       |- ImmAfter _ _ _ _ ?oact_a ?oact_b ?tr ]
+      => auto
+  | [ |- ImmAfter ?pdv ?compt ?comps ?comptdec _ ?oact_b (_::?act::_) ]
+      => let H := fresh "H" in
+         pose proof (decide_act pdv compt comps comptdec oact_b act) as H;
+         destruct H as [A|A]; simpl in A; repeat autounfold in A;
+         [ tauto ||
+           (apply IA_B; [ match_immafter | act_match ] )
+         | tauto ||
+           (apply IA_nB; [ match_immafter | act_match ] ) ]
+         (*In some cases, one branch is impossible, so contradiction
+           solves the goal immediately.
+           In other cases, there are variables in the message payloads,
+           so both branches are possible.*)
+  | [ |- ImmAfter _ _ _ _ _ _ (?act::_) ]
+      (*If theres only one concrete action at the head of the trace,
+        it better not a before action because there's nothing after.*)
+      => apply IA_nB; [ match_immafter | act_nmatch ]
+  end.
+
 Ltac crush :=
   reach_induction;
   match goal with
   | [ |- ImmBefore _ _ _ _ _ _ _ ]
      => try abstract match_immbefore
+  | [ |- ImmAfter _ _ _ _ _ _ _ ]
+     => try abstract match_immafter
   | [ |- Enables _ _ _ _ _ _ _ ]
      => try match_releases
   end.

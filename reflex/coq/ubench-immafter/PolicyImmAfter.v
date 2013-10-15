@@ -25,5 +25,5 @@ Theorem immafter st tr :
            )
            tr.
 Proof.
-  crush.
+  Time crush.
 Qed.

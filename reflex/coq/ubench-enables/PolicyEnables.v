@@ -25,5 +25,5 @@ Theorem enable : forall st tr u,
                                          PrivReq (Some u, tt))))
           tr.
 Proof.
-  crush.
+  Time crush.
 Qed.

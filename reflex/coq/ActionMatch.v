@@ -139,6 +139,9 @@ End KOAction.
 Hint Unfold eltMatch.
 Hint Unfold listMatch.
 Hint Unfold match_comp.
+Hint Unfold match_comp'.
+Hint Unfold msgMatch.
+Hint Unfold msgMatch'.
 Hint Unfold AMatch.
 
 Lemma decide_and : forall P Q,

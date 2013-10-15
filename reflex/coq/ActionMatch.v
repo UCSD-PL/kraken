@@ -135,9 +135,16 @@ end.
 
 End KOAction.
 
-Lemma decide_and : forall P Q, decide P ->
-                               decide Q ->
-                               decide (P /\ Q).
+(* Hints are lost on Section closure, so keep them out to be exported *)
+Hint Unfold eltMatch.
+Hint Unfold listMatch.
+Hint Unfold match_comp.
+Hint Unfold AMatch.
+
+Lemma decide_and : forall P Q,
+  decide P ->
+  decide Q ->
+  decide (P /\ Q).
 Proof.
   tauto.
 Qed.

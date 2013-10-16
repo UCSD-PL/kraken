@@ -163,19 +163,28 @@ Proof.
       apply decide_and; [apply decide_elt_match | auto].
 Qed.
 
+Definition decide_match_comp' :
+  forall COMPT COMPS COMPTDEC cp c,
+    decide (match_comp' COMPT COMPS COMPTDEC cp c).
+Proof.
+  intros COMPT COMPS COMPTDEC cp c.
+  destruct cp; destruct c.
+  unfold match_comp'.
+  match goal with
+  |- context[COMPTDEC ?comp_type ?comp_pat_type]
+    => destruct (COMPTDEC comp_type comp_pat_type) as [eq | ];
+       [destruct eq | auto]
+  end.
+  apply decide_shvec_match.
+Qed.
+
 Definition decide_match_comp :
   forall COMPT COMPS COMPTDEC cpopt c,
     decide (match_comp COMPT COMPS COMPTDEC cpopt c).
 Proof.
   intros COMPT COMPS COMPTDEC cpopt c.
   destruct cpopt as [cp | ]; [simpl; destruct cp; destruct c | auto].
-    unfold match_comp'.
-    match goal with
-    |- context[COMPTDEC ?comp_type ?comp_pat_type]
-      => destruct (COMPTDEC comp_type comp_pat_type) as [eq | ];
-         [destruct eq | auto]
-    end.
-  apply decide_shvec_match.
+  apply decide_match_comp'.
 Qed.
 
 Definition decide_list_match_comp :

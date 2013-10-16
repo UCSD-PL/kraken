@@ -470,6 +470,11 @@ Ltac get_decide P :=
              | num => apply num_eq
              | fd => apply fd_eq
              end
+  | match_comp _ _ _ _ _ => apply decide_match_comp
+  | match_comp' _ _ _ _ _ => apply decide_match_comp'
+  | comp_list_match _ _ _ _ _ => apply decide_list_match_comp
+  | listMatch _ _ _ => apply decide_list_match
+  | msgMatch _ _ _ => apply decide_msg_match
   | _ => auto
   end.
 
@@ -506,7 +511,6 @@ Proof.
 Qed.
 
 Ltac releaser_match :=
-  idtac "releaser_match";
   simpl;
   repeat
     match goal with
@@ -522,7 +526,6 @@ Ltac use_IH_releases :=
   end.
 
 Ltac reach_induction :=
-  idtac "reach_induction";
   intros;
   match goal with
   | [ _ : Reflex.ktr _ _ _ _ _ = inhabits ?tr, H : Reflex.Reach _ _ _ _ _ _ _ _ _ |- _ ]
@@ -554,7 +557,6 @@ Ltac extract_match_facts :=
   simpl in *; destruct_atom_eqs; try discriminate; simpl in *.
 
 Ltac exists_past :=
-  idtac "exists_past";
   destruct_action_matches;
   extract_match_facts;
   (*There may be conditions on s' (the intermediate state). We want
@@ -572,8 +574,6 @@ Ltac exists_past :=
             | auto].
 
 Ltac match_releases :=
-  idtac "match_releases";
-  match goal with |- ?G => idtac G end;
   match goal with
   | [ |- Enables _ _ _ _ _ _ nil ] => constructor
   (* Induction hypothesis.*)
@@ -589,7 +589,7 @@ Ltac match_releases :=
     pose proof (decide_act pdv compt comps comptdec future act) as H;
     destruct H;
     [ first [ contradiction | destruct_action_matches; contradiction |
-      (apply E_future; [ match_releases | try solve [exists_past] ]) ]
+      (apply E_future; [ match_releases | try exists_past ]) ]
     | first [ contradiction | destruct_action_matches; contradiction |
       (apply E_not_future; [ match_releases | assumption ]) ]
     ]
@@ -633,7 +633,6 @@ Ltac match_immbefore :=
   end.
 
 Ltac crush :=
-  idtac "crush";
   reach_induction;
   match goal with
   | [ |- ImmBefore _ _ _ _ _ _ _ ]

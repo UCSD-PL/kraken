@@ -26,5 +26,4 @@ Theorem enable : forall st tr,
           tr.
 Proof.
   Time crush.
-  releaser_match.
 Qed.

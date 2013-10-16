@@ -13,19 +13,20 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 6.
+Definition NB_MSG : nat := 7.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [
-    ("Crash",   []);
-    ("Acceleration",   []);
-    ("DoorsOpen",   []);
-    ("UnlockDoors",   []);
-    ("VolumeUp",   []);
-    ("VolumeDown",   [])
+    ("Crash", []);
+    ("Acceleration", []);
+    ("DoorsOpen", []);
+    ("UnlockDoors", []);
+    ("VolumeUp", []);
+    ("VolumeDown", []);
+    ("InflateAirbag", [])
   ].
 
-Inductive COMPT' : Type := Engine | Doors | Radio.
+Inductive COMPT' : Type := Engine | Doors | Radio | Airbag.
 
 Definition COMPT := COMPT'.
 
@@ -34,23 +35,31 @@ Proof. decide equality. Defined.
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | Engine => mk_compd
-                "Engine" "engine.c" []
-                (mk_vdesc [])
-  | Doors => mk_compd
-                "Doors"  "doors.c"      []
-                (mk_vdesc [])
-  | Radio => mk_compd
-                "Radio"  "radio.c"    []
-                (mk_vdesc [])
+  | Engine =>
+    mk_compd
+      "Engine" "engine.c" []
+      (mk_vdesc [])
+  | Doors =>
+    mk_compd
+      "Doors"  "doors.c"      []
+      (mk_vdesc [])
+  | Radio =>
+    mk_compd
+      "Radio"  "radio.c"    []
+      (mk_vdesc [])
+  | Airbag =>
+    mk_compd
+      "Airbag"  "airbag.c"    []
+      (mk_vdesc [])
   end.
 
-Notation Crash        := 0%fin (only parsing).
-Notation Acceleration       := 1%fin (only parsing).
-Notation DoorsOpen       := 2%fin (only parsing).
-Notation UnlockDoors       := 3%fin (only parsing).
-Notation VolumeUp       := 4%fin (only parsing).
-Notation VolumeDown      := 5%fin (only parsing).
+Notation Crash         := 0%fin (only parsing).
+Notation Acceleration  := 1%fin (only parsing).
+Notation DoorsOpen     := 2%fin (only parsing).
+Notation UnlockDoors   := 3%fin (only parsing).
+Notation VolumeUp      := 4%fin (only parsing).
+Notation VolumeDown    := 5%fin (only parsing).
+Notation InflateAirbag := 6%fin (only parsing).
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Engine; Comp _ Doors; Comp _ Radio ].
@@ -63,11 +72,13 @@ Definition KSTD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Engine
   ; Comp _ Doors
   ; Comp _ Radio
+  ; Comp _ Airbag
   ].
 
-Notation v_st_engine        := 0%fin (only parsing).
-Notation v_st_doors         := 1%fin (only parsing).
-Notation v_st_radio         := 2%fin (only parsing).
+Notation v_st_engine := 0%fin (only parsing).
+Notation v_st_doors  := 1%fin (only parsing).
+Notation v_st_radio  := 2%fin (only parsing).
+Notation v_st_airbag := 3%fin (only parsing).
 
 End SystemFeatures.
 
@@ -97,7 +108,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   with
      | Engine, Crash =>
        [[ mk_vcdesc [] :
-          send (stvar v_st_doors) UnlockDoors tt
+          seq
+            (send (stvar v_st_airbag) InflateAirbag tt)
+            (send (stvar v_st_doors) UnlockDoors tt)
        ]]
      | Engine, Acceleration =>
        [[ mk_vcdesc [] :

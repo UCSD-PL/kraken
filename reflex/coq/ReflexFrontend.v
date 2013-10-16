@@ -506,12 +506,14 @@ Proof.
 Qed.
 
 Ltac releaser_match :=
+  idtac "releaser_match";
   simpl;
-  repeat match goal with
-         | [ |- exists past : Reflex.KAction _ _ _, (?act = _ \/ ?disj_R ) /\ ?conj_R ]
-           => solve [exists act; unfold msgMatch, msgMatch'; simpl; intuition; congruence] ||
-              apply cut_exists
-         end.
+  repeat
+    match goal with
+    | [ |- exists past : Reflex.KAction _ _ _, (?act = _ \/ ?disj_R ) /\ ?conj_R ] =>
+      solve [exists act; unfold msgMatch, msgMatch'; simpl; intuition; congruence]
+            || apply cut_exists
+    end.
 
 Ltac use_IH_releases :=
   match goal with
@@ -520,6 +522,7 @@ Ltac use_IH_releases :=
   end.
 
 Ltac reach_induction :=
+  idtac "reach_induction";
   intros;
   match goal with
   | [ _ : Reflex.ktr _ _ _ _ _ = inhabits ?tr, H : Reflex.Reach _ _ _ _ _ _ _ _ _ |- _ ]
@@ -551,6 +554,7 @@ Ltac extract_match_facts :=
   simpl in *; destruct_atom_eqs; try discriminate; simpl in *.
 
 Ltac exists_past :=
+  idtac "exists_past";
   destruct_action_matches;
   extract_match_facts;
   (*There may be conditions on s' (the intermediate state). We want
@@ -566,64 +570,34 @@ Ltac exists_past :=
             | use_IH_releases
             | releaser_match
             | auto].
-(*  destruct_action_matches;
-  extract_match_facts;
-  (*There may be conditions on s' (the intermediate state). We want
-    to use these conditions to derive conditions on s.*)
-  (*subst_states;*)
-  (*Try to match stuff at head of trace.*)
-  releaser_match;
-  (*This may not clear the old induction hypothesis. Does it matter?*)
-  clear_useless_hyps;
-  (*Should this take s as an argument?*)
-  reach_induction;
-  match goal with
-  | [ _ : Reflex.InitialState _ _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *;
-       try solve [ impossible
-                 | releaser_match ]
-  | [ _ : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *;
-       try solve [ impossible
-                 | use_IH_releases
-                 | releaser_match
-                 (*| exists_past*)]
-        (*destruct_eq might have created contradictions
-           with previous calls of destruct_eq*)
-  | [ _ : Reflex.BogusExchange _ _ _ _ _ _ _ _ |- _ ]
-    => try subst; simpl in *; use_IH_releases
-  | _ => idtac
-  end.*)
 
 Ltac match_releases :=
+  idtac "match_releases";
+  match goal with |- ?G => idtac G end;
   match goal with
-  | [ |- Enables _ _ _ _ _ _ nil ]
-      => constructor
+  | [ |- Enables _ _ _ _ _ _ nil ] => constructor
   (* Induction hypothesis.*)
   | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
-      IH : forall tr', Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
-                       Enables _ _ _ _ ?past ?future tr'
-                       |- Enables _ _ _ _ ?past ?future ?tr ]
-      => auto
+      IH : forall tr',
+             Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
+             Enables _ _ _ _ ?past ?future tr'
+      |- Enables _ _ _ _ ?past ?future ?tr ] =>
+    auto
   (*Branch on whether the head of the trace matches.*)
-  | [ |- Enables ?pdv ?compt ?comps ?comptdec _ ?future (?act::_) ]
-      => (*let s := match goal with
-                  | [ _ : ktr _ _ _ _ ?s = inhabits _ |- _ ]
-                      => s
-                  | [ s : init_state _ _ _ _ _ |- _ ]
-                      => s
-                  end in*)
-         let H := fresh "H" in
-         pose proof (decide_act pdv compt comps comptdec future act) as H;
-         destruct H;
-         [ first [ contradiction | destruct_action_matches; contradiction |
-           (apply E_future; [ match_releases | try solve [exists_past] ]) ]
-         | first [ contradiction | destruct_action_matches; contradiction |
-           (apply E_not_future; [ match_releases | assumption ]) ] ]
-         (*In some cases, one branch is impossible, so contradiction
-           solves the goal immediately.
-           In other cases, there are variables in the message payloads,
-           so both branches are possible.*)
+  | [ |- Enables ?pdv ?compt ?comps ?comptdec _ ?future (?act::_) ] =>
+    let H := fresh "H" in
+    pose proof (decide_act pdv compt comps comptdec future act) as H;
+    destruct H;
+    [ first [ contradiction | destruct_action_matches; contradiction |
+      (apply E_future; [ match_releases | try solve [exists_past] ]) ]
+    | first [ contradiction | destruct_action_matches; contradiction |
+      (apply E_not_future; [ match_releases | assumption ]) ]
+    ]
+  (* In some cases, one branch is impossible, so contradiction
+     solves the goal immediately.
+     In other cases, there are variables in the message payloads,
+     so both branches are possible.
+   *)
   end.
 
 Ltac act_match :=
@@ -659,6 +633,7 @@ Ltac match_immbefore :=
   end.
 
 Ltac crush :=
+  idtac "crush";
   reach_induction;
   match goal with
   | [ |- ImmBefore _ _ _ _ _ _ _ ]

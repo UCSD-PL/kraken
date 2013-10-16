@@ -13,6 +13,7 @@ Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
 Definition KOAction := KOAction PAYD COMPT COMPS.
 Definition KTrace := KTrace PAYD COMPT COMPS.
 Definition AMatch := AMatch PAYD COMPT COMPS COMPTDEC.
+Hint Unfold AMatch.
 
 (*after occurs immediately after before occurs.*)
 Inductive ImmAfter (after:KOAction) (before:KOAction)

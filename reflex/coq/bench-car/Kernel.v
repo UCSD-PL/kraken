@@ -24,7 +24,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
     ("LockDoors", []);
     ("VolumeUp",   []);
     ("VolumeDown",   []);
-    ("AirbagDeploy", [])
+    ("InflateAirbag", [])
   ].
 
 Inductive COMPT' : Type := Engine | Doors | Radio | Airbag | Alarm.
@@ -60,7 +60,7 @@ Notation UnlockDoors       := 3%fin (only parsing).
 Notation LockDoors       := 4%fin (only parsing).
 Notation VolumeUp       := 5%fin (only parsing).
 Notation VolumeDown      := 6%fin (only parsing).
-Notation AirbagDeploy   := 7%fin (only parsing).
+Notation InflateAirbag   := 7%fin (only parsing).
 
 Definition IENVD : vcdesc COMPT := mk_vcdesc
   [ Comp _ Engine; Comp _ Doors; Comp _ Radio; Comp _ Airbag; Comp _ Alarm ].
@@ -120,7 +120,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   with
      | Engine, Crash =>
        [[ mk_vcdesc [] :
-           seq (send (stvar v_st_airbag) AirbagDeploy tt)
+           seq (send (stvar v_st_airbag) InflateAirbag tt)
           (seq (send (stvar v_st_doors) UnlockDoors tt)
                (stupd _ _ v_st_crashed (nlit (num_of_nat 1))))
        ]]

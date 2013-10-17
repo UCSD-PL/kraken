@@ -1414,6 +1414,7 @@ Inductive ValidExchange (c:comp) (m:msg)
   : kstate -> kstate -> Prop :=
 | C_ve : forall s tr s',
            let cs := kcs s in
+           In c cs ->
            ktr s = [tr]%inhabited ->
            s' = mk_inter_ve_st c m s tr ->
            let hdlrs := HANDLERS (tag m) (comp_type c) in
@@ -1432,6 +1433,7 @@ Inductive BogusExchange (c:comp) (bmsg:bogus_msg)
   : kstate -> kstate -> Prop :=
 | C_be : forall s tr,
   let cs := kcs s in
+  In c cs ->
   ktr s = [tr]%inhabited ->
   BogusExchange c bmsg s (mk_bogus_st c bmsg s tr).
 
@@ -3068,7 +3070,7 @@ Proof.
                  |}
       in
       s'' <- run_hdlr_cmd c m henv s' hprog
-      <@> [Reach s];
+      <@> [Reach s] * [In c cs];
       {{ Return (hdlr_kst _ s'') }}
     | inr m =>
       let tr := tr ~~~ KBogus c m :: tr in
@@ -3124,7 +3126,7 @@ Proof.
   destruct_btag. sep'.
 
   eapply Reach_bogus; eauto.
-  econstructor. sep'.
+  econstructor; sep'.
 Qed.
 
 Definition kloop:

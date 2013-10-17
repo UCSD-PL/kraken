@@ -263,10 +263,10 @@ Proof.
     rewrite <- Heqh. unfold default_hdlr_state, mk_inter_ve_st in Heqh.
     apply f_equal with (f:=fun s => ktr (hdlr_kst _ _ _ _ _ s)) in Heqh.
     simpl in *. apply pack_injective in Heqh. subst itr. simpl.
-    unfold ktr in Htr. rewrite H in Htr. apply pack_injective in Htr.
+    unfold ktr in Htr. rewrite H0 in Htr. apply pack_injective in Htr.
     subst tr0. auto.
     unfold kstate_run_prog in *. rewrite Heqh in *.
-    rewrite H2. auto.
+    rewrite H3. auto.
 Qed.
 
 Lemma hout_hcs : forall clblr s tr,
@@ -548,9 +548,9 @@ Lemma ve_inputs_high : forall c m i s s' tr tr' lblr,
 Proof.
   intros c m i s s' tr tr' lblr Hhigh Htr Htr' Hve.
   inversion Hve.
-  unfold kstate_run_prog in H2.
-  apply f_equal with (f:=ktr) in H0.
-  simpl in H0.
+  unfold kstate_run_prog in H3.
+  apply f_equal with (f:=ktr) in H1.
+  simpl in H1.
   match goal with
   | [ _ : hdlr_kst _ _ _ _ ?envd
                    (hdlr_state_run_cmd _ _ _ _ _ ?c ?m _ ?hst ?stmt ?i) = _,
@@ -558,9 +558,9 @@ Proof.
     => pose proof (hdlr_no_recv c m envd hst stmt i trmid tr' lblr Hmid)
   end.
   subst s'.
-  apply H3 in Htr'.
+  apply H4 in Htr'.
   destruct Htr'.
-  destruct H2.
+  destruct H3.
   subst tr'.
   match goal with
   |- inputs ?lblr (?x++?act1::?act2::?tr0) = _
@@ -569,21 +569,21 @@ Proof.
   end.
   simpl.
   unfold ktr in Htr.
-  rewrite H in Htr.
+  rewrite H0 in Htr.
   apply pack_injective in Htr.
   subst tr.
   rewrite Hhigh.
   auto.
-  clear H3.
+  clear H4.
   induction x.
     auto.
 
     simpl in *.
     rewrite Hhigh in *.
-    pose proof (H4 a).
-    simpl in H2.
-    pose proof (H2 (or_introl _ (Logic.eq_refl a))).
-    rewrite H3.
+    pose proof (H5 a).
+    simpl in H3.
+    pose proof (H3 (or_introl _ (Logic.eq_refl a))).
+    rewrite H4.
     apply IHx; auto.
 Qed.
 
@@ -596,9 +596,9 @@ Lemma ve_inputs_low : forall c m i s s' tr tr' lblr,
 Proof.
   intros c m i s s' tr tr' lblr Hhigh Htr Htr' Hve.
   inversion Hve.
-  unfold kstate_run_prog in H2.
-  apply f_equal with (f:=ktr) in H0.
-  simpl in H0.
+  unfold kstate_run_prog in H3.
+  apply f_equal with (f:=ktr) in H1.
+  simpl in H1.
   match goal with
   | [ _ : hdlr_kst _ _ _ _ ?envd
                    (hdlr_state_run_cmd _ _ _ _ _ ?c ?m _ ?hst ?stmt ?i) = _,
@@ -606,9 +606,9 @@ Proof.
     => pose proof (hdlr_no_recv c m envd hst stmt i trmid tr' lblr Hmid)
   end.
   subst s'.
-  apply H3 in Htr'.
+  apply H4 in Htr'.
   destruct Htr'.
-  destruct H2.
+  destruct H3.
   subst tr'.
   match goal with
   |- inputs ?lblr (?x++?act1::?act2::?tr0) = _
@@ -616,7 +616,7 @@ Proof.
        (inputs lblr tr0)
   end.
   unfold ktr in Htr.
-  rewrite H in Htr.
+  rewrite H0 in Htr.
   apply pack_injective in Htr.
   subst tr.
   auto.
@@ -627,10 +627,10 @@ Proof.
     auto.
 
     simpl in *.
-    pose proof (H4 a).
-    simpl in H2.
-    pose proof (H2 (or_introl _ (Logic.eq_refl a))).
-    rewrite H5.
+    pose proof (H5 a).
+    simpl in H3.
+    pose proof (H3 (or_introl _ (Logic.eq_refl a))).
+    rewrite H6.
     apply IHx; eauto.
 Qed.
 
@@ -677,7 +677,11 @@ Proof.
           (projT1 hdlrs)
           (mk_inter_ve_st PAYD COMPT COMPS KSTD c m snil_ind trnil)
           (projT2 hdlrs) input)) as Hve.
-        econstructor; eauto; subst snil_ind; eauto.
+        decompose [and] IHsnil.
+        econstructor; eauto; eauto.
+        pose proof (filter_In clblr c (kcs _ _ _ _ snil_ind)) as [Hcs ?].
+        apply Hcs. rewrite <- hout_eq_hcs_eq with (s:=s); subst snil_ind; auto.
+        apply filter_In; auto. subst snil_ind; auto.
 
         split.
         eapply (Reach_valid _ _ _ _ _ _ _ _ c m input snil_ind); eauto.
@@ -750,8 +754,11 @@ Proof.
         split.
         eapply (Reach_bogus _ _ _ _ _ _ _ _ snil_ind _ c bmsg); eauto.
         subst snil_ind; eapply IHsnil; eauto.
+        decompose [and] IHsnil.
         econstructor; eauto.
-        subst snil_ind; auto.
+        pose proof (filter_In clblr c (kcs _ _ _ _ snil_ind)) as [Hcs ?].
+        apply Hcs. rewrite <- hout_eq_hcs_eq with (s:=s); subst snil_ind; auto.
+        apply filter_In; auto. subst snil_ind; auto.
 
         split.
         unfold mk_bogus_st.

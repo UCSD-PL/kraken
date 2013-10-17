@@ -66,7 +66,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
   with
   | M1, C1 =>
-    let e := mk_vcdesc [Comp _ C1] in
+    let e := mk_vcdesc [Comp _ C2] in
     [[ e :
          (spawn _ e C2 tt 0%fin (eq_refl _))
     ]]

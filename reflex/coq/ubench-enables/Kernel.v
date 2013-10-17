@@ -17,17 +17,16 @@ Definition NB_MSG : nat := 3.
 
 Definition PAYD : vvdesc NB_MSG :=
   mk_vvdesc
-  [ ("User", [str_d]) (*User name payload.*)
-  ; ("AuthT", [str_d]) (*Auth response from system payload.*)
-  ; ("AuthF", [])
+  [ ("M1", [])
+  ; ("M2", [])
+  ; ("M3", [])
   ].
 
-Notation PrivReq        := 0%fin (only parsing).
-Notation LoginResT      := 1%fin (only parsing).
-Notation LoginResF      := 2%fin (only parsing).
+Notation M1 := 0%fin (only parsing).
+Notation M2 := 1%fin (only parsing).
+Notation M3 := 2%fin (only parsing).
 
-(*State is (username, authres)*)
-Inductive COMPT' : Type := C.
+Inductive COMPT' : Type := C1 | C2 | C3.
 Definition COMPT := COMPT'.
 
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
@@ -35,14 +34,19 @@ Proof. decide equality. Defined.
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | C => mk_compd "Echo" "test/echo-00/test.py" [] (mk_vdesc [])
+  | C1 => mk_compd "C1" "c1" [] (mk_vdesc [])
+  | C2 => mk_compd "C2" "c2" [] (mk_vdesc [])
+  | C3 => mk_compd "C3" "c3" [] (mk_vdesc [])
   end.
 
-Definition KSTD : vcdesc COMPT := mk_vcdesc [Desc _ str_d; Desc _ num_d].
-Definition v_user : fin (projT1 KSTD) := None.
-Definition v_authed : fin (projT1 KSTD) := Some None.
+Definition KSTD : vcdesc COMPT :=
+  mk_vcdesc [Desc _ str_d; Desc _ num_d].
 
-Definition IENVD : vcdesc COMPT := mk_vcdesc [Comp _ C].
+Definition st1 : fin (projT1 KSTD) := None.
+Definition st2 : fin (projT1 KSTD) := Some None.
+
+Definition IENVD : vcdesc COMPT :=
+  mk_vcdesc [Comp _ C1].
 
 End SystemFeatures.
 
@@ -53,7 +57,7 @@ Module Language := MkLanguage(SystemFeatures).
 Import Language.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  spawn _ IENVD C tt None (Logic.eq_refl _).
+  spawn _ IENVD C1 tt None (Logic.eq_refl _).
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -61,20 +65,14 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   match t as _t, ct as _ct return
     {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
   with
-  | PrivReq, C =>
-    [[ mk_vcdesc [] :
-      ite (eq (stvar v_authed) (nlit (num_of_nat 0)))
-          (
-            nop
-          )
-          (
-            send ccomp PrivReq (stvar v_user, tt)
-          )
+  | M1, C1 =>
+    let e := mk_vcdesc [Comp _ C1] in
+    [[ e :
+         (spawn _ e C1 tt 0%fin (eq_refl _))
     ]]
-  | LoginResT, C =>
+  | M3, C2 =>
     [[ mk_vcdesc [] :
-       seq (stupd _ _ v_user   (mvar LoginResT 0%fin))
-           (stupd _ _ v_authed (nlit (num_of_nat 1)))
+         (send ccomp M2 tt)
     ]]
   | _, _ => [[ mk_vcdesc [] : nop ]]
   end.

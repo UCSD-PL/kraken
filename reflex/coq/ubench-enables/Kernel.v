@@ -68,7 +68,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | M1, C1 =>
     let e := mk_vcdesc [Comp _ C1] in
     [[ e :
-         (spawn _ e C1 tt 0%fin (eq_refl _))
+         (spawn _ e C2 tt 0%fin (eq_refl _))
     ]]
   | M3, C2 =>
     [[ mk_vcdesc [] :

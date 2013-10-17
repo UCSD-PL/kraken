@@ -26,6 +26,8 @@ Theorem enable : forall st tr,
           tr.
 Proof.
   Time crush.
+
   (* This looks like it's doing it wrong: do we want to find a contradiction? *)
   releaser_match.
+
 Qed.

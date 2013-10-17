@@ -210,7 +210,9 @@ Ltac destruct_find_comp :=
   |- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
     => let Heq := fresh "Heq" in
        destruct (find_comp a b c d e) as [? | ?]_eqn:Heq; try rewrite Heq;
-       [apply find_comp_suc_match with (cp:=d) in Heq | ]
+       [ apply find_comp_suc_match with (cp:=d) in Heq; destruct Heq
+       | pose proof (find_comp_fail _ _ _ _ _ Heq);
+         pose proof (find_comp_fail_prop _ _ _ _ _ Heq); clear Heq ]
   end.
 
 Ltac destruct_comp_pf :=
@@ -422,8 +424,11 @@ Ltac clear_useless_hyps :=
            => revert H
          | [ H : Reflex.Reach _ _ _ _ _ _ _ _ _ |- _ ]
            => revert H
-         | [ H : In _ _ |- _ ]
+         | [ H : List.In _ _ |- _ ]
            => revert H
+         | [ H : forall _ : Reflex.comp _ _,
+                   List.In _ _ -> _ |- _ ]
+             => (*find_comp_fail*) revert H
          | _
            => idtac
          end; clear; intros.

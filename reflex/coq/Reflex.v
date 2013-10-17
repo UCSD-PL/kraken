@@ -1037,15 +1037,19 @@ Definition shvec_replace_cast {d envd} {i : fin (projT1 envd)} (EQ : svec_ith (p
 
 Definition eval_base_expr {d} {envd : vcdesc} : s[[envd]] -> expr base_term envd d -> s[[ d ]] :=
   eval_expr base_term (fun d envd e => @eval_base_term d envd e).
+Hint Unfold eval_base_expr.
 
 Definition eval_base_payload_cexpr :=
   eval_payload_cexpr base_term (fun d envd e => @eval_base_term d envd e).
+Hint Unfold eval_base_payload_cexpr.
 
 Definition eval_base_payload_expr :=
   eval_payload_expr base_term (fun d envd e => @eval_base_term d envd e).
+Hint Unfold eval_base_payload_expr.
 
 Definition eval_base_payload_oexpr :=
   eval_payload_oexpr base_term (fun d envd e => @eval_base_term d envd e).
+Hint Unfold eval_base_payload_oexpr.
 
 Definition eval_base_comp_pat envd env cp :=
   {| conc_pat_type := comp_pat_type _ _ cp;
@@ -1054,15 +1058,19 @@ Definition eval_base_comp_pat envd env cp :=
 Definition eval_hdlr_expr {d} {envd : vcdesc} (s : s[[KSTD]])
   : s[[envd]] -> expr (hdlr_term CT CTAG) envd d -> s[[ d ]] :=
   eval_expr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
+Hint Unfold eval_hdlr_expr.
 
 Definition eval_hdlr_payload_cexpr s :=
   eval_payload_cexpr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
+Hint Unfold eval_hdlr_payload_cexpr.
 
 Definition eval_hdlr_payload_expr s :=
   eval_payload_expr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
+Hint Unfold eval_hdlr_payload_expr.
 
 Definition eval_hdlr_payload_oexpr s :=
   eval_payload_oexpr (hdlr_term CT CTAG) (fun d envd e t => @eval_hdlr_term s d envd t e).
+Hint Unfold eval_hdlr_payload_oexpr.
 
 Definition eval_hdlr_comp_pat s envd env cp :=
   {| conc_pat_type := comp_pat_type _ _ cp;
@@ -1406,6 +1414,7 @@ Inductive ValidExchange (c:comp) (m:msg)
   : kstate -> kstate -> Prop :=
 | C_ve : forall s tr s',
            let cs := kcs s in
+           In c cs ->
            ktr s = [tr]%inhabited ->
            s' = mk_inter_ve_st c m s tr ->
            let hdlrs := HANDLERS (tag m) (comp_type c) in
@@ -1424,6 +1433,7 @@ Inductive BogusExchange (c:comp) (bmsg:bogus_msg)
   : kstate -> kstate -> Prop :=
 | C_be : forall s tr,
   let cs := kcs s in
+  In c cs ->
   ktr s = [tr]%inhabited ->
   BogusExchange c bmsg s (mk_bogus_st c bmsg s tr).
 
@@ -3060,7 +3070,7 @@ Proof.
                  |}
       in
       s'' <- run_hdlr_cmd c m henv s' hprog
-      <@> [Reach s];
+      <@> [Reach s] * [In c cs];
       {{ Return (hdlr_kst _ s'') }}
     | inr m =>
       let tr := tr ~~~ KBogus c m :: tr in
@@ -3116,7 +3126,7 @@ Proof.
   destruct_btag. sep'.
 
   eapply Reach_bogus; eauto.
-  econstructor. sep'.
+  econstructor; sep'.
 Qed.
 
 Definition kloop:

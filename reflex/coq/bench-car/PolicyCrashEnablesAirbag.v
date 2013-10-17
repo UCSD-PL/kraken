@@ -5,24 +5,24 @@ Require Import Kernel.
 
 Local Opaque str_of_string.
 
-Import SystemFeatures Language.
+Import SystemFeatures Language Spec.
 
-Require Import PolLang.
-Require Import ActionMatch.
-Require Import List.
+Definition Engine_pat : conc_pat COMPT COMPS :=
+  Build_conc_pat COMPT COMPS Engine tt.
 
-Local Opaque str_of_string.
+Definition Airbag_pat : conc_pat COMPT COMPS :=
+  Build_conc_pat COMPT COMPS Airbag tt.
 
 Theorem enable : forall st tr,
   Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
   ktr _ _ _ _ st = inhabits tr ->
   Enables PAYD COMPT COMPS COMPTDEC
-          (KORecv PAYD COMPT COMPS None
+          (KORecv PAYD COMPT COMPS (Some Engine_pat)
                   (Some (Build_opt_msg PAYD
-                                       M1 tt)))
-          (KOSend PAYD COMPT COMPS None
+                                       Crash tt)))
+          (KOSend PAYD COMPT COMPS (Some Airbag_pat)
                   (Some (Build_opt_msg PAYD
-                                       M2 tt)))
+                                       InflateAirbag tt)))
           tr.
 Proof.
   Time crush.

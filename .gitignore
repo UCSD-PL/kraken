@@ -7,3 +7,8 @@
 *.pyc
 *.swp
 *.vo
+*.aux
+*.log
+*bench*.csv
+*bench*.pdf
+*bench*.tex

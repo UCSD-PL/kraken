@@ -85,6 +85,12 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     BinOp COMPT COMPS term envd
           (Eq _ _ d) e1 e2.
 
+  Definition lt {term envd} e1 e2 :=
+    BinOp COMPT COMPS term envd (Lt _ _) e1 e2.
+
+  Definition add {term envd} e1 e2 :=
+    BinOp COMPT COMPS term envd (Add _ _) e1 e2.
+
   Definition splitfst envd term c s :=
     UnOp COMPT COMPS term envd (SplitFst _ _ c) s.
 

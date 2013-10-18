@@ -71,7 +71,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
     ("CreatePtyerRes",   [fd_d; fd_d]);
 
     (* monitor <-> system *)
-    ("SLoginReq",   [str_d]);
+    ("SLoginReq",   [str_d; num_d]);
     ("SLoginResT",   [str_d]);
     ("SLoginResF",   []);
 
@@ -132,12 +132,14 @@ Definition KSTD : vcdesc COMPT := mk_vcdesc
   ; Comp _ Slave
   ; Desc _ num_d (* authenticated *)
   ; Desc _ str_d (* authenticated username *)
+  ; Desc _ num_d (* login attempts *)
   ].
 
-Notation v_st_system        := (None) (only parsing).
-Notation v_st_slave         := (Some None) (only parsing).
-Notation v_st_authenticated := (Some (Some None)) (only parsing).
-Notation v_st_auth_user     := (Some (Some (Some None))) (only parsing).
+Notation v_st_system        := 0%fin (only parsing).
+Notation v_st_slave         := 1%fin (only parsing).
+Notation v_st_authenticated := 2%fin (only parsing).
+Notation v_st_auth_user     := 3%fin (only parsing).
+Notation v_st_login_att     := 4%fin (only parsing).
 
 End SystemFeatures.
 
@@ -155,11 +157,10 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
    seq (spawn _ IENVD System (i_slit (str_of_string "System"), tt) v_env_system (Logic.eq_refl _))
   (seq (stupd _ IENVD v_st_system (i_envvar IENVD v_env_system))
   (seq (spawn _ IENVD Slave  tt                           v_env_slave  (Logic.eq_refl _))
-       (stupd _ IENVD v_st_slave (i_envvar IENVD v_env_slave)))).
+  (seq (stupd _ IENVD v_st_slave (i_envvar IENVD v_env_slave))
+       (stupd _ IENVD v_st_login_att (i_nlit (num_of_nat 0)))))).
 
 Definition system_pat := (Some (str_of_string "System"), tt).
-
-Definition exists_comp := exists_comp COMPT COMPTDEC COMPS.
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -169,7 +170,17 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   with
      | Slave, LoginReq =>
        [[ mk_vcdesc [] :
-          send (stvar v_st_system) SLoginReq (mvar LoginReq 0%fin, tt)
+          ite (lt (stvar v_st_login_att) (nlit (num_of_nat 3)))
+              (
+                seq (send (stvar v_st_system) SLoginReq
+                          (mvar LoginReq 0%fin, (stvar v_st_login_att, tt)))
+                    (stupd _ _ v_st_login_att
+                           (add (stvar v_st_login_att)
+                                (nlit (num_of_nat 1))))
+              )
+              (
+                nop
+              )
        ]]
      | System, SLoginResT =>
        [[ mk_vcdesc [] :

@@ -1,19 +1,20 @@
 #!/bin/bash
 
-if [ $# -ne 2 ]
-then echo "Usage: bench COQC YNOT"; exit 65
-fi;
+if [ $# -ne 3 ]
+then echo "Usage: bench COQC YNOT PREFIX"; exit 65
+fi
 
 COQC=$1
 YNOT=$2
+PREFIX=$3
 BENCHINCLUDES="-R $YNOT Ynot -I . -I .."
-BENCHNAME=benchmark-`date +"%y-%m-%d-%H:%M:%S"`
+BENCHNAME=$PREFIX-`date +"%y-%m-%d-%H:%M:%S"`
 BENCHDIR=benchmarks
 BENCHFULL=$BENCHDIR/$BENCHNAME
 
 echo "Benchmark,Policy,Time" >> $BENCHFULL.csv
 
-for d in `find . -name "bench-*"`;
+for d in `ls -d -- $PREFIX-*`;
 do (
   echo `basename $d`;
   cd $d;
@@ -21,7 +22,8 @@ do (
   for b in `find . -name "Policy*.v"`;
   do (
     echo `basename $b .v`;
-    echo -n `basename $d`,`basename $b .v`, >> ../$BENCHFULL.csv;
+    echo -n `basename $d`,    | sed -e "s/^$PREFIX-//" >> ../$BENCHFULL.csv;
+    echo -n `basename $b .v`, | sed -e "s/^Policy//"   >> ../$BENCHFULL.csv;
     coqres=`timeout --foreground 1h $COQC $BENCHINCLUDES $b 2>&1`;
     status=$?;
     coqtime=`echo "$coqres" \
@@ -43,7 +45,7 @@ do (
   );
   done;
 );
-done;
+done
 
 (
   cd $BENCHDIR;

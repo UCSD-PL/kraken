@@ -13,10 +13,10 @@ BENCHDIR  := benchmarks
 BENCHFULL := $(BENCHDIR)/$(BENCHNAME)
 
 bench: all
-	./bench.sh $(COQC) $(YNOT)
+	./bench.sh $(COQC) $(YNOT) bench
 
-ubench:
-	for i in `find . -name "ubench-*"`; do make policies -C $$i; done
+ubench: all
+	./bench.sh $(COQC) $(YNOT) ubench
 
 build:
 	$(MAKE) depend

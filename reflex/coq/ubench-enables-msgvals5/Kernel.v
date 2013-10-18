@@ -13,20 +13,16 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 3.
+Definition NB_MSG : nat := 1.
 
 Definition PAYD : vvdesc NB_MSG :=
   mk_vvdesc
-  [ ("M1", [])
-  ; ("M2", [])
-  ; ("M3", [])
+  [ ("M", [num_d; str_d])
   ].
 
-Notation M1 := 0%fin (only parsing).
-Notation M2 := 1%fin (only parsing).
-Notation M3 := 2%fin (only parsing).
+Notation M := 0%fin (only parsing).
 
-Inductive COMPT' : Type := C1 | C2 | C3.
+Inductive COMPT' : Type := C.
 Definition COMPT := COMPT'.
 
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
@@ -34,19 +30,15 @@ Proof. decide equality. Defined.
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | C1 => mk_compd "C1" "c1" [] (mk_vdesc [])
-  | C2 => mk_compd "C2" "c2" [] (mk_vdesc [])
-  | C3 => mk_compd "C3" "c3" [] (mk_vdesc [])
+  | C => mk_compd "C" "" [] (mk_vdesc [])
   end.
 
 Definition KSTD : vcdesc COMPT :=
-  mk_vcdesc [Desc _ str_d; Desc _ num_d].
+  mk_vcdesc [Comp _ C].
+Notation v_st_c := 0%fin (only parsing).
 
-Definition st1 : fin (projT1 KSTD) := None.
-Definition st2 : fin (projT1 KSTD) := Some None.
-
-Definition IENVD : vcdesc COMPT :=
-  mk_vcdesc [Comp _ C1].
+Definition IENVD : vcdesc COMPT := mk_vcdesc [Comp _ C].
+Notation v_env_c := 0%fin (only parsing).
 
 End SystemFeatures.
 
@@ -57,7 +49,8 @@ Module Language := MkLanguage(SystemFeatures).
 Import Language.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  spawn _ IENVD C1 tt None (Logic.eq_refl _).
+   seq (spawn _ IENVD C tt v_env_c (Logic.eq_refl _))
+       (stupd _ IENVD v_st_c (i_envvar IENVD v_env_c)).
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -65,14 +58,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   match t as _t, ct as _ct return
     {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}
   with
-  | M1, C1 =>
-    let e := mk_vcdesc [Comp _ C2] in
-    [[ e :
-         (spawn _ e C2 tt 0%fin (eq_refl _))
-    ]]
-  | M3, C2 =>
+  | M, C =>
     [[ mk_vcdesc [] :
-         (send ccomp M2 tt)
+       send (stvar v_st_c) M (mvar M 0%fin, (mvar M 1%fin, tt))
     ]]
   | _, _ => [[ mk_vcdesc [] : nop ]]
   end.

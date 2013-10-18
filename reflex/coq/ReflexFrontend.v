@@ -206,14 +206,19 @@ match goal with
 end.
 
 Ltac destruct_find_comp :=
-  match goal with
-  |- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-    => let Heq := fresh "Heq" in
-       destruct (find_comp a b c d e) as [? | ?]_eqn:Heq; try rewrite Heq;
-       [ apply find_comp_suc_match with (cp:=d) in Heq; destruct Heq
-       | pose proof (find_comp_fail _ _ _ _ _ Heq);
-         pose proof (find_comp_fail_prop _ _ _ _ _ Heq); clear Heq ]
-  end.
+  let find_comp_expr :=
+      match goal with
+      | [ |- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ] ]
+        => (constr:(find_comp a b c d e))
+      | [ _ : context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ] |- _ ]
+        => (constr:(find_comp a b c d e))
+      end in
+  let Heq := fresh "Heq" in
+  let Heq' := fresh "Heq'" in
+  destruct find_comp_expr as [? | ?]_eqn:Heq; try rewrite Heq;
+  [ pose proof (find_comp_suc_match _ _ _ _ _ _ Heq) as Heq'; destruct Heq'
+  | pose proof (find_comp_fail _ _ _ _ _ Heq);
+    pose proof (find_comp_fail_prop _ _ _ _ _ Heq); clear Heq ].
 
 Ltac destruct_comp_pf :=
   match goal with
@@ -534,13 +539,7 @@ Ltac reach_induction :=
   intros;
   match goal with
   | [ _ : Reflex.ktr _ _ _ _ _ = inhabits ?tr, H : Reflex.Reach _ _ _ _ _ _ _ _ ?s |- _ ]
-      => generalize dependent tr;
-         repeat match goal with
-         | [ cs := kcs _ _ _ _ s |- _ ]
-           => generalize dependent cs
-         | [ st := kst _ _ _ _ s |- _ ]
-           => generalize dependent st
-         end; induction H; unpack
+      => generalize dependent tr; induction H; unpack
          (*Do not put simpl anywhere in here. It breaks destruct_unpack.*)
   end.
 
@@ -568,7 +567,6 @@ Ltac extract_match_facts :=
   simpl in *; destruct_atom_eqs; try discriminate; simpl in *.
 
 Ltac exists_past :=
-  destruct_action_matches;
   extract_match_facts;
   (*There may be conditions on s' (the intermediate state). We want
     to use these conditions to derive conditions on s.*)
@@ -577,6 +575,10 @@ Ltac exists_past :=
   releaser_match;
   (*This may not clear the old induction hypothesis. Does it matter?*)
   clear_useless_hyps;
+  try match goal with
+      | [ cs : List.list (Reflex.comp _ _) |- _ ]
+        => subst cs
+      end;
   (*Should this take s as an argument?*)
   reach_induction;
   try solve [ impossible
@@ -644,6 +646,13 @@ Ltac forall_not_disabler :=
   subst_states;*)
   (*This may not clear the old induction hypothesis. Does it matter?*)
   clear_useless_hyps;
+  try match goal with
+      | [ cs : List.list (Reflex.comp _ _) |- _ ]
+        => match goal with
+           | [ H : List.In _ cs |- _ ]
+             => clear H
+           end
+      end;
   (*Should this take s as an argument?*)
   reach_induction;
   match goal with
@@ -691,7 +700,7 @@ Ltac match_disables :=
          destruct H as [A|A]; simpl in A; repeat autounfold in A; simpl in A;
          [ tauto ||
            (decompose [and] A; apply D_disablee;
-            [ match_disables | try forall_not_disabler ])
+            [ match_disables | try solve [forall_not_disabler] ])
          | tauto ||
            (destruct_neg_conjuncts A; apply D_not_disablee;
             [ match_disables | assumption ]) ]

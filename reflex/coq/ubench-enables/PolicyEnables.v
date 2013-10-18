@@ -24,18 +24,4 @@ Theorem enable : forall st tr,
           tr.
 Proof.
   Time crush.
-  clear_useless_hyps.
-  repeat apply cut_exists.
-  unfold cs in *.
-  clear cs.
-  revert H1.
-  generalize dependent tr.
-  induction H.
-
-  unpack. intuition congruence.
-
-  unpack; try solve [repeat apply cut_exists; eapply IHReach; eauto].
-  releaser_match.
-
-  unpack; try solve [repeat apply cut_exists; eapply IHReach; eauto].
 Qed.

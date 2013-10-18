@@ -13,18 +13,20 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 3.
+Definition NB_MSG : nat := 4.
 
 Definition PAYD : vvdesc NB_MSG :=
   mk_vvdesc
   [ ("M1", [])
   ; ("M2", [])
   ; ("M3", [])
+  ; ("M4", [])
   ].
 
 Notation M1 := 0%fin (only parsing).
 Notation M2 := 1%fin (only parsing).
 Notation M3 := 2%fin (only parsing).
+Notation M4 := 3%fin (only parsing).
 
 Inductive COMPT' : Type := C1 | C2 | C3.
 Definition COMPT := COMPT'.
@@ -40,10 +42,9 @@ Definition COMPS (t : COMPT) : compd :=
   end.
 
 Definition KSTD : vcdesc COMPT :=
-  mk_vcdesc [Desc _ str_d; Desc _ num_d].
+  mk_vcdesc [Desc _ num_d].
 
 Definition st1 : fin (projT1 KSTD) := None.
-Definition st2 : fin (projT1 KSTD) := Some None.
 
 Definition IENVD : vcdesc COMPT :=
   mk_vcdesc [Comp _ C1].
@@ -57,7 +58,9 @@ Module Language := MkLanguage(SystemFeatures).
 Import Language.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  spawn _ IENVD C1 tt None (Logic.eq_refl _).
+  seq
+    (stupd _ IENVD st1 (i_nlit (num_of_nat 0)))
+    (spawn _ IENVD C1 tt None (Logic.eq_refl _)).
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -67,13 +70,15 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   with
   | M1, C1 =>
     let e := mk_vcdesc [Comp _ C2] in
-    [[ e :
-         (spawn _ e C2 tt 0%fin (eq_refl _))
-    ]]
-  | M3, C2 =>
+    [[ e : (spawn _ e C2 tt 0%fin (eq_refl _)) ]]
+  | M3, _ =>
     [[ mk_vcdesc [] :
-         (send ccomp M2 tt)
-    ]]
+         (ite (eq (stvar st1) (nlit (num_of_nat 0)))
+              (send ccomp M4 tt)
+              (nop)
+         ) ]]
+  | _, C2 =>
+    [[ mk_vcdesc [] : (send ccomp M2 tt) ]]
   | _, _ => [[ mk_vcdesc [] : nop ]]
   end.
 Close Scope hdlr.

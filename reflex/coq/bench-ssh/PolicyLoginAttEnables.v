@@ -7,16 +7,16 @@ Local Opaque str_of_string.
 
 Import SystemFeatures Language Spec.
 
-Theorem disable : forall st tr,
+Theorem enable : forall st tr s,
   Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->
   ktr _ _ _ _ st = inhabits tr ->
-  Disables PAYD COMPT COMPS COMPTDEC
+  Enables PAYD COMPT COMPS COMPTDEC
            (KOSend PAYD COMPT COMPS None
                    (Some (Build_opt_msg PAYD
-                                        SLoginReq (None, (Some nil, tt)))))
+                                        SLoginReq (None, (Some s, tt)))))
            (KOSend PAYD COMPT COMPS None
                    (Some (Build_opt_msg PAYD
-                                        SLoginReq (None, (Some nil, tt)))))
+                                        SLoginReq (None, (Some (Ascii.zero::s), tt)))))
           tr.
 Proof.
   Time crush.

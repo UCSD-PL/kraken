@@ -13,10 +13,10 @@ Theorem disable : forall st tr,
   Disables PAYD COMPT COMPS COMPTDEC
            (KOSend PAYD COMPT COMPS None
                    (Some (Build_opt_msg PAYD
-                                        SLoginReq (None, (Some nil, tt)))))
+                                        M (Some (Ascii.zero::Ascii.zero::nil), tt))))
            (KOSend PAYD COMPT COMPS None
                    (Some (Build_opt_msg PAYD
-                                        SLoginReq (None, (Some nil, tt)))))
+                                        M (None, tt))))
           tr.
 Proof.
   Time crush.

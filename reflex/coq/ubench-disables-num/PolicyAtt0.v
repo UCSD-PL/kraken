@@ -13,18 +13,11 @@ Theorem disable : forall st tr,
   Disables PAYD COMPT COMPS COMPTDEC
            (KOSend PAYD COMPT COMPS None
                    (Some (Build_opt_msg PAYD
-                                        M (Some (num_of_nat 1), tt))))
+                                        M (Some nil, tt))))
            (KOSend PAYD COMPT COMPS None
                    (Some (Build_opt_msg PAYD
-                                        M (Some (num_of_nat 1), tt))))
+                                        M (Some nil, tt))))
           tr.
 Proof.
-
   Time crush.
-forall_not_disabler.
-unfold msgMatch'.
-simpl. rewrite H6.
-Local Transparent num_of_nat nat_of_num.
-simpl. admit. rewrite ReflexBase.num_nat_embedding.
-intuition.
 Qed.

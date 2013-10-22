@@ -91,6 +91,9 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition add {term envd} e1 e2 :=
     BinOp COMPT COMPS term envd (Add _ _) e1 e2.
 
+  Definition cat {term envd} e1 e2 :=
+    BinOp COMPT COMPS term envd (Cat _ _) e1 e2.
+
   Definition splitfst envd term c s :=
     UnOp COMPT COMPS term envd (SplitFst _ _ c) s.
 
@@ -637,13 +640,44 @@ Ltac specialize_comp_hyps :=
               end
   end.
 
+Ltac decompose_not_match :=
+  match goal with
+  |- _ -> _
+    => let H := fresh "H" in
+       intro H; try decompose [and] H
+  end.
+
+Ltac rewrite_st_eqs :=
+  match goal with
+  | [ H : _ = fst (kst _ _ _ _ _) |- _ ]
+      => rewrite <- H in *
+  | [ H : _ = fst (snd (kst _ _ _ _ _)) |- _ ]
+      => rewrite <- H in *
+  | [ H : _ = fst (snd (snd (kst _ _ _ _ _))) |- _ ]
+      => rewrite <- H in *
+  | [ H : _ = fst (snd (snd (snd (kst _ _ _ _ _)))) |- _ ]
+      => rewrite <- H in *
+  | [ H : _ = fst (snd (snd (snd (snd (kst _ _ _ _ _))))) |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (kst _ _ _ _ _) = _ |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (snd (kst _ _ _ _ _)) = _ |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (snd (snd (kst _ _ _ _ _))) = _ |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (snd (snd (snd (kst _ _ _ _ _)))) = _ |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (snd (snd (snd (snd (kst _ _ _ _ _))))) = _ |- _ ]
+      => rewrite <- H in *
+  end.
+
 (*This function should be passed a state. It will then attempt to prove
   that there are no instances of the disabler (should it be passed the disabler?)
   anywhere in the trace of that state.*)
 (*There are two situations:
 1.) The trace of the state is fully concrete: no induction required.
 2.) The trace is not fully concrete: induction required.*)
-Ltac forall_not_disabler :=
+Ltac forall_not_disabler n :=
 (*  destruct_action_matches;*)
   try solve [impossible];
   extract_match_facts;
@@ -663,11 +697,14 @@ Ltac forall_not_disabler :=
   reach_induction;
   match goal with
   | [ H :  context[ List.In ?act _ ] |- _ ]
-      => simpl in *; decompose [or] H; try subst;
+      => simpl in *; decompose [or] H; try subst; autounfold; simpl;
+         try decompose_not_match; try rewrite_st_eqs;
          try solve [ impossible
                    | tauto
                    | use_IH_disables
-                   | specialize_comp_hyps; intuition ]
+                   | try specialize_comp_hyps; intuition; try congruence
+                   | match n with | O => fail | S ?n' => forall_not_disabler n' end
+                   ]
   end.
 (*
   match goal with
@@ -706,7 +743,7 @@ Ltac match_disables :=
          destruct H as [A|A]; simpl in A; repeat autounfold in A; simpl in A;
          [ tauto ||
            (decompose [and] A; apply D_disablee;
-            [ match_disables | try solve [forall_not_disabler] ])
+            [ match_disables | try solve [forall_not_disabler 3] ])
          | tauto ||
            (destruct_neg_conjuncts A; apply D_not_disablee;
             [ match_disables | assumption ]) ]

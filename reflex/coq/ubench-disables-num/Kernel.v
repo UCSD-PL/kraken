@@ -17,7 +17,7 @@ Definition NB_MSG : nat := 1.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [
-    ("M",   [num_d])
+    ("M",   [str_d])
   ].
 
 Inductive COMPT' : Type := C.
@@ -42,7 +42,7 @@ Definition IENVD : vcdesc COMPT := mk_vcdesc
 Notation v_env_c := 0%fin (only parsing).
 
 Definition KSTD : vcdesc COMPT := mk_vcdesc
-  [Desc _ num_d (* attempts *)].
+  [Desc _ str_d (* attempts *)].
 
 Notation v_st_att     := 0%fin (only parsing).
 
@@ -62,6 +62,20 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   spawn _ IENVD C tt v_env_c (Logic.eq_refl _).
 
 Open Scope hdlr.
+Fixpoint str_prefix (s1 s2:str) :=
+  match s1 with
+  | nil => TRUE
+  | a1::s1' =>
+    match s2 with
+    | nil => FALSE
+    | a2::s2' =>
+      match Ascii.ascii_dec a1 a2 with
+      | left _ => str_prefix s1' s2'
+      | right _ => FALSE
+      end
+    end
+  end.
+
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun t ct =>
   match ct as _ct, t as _t return
@@ -69,12 +83,12 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   with
      | C, M =>
        [[ mk_vcdesc [] :
-          ite (lt (stvar v_st_att) (nlit (num_of_nat 3)))
+          ite (binop_num _ _ (Desc _ str_d) (Desc _ str_d)
+                         str_prefix (stvar v_st_att) (slit (Ascii.zero::Ascii.zero::nil)))
               (
                 seq (send ccomp M (stvar v_st_att, tt))
                     (stupd _ _ v_st_att
-                           (add (stvar v_st_att)
-                                (nlit (num_of_nat 1))))
+                           (cat (slit (Ascii.zero::nil)) (stvar v_st_att)))
               )
               (
                 nop

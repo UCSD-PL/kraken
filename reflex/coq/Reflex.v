@@ -590,6 +590,7 @@ Implicit Arguments eval_unop.
 
 Inductive binop : cdesc -> cdesc -> cdesc -> Set :=
 | Eq    : forall d, binop d d (Desc num_d)
+| Lt    : binop (Desc num_d) (Desc num_d) (Desc num_d)
 | Add   : binop (Desc num_d) (Desc num_d) (Desc num_d)
 | Sub   : binop (Desc num_d) (Desc num_d) (Desc num_d)
 | Mul   : binop (Desc num_d) (Desc num_d) (Desc num_d)
@@ -618,6 +619,9 @@ Definition eval_binop
       (* Assumption: comparing the file descriptors is enough *)
       if fd_eq (comp_fd (projT1 c1)) (comp_fd (projT1 c2)) then TRUE else FALSE
     end
+  | Lt  => fun n1 n2 : num =>
+    if Compare_dec.lt_dec (nat_of_num n1) (nat_of_num n2)
+    then TRUE else FALSE
   | Add => fun v1 v2 : num =>
     num_of_nat (plus (nat_of_num v1) (nat_of_num v2))
   | Sub => fun v1 v2 : num =>
@@ -1117,9 +1121,7 @@ Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd bas
   | Nop _ => fun s _ => s
   
   | Seq envd c1 c2 => fun s i =>
-    let s1 := init_state_run_cmd envd s c1 (fst i) in
-    let s2 := init_state_run_cmd envd s1 c2 (snd i) in
-    s2
+    init_state_run_cmd envd (init_state_run_cmd envd s c1 (fst i)) c2 (snd i)
 
   | Ite envd cond c1 c2 => fun s i =>
     if num_eq (@eval_base_expr (Desc num_d) _ (init_env _ s) cond) FALSE

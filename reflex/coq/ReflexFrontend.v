@@ -85,6 +85,15 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     BinOp COMPT COMPS term envd
           (Eq _ _ d) e1 e2.
 
+  Definition lt {term envd} e1 e2 :=
+    BinOp COMPT COMPS term envd (Lt _ _) e1 e2.
+
+  Definition add {term envd} e1 e2 :=
+    BinOp COMPT COMPS term envd (Add _ _) e1 e2.
+
+  Definition cat {term envd} e1 e2 :=
+    BinOp COMPT COMPS term envd (Cat _ _) e1 e2.
+
   Definition splitfst envd term c s :=
     UnOp COMPT COMPS term envd (SplitFst _ _ c) s.
 
@@ -205,12 +214,30 @@ match goal with
 |- context[ if ?e then _ else _ ] => destruct e
 end.
 
+Ltac destruct_cond' H :=
+match type of H with
+| context[ if ?e then _ else _ ] => destruct e
+end.
+
 Ltac destruct_find_comp :=
   let find_comp_expr :=
       match goal with
       | [ |- context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ] ]
         => (constr:(find_comp a b c d e))
       | [ _ : context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ] |- _ ]
+        => (constr:(find_comp a b c d e))
+      end in
+  let Heq := fresh "Heq" in
+  let Heq' := fresh "Heq'" in
+  destruct find_comp_expr as [? | ?]_eqn:Heq; try rewrite Heq;
+  [ pose proof (find_comp_suc_match _ _ _ _ _ _ Heq) as Heq'; destruct Heq'
+  | pose proof (find_comp_fail _ _ _ _ _ Heq);
+    pose proof (find_comp_fail_prop _ _ _ _ _ Heq); clear Heq ].
+
+Ltac destruct_find_comp' H :=
+  let find_comp_expr :=
+      match type of H with
+      | context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
         => (constr:(find_comp a b c d e))
       end in
   let Heq := fresh "Heq" in
@@ -386,6 +413,11 @@ Ltac ni :=
 
 (*Policy language tactics*)
 
+Ltac symb_exec H :=
+  unfold kstate_run_prog, init_state_run_cmd, initial_init_state,
+    eval_base_payload_expr, eval_payload_expr in *; simpl in *;
+  repeat destruct_find_comp' H; repeat destruct_cond' H; simpl in *.
+
 Ltac destruct_ite_pol :=
   match goal with
   |- context[ ite _ _ _ ]
@@ -395,24 +427,37 @@ Ltac destruct_ite_pol :=
   end.
 
 Ltac unpack :=
+  intros;
   match goal with
-  | [ H : Reflex.InitialState _ _ _ _ _ _ _ _ ?s |- _ ]
+  | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input ?s |- _ ]
     => inversion H;
        match goal with
-       | [ _ : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _ |- _ ]
-         => subst s'; subst s
+       | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _,
+           Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
+         => clear H; subst s; simpl in Htr; destruct_pay input;
+            match goal with
+            | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
+                => symb_exec Hs; subst s'; simpl in *
+            | _ => subst s'; symb_exec Htr
+            end
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
-    => destruct_msg; destruct_comp; inversion H;
+    => destruct_msg; destruct_comp;
+       inversion H;
        match goal with
-       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _ |- _ ]
-         => subst s'; subst s
+       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
+           Htr : Reflex.ktr _ _ _ _ s = _,
+           Hs : _ = s |- _ ]
+         => clear H; subst s';
+            match goal with
+            | [ _ : context [ s ], _ : context [ s ], _ : context [ s ] |- _ ]
+                => symb_exec Hs; subst s; simpl in *
+            | _ => subst s; symb_exec Htr
+            end
        end
   | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
-    => inversion H; subst s
-  end; simpl; unfold kstate_run_prog in *; simpl in *;
-       repeat destruct_find_comp; repeat destruct_cond;
-       simpl in *; intros; try uninhabit.
+    => inversion H; subst s; clear H; simpl in *
+  end; try uninhabit.
 
 Ltac clear_useless_hyps :=
   repeat match goal with
@@ -631,13 +676,44 @@ Ltac specialize_comp_hyps :=
               end
   end.
 
+Ltac decompose_not_match :=
+  match goal with
+  |- _ -> _
+    => let H := fresh "H" in
+       intro H; try decompose [and] H
+  end.
+
+Ltac rewrite_st_eqs :=
+  match goal with
+  | [ H : _ = fst (kst _ _ _ _ _) |- _ ]
+      => rewrite <- H in *
+  | [ H : _ = fst (snd (kst _ _ _ _ _)) |- _ ]
+      => rewrite <- H in *
+  | [ H : _ = fst (snd (snd (kst _ _ _ _ _))) |- _ ]
+      => rewrite <- H in *
+  | [ H : _ = fst (snd (snd (snd (kst _ _ _ _ _)))) |- _ ]
+      => rewrite <- H in *
+  | [ H : _ = fst (snd (snd (snd (snd (kst _ _ _ _ _))))) |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (kst _ _ _ _ _) = _ |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (snd (kst _ _ _ _ _)) = _ |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (snd (snd (kst _ _ _ _ _))) = _ |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (snd (snd (snd (kst _ _ _ _ _)))) = _ |- _ ]
+      => rewrite <- H in *
+  | [ H : fst (snd (snd (snd (snd (kst _ _ _ _ _))))) = _ |- _ ]
+      => rewrite <- H in *
+  end.
+
 (*This function should be passed a state. It will then attempt to prove
   that there are no instances of the disabler (should it be passed the disabler?)
   anywhere in the trace of that state.*)
 (*There are two situations:
 1.) The trace of the state is fully concrete: no induction required.
 2.) The trace is not fully concrete: induction required.*)
-Ltac forall_not_disabler :=
+Ltac forall_not_disabler n :=
 (*  destruct_action_matches;*)
   try solve [impossible];
   extract_match_facts;
@@ -657,11 +733,14 @@ Ltac forall_not_disabler :=
   reach_induction;
   match goal with
   | [ H :  context[ List.In ?act _ ] |- _ ]
-      => simpl in *; decompose [or] H; try subst;
+      => simpl in *; decompose [or] H; try subst; autounfold; simpl;
+         try decompose_not_match; try rewrite_st_eqs;
          try solve [ impossible
                    | tauto
                    | use_IH_disables
-                   | specialize_comp_hyps; intuition ]
+                   | try specialize_comp_hyps; intuition; try congruence
+                   | match n with | O => fail | S ?n' => forall_not_disabler n' end
+                   ]
   end.
 (*
   match goal with
@@ -700,7 +779,7 @@ Ltac match_disables :=
          destruct H as [A|A]; simpl in A; repeat autounfold in A; simpl in A;
          [ tauto ||
            (decompose [and] A; apply D_disablee;
-            [ match_disables | try solve [forall_not_disabler] ])
+            [ match_disables | try solve [forall_not_disabler 3] ])
          | tauto ||
            (destruct_neg_conjuncts A; apply D_not_disablee;
             [ match_disables | assumption ]) ]

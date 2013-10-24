@@ -183,7 +183,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
      | AccessControl, ACLoginResT =>
        let envd := mk_vcdesc [Comp _ Client] in
        [[ envd :
-          complkup (envd:=envd) (mk_comp_pat _ envd Client (None, (Some (mvar ACLoginResT 1%fin), tt)))
+          complkup (envd:=envd) (mk_comp_pat _ envd Client
+                                  (Some (mvar ACLoginResT 0%fin),
+                                   (Some (mvar ACLoginResT 1%fin), tt)))
            nop
            (seq (spawn _ envd Client (mvar ACLoginResT 0%fin, (mvar ACLoginResT 1%fin, tt))
                  0%fin (Logic.eq_refl _))

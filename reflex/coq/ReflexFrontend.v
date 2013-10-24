@@ -140,6 +140,17 @@ Ltac destruct_pay pay :=
          destruct pay as [a b]; simpl in a; destruct_pay b
   end.
 
+Ltac destruct_input input :=
+  compute in input;
+  match type of input with
+  | unit => idtac
+  | num => idtac
+  | fd  => idtac
+  | _ => let a := fresh "a" in
+         let b := fresh "b" in
+         destruct input as [a b]; simpl in a; destruct_input b
+  end.
+
 Ltac destruct_msg :=
   match goal with
   | [ m : msg _ |- _ ]
@@ -434,7 +445,7 @@ Ltac unpack :=
        match goal with
        | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _,
            Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
-         => clear H; subst s; simpl in Htr; destruct_pay input;
+         => clear H; subst s; simpl in Htr; destruct_input input;
             match goal with
             | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
                 => symb_exec Hs; subst s'; simpl in *
@@ -733,12 +744,13 @@ Ltac forall_not_disabler n :=
   reach_induction;
   match goal with
   | [ H :  context[ List.In ?act _ ] |- _ ]
-      => simpl in *; decompose [or] H; try subst; autounfold; simpl;
+      => simpl in *; decompose [or] H; try subst;
+         try specialize_comp_hyps; autounfold; simpl;
          try decompose_not_match; try rewrite_st_eqs;
          try solve [ impossible
                    | tauto
                    | use_IH_disables
-                   | try specialize_comp_hyps; intuition; try congruence
+                   | intuition; try congruence
                    | match n with | O => fail | S ?n' => forall_not_disabler n' end
                    ]
   end.

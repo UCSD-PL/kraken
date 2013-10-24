@@ -814,7 +814,8 @@ Ltac match_disables :=
   end.*)
 
 Ltac act_match :=
-  simpl in *; repeat destruct_comp_st_vars; intuition.
+  simpl in *; autounfold; simpl;
+  repeat destruct_comp_st_vars; intuition.
 
 Ltac match_immbefore :=
   match goal with

@@ -414,8 +414,9 @@ Ltac ni :=
 (*Policy language tactics*)
 
 Ltac symb_exec H :=
-  unfold kstate_run_prog in H; simpl in H;
-  repeat destruct_find_comp' H; repeat destruct_cond' H.
+  unfold kstate_run_prog, init_state_run_cmd, initial_init_state,
+    eval_base_payload_expr, eval_payload_expr in *; simpl in *;
+  repeat destruct_find_comp' H; repeat destruct_cond' H; simpl in *.
 
 Ltac destruct_ite_pol :=
   match goal with
@@ -428,51 +429,35 @@ Ltac destruct_ite_pol :=
 Ltac unpack :=
   intros;
   match goal with
-  | [ H : Reflex.InitialState _ _ _ _ _ _ _ _ ?s |- _ ]
+  | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input ?s |- _ ]
     => inversion H;
        match goal with
-       | [ _ : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _ |- _ ]
-         => subst s'; clear H;
+       | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _,
+           Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
+         => clear H; subst s; simpl in Htr; destruct_pay input;
             match goal with
-            | [ Hs : _ = s |- _ ]
-                => symb_exec Hs 
-            | [ Hs : s = _ |- _ ]
-                => symb_exec Hs
-            end; subst s
+            | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
+                => symb_exec Hs; subst s'; simpl in *
+            | _ => subst s'; symb_exec Htr
+            end
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
-    => destruct_msg; destruct_comp; inversion H;
+    => destruct_msg; destruct_comp;
+       inversion H;
        match goal with
-       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _ |- _ ]
-         => subst s'; clear H;
+       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
+           Htr : Reflex.ktr _ _ _ _ s = _,
+           Hs : _ = s |- _ ]
+         => clear H; subst s';
             match goal with
-            | [ Hs : _ = s |- _ ]
-                => symb_exec Hs 
-            | [ Hs : s = _ |- _ ]
-                => symb_exec Hs
-            end; subst s
+            | [ _ : context [ s ], _ : context [ s ], _ : context [ s ] |- _ ]
+                => symb_exec Hs; subst s; simpl in *
+            | _ => subst s; symb_exec Htr
+            end
        end
   | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
-    => inversion H; subst s; clear H
-  end; simpl in *; intros; try uninhabit.
-(*  match goal with
-  | [ H : Reflex.InitialState _ _ _ _ _ _ _ _ ?s |- _ ]
-    => inversion H;
-       match goal with
-       | [ _ : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _ |- _ ]
-         => subst s'; subst s
-       end
-  | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
-    => destruct_msg; destruct_comp; inversion H;
-       match goal with
-       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _ |- _ ]
-         => subst s'; subst s
-       end
-  | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
-    => inversion H; subst s
-  end; simpl; unfold kstate_run_prog in *; simpl in *;
-       repeat destruct_find_comp; repeat destruct_cond;
-       simpl in *; intros; try uninhabit.*)
+    => inversion H; subst s; clear H; simpl in *
+  end; try uninhabit.
 
 Ltac clear_useless_hyps :=
   repeat match goal with

@@ -1121,9 +1121,7 @@ Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd bas
   | Nop _ => fun s _ => s
   
   | Seq envd c1 c2 => fun s i =>
-    let s1 := init_state_run_cmd envd s c1 (fst i) in
-    let s2 := init_state_run_cmd envd s1 c2 (snd i) in
-    s2
+    init_state_run_cmd envd (init_state_run_cmd envd s c1 (fst i)) c2 (snd i)
 
   | Ite envd cond c1 c2 => fun s i =>
     if num_eq (@eval_base_expr (Desc num_d) _ (init_env _ s) cond) FALSE

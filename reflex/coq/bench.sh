@@ -33,13 +33,18 @@ do (
     if [[ "$status" = "124" ]];
     then echo "Timeout" >> ../$BENCHFULL.csv;
     else
-      if [[ -z "$coqtime" ]];
+      if [[ "$status" = "0" ]];
       then
-        echo $coqres\
-          | tr -d '"'\
-          | sed -e 's/_/\\_/'\
-          | sed -r 's/(.*)/{\1}/' >> ../$BENCHFULL.csv;
-      else echo {$coqtime} >> ../$BENCHFULL.csv;
+        if [[ -z "$coqtime" ]];
+        then
+          echo $coqres\
+            | tr -d '"'\
+            | sed -e 's/_/\\_/'\
+            | sed -r 's/(.*)/{\1}/' >> ../$BENCHFULL.csv;
+        else echo {$coqtime} >> ../$BENCHFULL.csv;
+        fi;
+      else
+        echo "Error, status code: $status" >> ../$BENCHFULL.csv;
       fi;
     fi;
   );

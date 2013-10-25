@@ -3,10 +3,14 @@ include ../../Makefile.config
 INCLUDES      := -R $(YNOT) Ynot -I .
 BENCHINCLUDES := $(INCLUDES) -I ..
 FILES         := $(filter-out Extract.v,$(wildcard *.v))
+UBENCHKERNELS := $(wildcard ubench-*/Kernel.v)
+BENCHKERNELS  := $(wildcard bench-*/Kernel.v)
 
 all:
 	$(MAKE) depend
 	$(MAKE) coq
+	$(MAKE) ubenchkernels
+	$(MAKE) benchkernels
 
 BENCHNAME := benchmark-$(shell date +"%y-%m-%d-%H:%M:%S")
 BENCHDIR  := benchmarks
@@ -23,10 +27,12 @@ build:
 	$(MAKE) coq
 	$(MAKE) build -C bench-$(NAME)
 
-depend: $(FILES)
+depend: $(FILES) $(BENCHKERNELS) $(UBENCHKERNELS)
 	$(COQDEP) $(INCLUDES) $^ > .depend
 
 coq: $(FILES:.v=.vo)
+ubenchkernels: $(UBENCHKERNELS:.v=.vo)
+benchkernels: $(BENCHKERNELS:.v=.vo)
 
 %.vo: %.v
 	$(COQC) $(INCLUDES) $*.v
@@ -38,5 +44,5 @@ clean:
 
 include .depend
 
-.PHONY: all depend coq clean bench ubench
+.PHONY: all depend coq clean bench ubench benchkernels ubenchkernels
 

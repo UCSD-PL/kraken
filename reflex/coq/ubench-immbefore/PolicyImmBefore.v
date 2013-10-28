@@ -25,5 +25,5 @@ Theorem immbefore st tr :
            )
            tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

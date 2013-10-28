@@ -27,5 +27,5 @@ Theorem enable : forall st tr n s,
                                        M (Some n, (Some s, tt)))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

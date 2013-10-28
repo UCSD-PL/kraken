@@ -28,5 +28,5 @@ Theorem enable : forall st tr n s,
           (KOExec PAYD COMPT COMPS None None (Some (C2_pat n s)))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

@@ -25,5 +25,5 @@ Theorem enable : forall st tr d f,
         CProcFD (Some f, tt))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

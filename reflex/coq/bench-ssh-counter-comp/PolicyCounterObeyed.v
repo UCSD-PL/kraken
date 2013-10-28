@@ -22,5 +22,5 @@ Theorem immbefore : forall st tr u,
                                         SLoginReq (Some u, tt))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

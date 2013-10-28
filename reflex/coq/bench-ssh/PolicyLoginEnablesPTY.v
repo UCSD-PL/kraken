@@ -23,5 +23,5 @@ Theorem enable : forall st tr u,
                                          SCreatePtyerReq (Some u, tt))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

@@ -18,5 +18,5 @@ Theorem enable : forall st tr d,
     (KOExec PAYD COMPT COMPS None None (Some (CK_pat d)))
     tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

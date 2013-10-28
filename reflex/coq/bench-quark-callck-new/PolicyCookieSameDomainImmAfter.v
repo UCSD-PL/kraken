@@ -21,5 +21,5 @@ Theorem imm_after : forall st tr f,
             (Some (str_of_string create_ckchan)) (Some nil) (Some f))
     tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

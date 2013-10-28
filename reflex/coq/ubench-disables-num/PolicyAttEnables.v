@@ -19,5 +19,5 @@ Theorem enable : forall st tr s,
                                         M (Some (Ascii.zero::s), tt))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

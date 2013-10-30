@@ -31,5 +31,5 @@ Theorem enable : forall st tr n1 s1 n2 s2,
                                        M2 (Some s1, (Some n2, tt)))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

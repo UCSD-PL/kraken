@@ -19,5 +19,5 @@ Theorem disable : forall st tr,
                                         SLoginReq (None, (Some (Ascii.zero::nil), tt)))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

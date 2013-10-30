@@ -14,6 +14,7 @@ Require Import Decidable.
 Require Import List.
 Require Import ActionMatch.
 Require Import PolLang.
+Require Import PolLangFacts.
 
 Module Type SystemFeaturesInterface.
   Parameter NB_MSG   : nat.
@@ -424,10 +425,52 @@ Ltac ni :=
 
 (*Policy language tactics*)
 
-Ltac symb_exec H :=
-  unfold kstate_run_prog, init_state_run_cmd, initial_init_state,
-    eval_base_payload_expr, eval_payload_expr in *; simpl in *;
-  repeat destruct_find_comp' H; repeat destruct_cond' H; simpl in *.
+Lemma seq_rew : forall c m envd cmd1 cmd2 s input,
+  hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd s (Seq PAYD COMPT COMPS KSTD _ _ cmd1 cmd2) input =
+  hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd
+    (hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd s cmd1 (fst input)) cmd2 (snd input).
+Proof.
+  auto.
+Qed.
+
+Ltac symb_exec Hs :=
+  unfold kstate_run_prog in Hs;
+  repeat match type of Hs with
+         | context [projT1 ?e ] => simpl (projT1 e) in Hs
+         | context [projT2 ?e ] => simpl (projT2 e) in Hs
+         end;
+  repeat first
+         [ progress match type of Hs with
+           | context [ hdlr_kst _ _ _ _ _
+                         (hdlr_state_run_cmd _ _ _ _ _ _ _ _
+                            (hdlr_state_run_cmd _ _ _ _ _ _ _ _ _ _ _) _ _ ) ] =>
+             unfold hdlr_state_run_cmd at 2 in Hs;
+             unfold default_hdlr_state, mk_inter_ve_st,
+             eval_hdlr_payload_expr, mvar,
+             eval_payload_expr, eval_payload_expr',
+             shvec_replace_cast, shvec_replace_ith in Hs;
+             match type of Hs with
+             | context [ hdlr_kst _ _ _ _ _
+                         (hdlr_state_run_cmd _ _ _ _ _ _ _ _
+                            ?s _ _ ) ] =>
+               simpl s in Hs
+             end
+           end
+         | erewrite seq_rew in Hs; eauto
+         | match type of Hs with
+           | context [ if num_eq ?e1 ?e2 then _ else _ ]
+             => destruct (num_eq e1 e2)
+           end
+         | destruct_find_comp' Hs
+         | progress simpl in Hs
+         ].
+
+(*Ltac symb_exec H prog :=
+  unfold kstate_run_prog, init_state_run_cmd, shvec_replace_cast, shvec_replace_ith,
+    initial_init_state, eval_base_payload_expr, eval_payload_expr,
+    eval_payload_expr', eval_base_expr, eval_expr, eval_base_term in *;
+  unfold prog in *; simpl in *;
+  repeat destruct_find_comp' H; repeat destruct_cond' H; simpl in *.*)
 
 Ltac destruct_ite_pol :=
   match goal with
@@ -437,38 +480,87 @@ Ltac destruct_ite_pol :=
        repeat destruct_cond
   end.
 
-Ltac unpack :=
+Ltac prune_finish :=
+  eauto; simpl; intuition.
+
+Ltac unpack prune_init prune_hdlr :=
   intros;
   match goal with
   | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input ?s |- _ ]
-    => inversion H;
-       match goal with
-       | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _,
-           Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
-         => clear H; subst s; simpl in Htr; destruct_input input;
-            match goal with
-            | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
-                => symb_exec Hs; subst s'; simpl in *
-            | _ => subst s'; symb_exec Htr
-            end
-       end
-  | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
-    => destruct_msg; destruct_comp;
+    => prune_init;
        inversion H;
        match goal with
+       | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ ?prog _,
+           Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
+         => clear H; subst s; simpl in Htr; destruct_input input;
+            symb_exec Hs; subst s'; simpl in *
+(*            match goal with
+            | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
+                => symb_exec Hs prog; subst s'; simpl in *
+            | _ => subst s'; symb_exec Htr prog
+            end*)
+       end
+  | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
+    => destruct_msg; destruct_comp; prune_hdlr;
+       destruct H;
+       match goal with
        | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
-           Htr : Reflex.ktr _ _ _ _ s = _,
-           Hs : _ = s |- _ ]
-         => clear H; subst s';
+           hdlrs : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
+         => subst s';
             match goal with
-            | [ _ : context [ s ], _ : context [ s ], _ : context [ s ] |- _ ]
-                => symb_exec Hs; subst s; simpl in *
-            | _ => subst s; symb_exec Htr
+            | [ Htr : Reflex.ktr _ _ _ _
+                        (kstate_run_prog _ _ _ _ _ _ _ _ _ _ _) = inhabits ?tr |- _ ]
+              => let ksrp := fresh "ksrp" in
+                 match type of Htr with
+                 | Reflex.ktr _ _ _ _ ?s = inhabits _
+                   => remember s as ksrp;
+                   match goal with
+                   | [ Hksrp : ksrp = s |- _ ]
+                      => simpl in hdlrs;
+                         unfold seq, spawn, stupd, call, ite, send in hdlrs;
+                         unfold hdlrs in Hksrp; symb_exec Hksrp; subst ksrp;
+                         simpl in *
+                   end
+                 end
             end
        end
   | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
     => inversion H; subst s; clear H; simpl in *
   end; try uninhabit.
+(*Ltac unpack :=
+  intros;
+  match goal with
+  | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input ?s |- _ ]
+    => (*try solve [eapply no_enablee_init; eauto; simpl; intuition];*)
+       inversion H;
+       match goal with
+       | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ ?prog _,
+           Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
+         => clear H; subst s; simpl in Htr; destruct_input input;
+            match goal with
+            | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
+                => symb_exec Hs prog; subst s'; simpl in *
+            | _ => subst s'; symb_exec Htr prog
+            end
+       end
+  | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
+    => destruct_msg; destruct_comp;
+       (*try solve [eapply no_enablee_hdlr; eauto; simpl; intuition];*)
+       inversion H;
+       match goal with
+       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
+           Htr : Reflex.ktr _ _ _ _ s = _,
+           Hs : kstate_run_prog _ _ _ _ _ _ _ (projT1 ?hdlrs) _ _ _ = s |- _ ]
+         => clear H; subst s';
+            match goal with
+            | [ _ : context [ s ], _ : context [ s ], _ : context [ s ] |- _ ]
+                => symb_exec Hs hdlrs; subst s; simpl in *
+            | _ => subst s; symb_exec Htr hdlrs
+            end
+       end
+  | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
+    => inversion H; subst s; clear H; simpl in *
+  end; try uninhabit.*)
 
 Ltac clear_useless_hyps :=
   repeat match goal with
@@ -591,11 +683,11 @@ Ltac use_IH_releases :=
     => repeat apply cut_exists; eapply IHReach; eauto
   end.
 
-Ltac reach_induction :=
+Ltac reach_induction prune_init prune_hdlr :=
   intros;
   match goal with
   | [ _ : Reflex.ktr _ _ _ _ _ = inhabits ?tr, H : Reflex.Reach _ _ _ _ _ _ _ _ ?s |- _ ]
-      => generalize dependent tr; induction H; unpack
+      => generalize dependent tr; induction H; unpack prune_init prune_hdlr
          (*Do not put simpl anywhere in here. It breaks destruct_unpack.*)
   end.
 
@@ -636,7 +728,7 @@ Ltac exists_past :=
         => subst cs
       end;
   (*Should this take s as an argument?*)
-  reach_induction;
+  reach_induction idtac idtac;
   try solve [ impossible
             | use_IH_releases
             | releaser_match
@@ -724,10 +816,12 @@ Ltac rewrite_st_eqs :=
 (*There are two situations:
 1.) The trace of the state is fully concrete: no induction required.
 2.) The trace is not fully concrete: induction required.*)
-Ltac forall_not_disabler n :=
+Ltac forall_not_disabler n act Hact disabler :=
 (*  destruct_action_matches;*)
   try solve [impossible];
   extract_match_facts;
+  simpl in Hact; decompose [or] Hact; try subst act;
+  try solve [auto | tauto | intuition];
 (*   (*There may be conditions on s' (the intermediate state). We want
     to use these conditions to derive conditions on s.*)
   subst_states;*)
@@ -741,17 +835,26 @@ Ltac forall_not_disabler n :=
            end
       end;
   (*Should this take s as an argument?*)
-  reach_induction;
+  let prune_init := try solve [eapply no_disabler_init with (oact:=disabler); prune_finish] in
+  let prune_hdlr := try solve [eapply no_disabler_hdlr with (oact:=disabler); prune_finish] in
+  reach_induction prune_init prune_hdlr;
   match goal with
   | [ H :  context[ List.In ?act _ ] |- _ ]
       => simpl in *; decompose [or] H; try subst;
          try specialize_comp_hyps; autounfold; simpl;
-         try decompose_not_match; try rewrite_st_eqs;
-         try solve [ impossible
-                   | tauto
-                   | use_IH_disables
-                   | intuition; try congruence
-                   | match n with | O => fail | S ?n' => forall_not_disabler n' end
+         try solve [try decompose_not_match; try rewrite_st_eqs;
+                    try solve [ impossible
+                              | tauto
+                              | use_IH_disables
+                              | intuition; try congruence]
+                   | match n with
+                     | O => fail
+                     | S ?n' =>
+                       match goal with
+                       | [ Hact' : List.In act _ |- _ ]
+                           => forall_not_disabler n' act Hact' disabler
+                       end
+                     end
                    ]
   end.
 (*
@@ -773,7 +876,7 @@ Ltac forall_not_disabler n :=
                  | forall_not_disabler s' ]
   end.*)
 
-Ltac match_disables :=
+Ltac match_disables disabler :=
    match goal with
   | [ |- Disables _ _ _ _ _ _ nil ]
       => constructor
@@ -791,10 +894,13 @@ Ltac match_disables :=
          destruct H as [A|A]; simpl in A; repeat autounfold in A; simpl in A;
          [ tauto ||
            (decompose [and] A; apply D_disablee;
-            [ match_disables | try solve [forall_not_disabler 3] ])
+            [ match_disables disabler
+             | let act := fresh "act" in
+               let Hact := fresh "Hact" in
+               intros act Hact; try solve [forall_not_disabler 3 act Hact disabler] ])
          | tauto ||
            (destruct_neg_conjuncts A; apply D_not_disablee;
-            [ match_disables | assumption ]) ]
+            [ match_disables disabler | assumption ]) ]
          (*In some cases, one branch is impossible, so contradiction
            solves the goal immediately.
            In other cases, there are variables in the message payloads,
@@ -881,17 +987,40 @@ Ltac match_immafter :=
       => apply IA_nB; [ match_immafter | act_match ]
   end.
 
+Ltac build_prune_tac lem :=
+  try solve [ eapply lem; prune_finish].
+
 Ltac crush :=
-  reach_induction;
+  intros;
   match goal with
-  | [ |- ImmBefore _ _ _ _ _ _ _ ]
-     => try abstract match_immbefore
-  | [ |- ImmAfter _ _ _ _ _ _ _ ]
-     => try abstract match_immafter
-  | [ |- Enables _ _ _ _ _ _ _ ]
-     => try match_releases
-  | [ |- Disables _ _ _ _ _ _ _ ]
-     => try match_disables
+  | [ |- context [ ImmBefore _ _ _ _ _ _ _ ] ]
+     => let lem_init := constr:(@no_after_IB_init) in
+        let lem_hdlr := constr:(@no_after_IB_hdlr) in
+        let prune_init := build_prune_tac lem_init in
+        let prune_hdlr := build_prune_tac lem_hdlr in
+        reach_induction prune_init prune_hdlr;
+        try abstract match_immbefore
+  | [ |- context [ ImmAfter _ _ _ _ _ _ _ ] ]
+     => let lem_init := constr:(@no_before_IA_init) in
+        let lem_hdlr := constr:(@no_before_IA_hdlr) in
+        let prune_init := build_prune_tac lem_init in
+        let prune_hdlr := build_prune_tac lem_hdlr in
+        reach_induction prune_init prune_hdlr;
+        try abstract match_immafter
+  | [ |- context [ Enables _ _ _ _ _ _ _ ] ]
+     => let lem_init := constr:(@no_enablee_init) in
+        let lem_hdlr := constr:(@no_enablee_hdlr) in
+        let prune_init := build_prune_tac lem_init in
+        let prune_hdlr := build_prune_tac lem_hdlr in
+        reach_induction prune_init prune_hdlr;
+        try match_releases
+  | [ |- context [ Disables _ _ _ _ ?disabler _ _ ] ]
+     => let lem_init := constr:(@no_disablee_init) in
+        let lem_hdlr := constr:(@no_disablee_hdlr) in
+        let prune_init := build_prune_tac lem_init in
+        let prune_hdlr := build_prune_tac lem_hdlr in
+        reach_induction prune_init prune_hdlr;
+        try match_disables disabler
   end.
 
 End MkLanguage.

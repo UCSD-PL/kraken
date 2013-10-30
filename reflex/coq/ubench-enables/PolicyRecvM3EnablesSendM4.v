@@ -23,5 +23,5 @@ Theorem RecvM3EnablesSendM4 : forall st tr,
                   (Some (Build_opt_msg PAYD M4 tt)))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

@@ -22,5 +22,5 @@ Theorem disable : forall st tr,
                                         LockDoors tt)))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

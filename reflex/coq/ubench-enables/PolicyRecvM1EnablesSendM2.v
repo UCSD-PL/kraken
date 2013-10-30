@@ -23,5 +23,5 @@ Theorem RecvM1EnablesSendM2 : forall st tr,
                   (Some (Build_opt_msg PAYD M2 tt)))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

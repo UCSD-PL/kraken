@@ -19,5 +19,5 @@ Theorem disable : forall st tr,
                                         M (None, tt))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

@@ -25,5 +25,5 @@ Theorem immafter : forall st tr,
                                         BrakesApplied tt)))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

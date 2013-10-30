@@ -44,7 +44,7 @@ do (
         else echo {$coqtime} >> ../$BENCHFULL.csv;
         fi;
       else
-        echo "Error, status code: $status" >> ../$BENCHFULL.csv;
+        echo "Error with status code: $status" >> ../$BENCHFULL.csv;
       fi;
     fi;
   );

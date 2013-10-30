@@ -30,5 +30,5 @@ Import Language Spec.
 Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS (clblr d) vlblr.
 Proof.
-  Time ni.
+  Time solve [ni].
 Qed.

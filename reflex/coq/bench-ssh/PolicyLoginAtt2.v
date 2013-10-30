@@ -20,5 +20,5 @@ Theorem disable : forall st tr,
                          SLoginReq (None, (None, tt)))))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

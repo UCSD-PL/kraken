@@ -21,5 +21,5 @@ Definition vlblr (f : fin (projT1 KSTD)) : bool :=
 Theorem ni : NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS clblr vlblr.
 Proof.
-  Time ni.
+  Time solve [ni].
 Qed.

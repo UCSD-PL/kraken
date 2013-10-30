@@ -21,5 +21,5 @@ Theorem disable : forall st tr n,
 
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

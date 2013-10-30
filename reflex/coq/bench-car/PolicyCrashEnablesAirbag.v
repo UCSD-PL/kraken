@@ -25,5 +25,5 @@ Theorem enable : forall st tr,
                                        InflateAirbag tt)))
           tr.
 Proof.
-  Time crush.
+  Time solve [crush].
 Qed.

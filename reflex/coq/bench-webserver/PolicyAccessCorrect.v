@@ -1,6 +1,7 @@
 Require Import Kernel PolLang ActionMatch Reflex ReflexBase ReflexFin ReflexHVec.
 
 Import SystemFeatures.
+Import Language.
 Import Spec.
 
 Theorem access_correct : forall st tr u a r,

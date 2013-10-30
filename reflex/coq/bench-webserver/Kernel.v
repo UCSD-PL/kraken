@@ -204,7 +204,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       [[ mk_vcdesc [] :
         send (stvar v_st_d) DFileReq
           (mvar ACFileResT 0%fin,
-            (mvar ACFileResT 1%fin, (mvar ACFileResT 0%fin, tt)))
+            (mvar ACFileResT 1%fin, (mvar ACFileResT 2%fin, tt)))
       ]]
     | AccessControl, ACFileResF =>
       let envd := mk_vcdesc [] in
@@ -216,7 +216,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     | Disk, DFileRes =>
       let envd := mk_vcdesc [] in
       [[ envd :
-        complkup (envd:=envd) (mk_comp_pat _ envd Client (None, (Some (mvar DFileRes 1%fin), tt)))
+        complkup (envd:=envd) (mk_comp_pat _ envd Client
+                                           (Some (mvar DFileRes 0%fin),
+                                            (Some (mvar DFileRes 1%fin), tt)))
           (send (envvar (mk_vcdesc [Comp _ Client]) 0%fin) FileRes
             (mvar DFileRes 2%fin, (mvar DFileRes 3%fin, tt)))
           nop

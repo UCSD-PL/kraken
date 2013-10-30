@@ -14,4 +14,6 @@ Theorem access_correct_disk : forall st tr u a r f,
       (Some (Build_opt_msg PAYD
         FileRes (Some r, (Some f, tt)))))
     tr.
-Admitted.
+Proof.
+  Time solve [crush].
+Qed.

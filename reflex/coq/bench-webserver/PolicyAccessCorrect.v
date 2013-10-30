@@ -14,4 +14,6 @@ Theorem access_correct : forall st tr u a r,
       (Some (Build_opt_msg PAYD
         DFileReq (Some u, (Some a, (Some r, tt))))))
     tr.
-Admitted.
+Proof.
+  Time solve [crush].
+Qed.

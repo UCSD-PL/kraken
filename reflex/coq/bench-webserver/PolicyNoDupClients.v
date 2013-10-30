@@ -10,4 +10,6 @@ Theorem auth_correct : forall st tr u a,
     (KOExec PAYD COMPT COMPS None None (Some (Client_pat u a)))
     (KOExec PAYD COMPT COMPS None None (Some (Client_pat u a)))
     tr.
-Admitted.
+Proof.
+  Time solve [crush].
+Qed.

@@ -14,4 +14,6 @@ Theorem auth_correct : forall st tr u a,
       (Some (Build_opt_msg PAYD
         ACFileReq (Some u, (Some a, (None, tt))))))
     tr.
-Admitted.
+Proof.
+  Time solve [crush].
+Qed.

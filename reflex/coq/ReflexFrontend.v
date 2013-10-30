@@ -425,10 +425,52 @@ Ltac ni :=
 
 (*Policy language tactics*)
 
-Ltac symb_exec H :=
-  unfold kstate_run_prog, init_state_run_cmd, initial_init_state,
-    eval_base_payload_expr, eval_payload_expr in *; simpl in *;
-  repeat destruct_find_comp' H; repeat destruct_cond' H; simpl in *.
+Lemma seq_rew : forall c m envd cmd1 cmd2 s input,
+  hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd s (Seq PAYD COMPT COMPS KSTD _ _ cmd1 cmd2) input =
+  hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd
+    (hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd s cmd1 (fst input)) cmd2 (snd input).
+Proof.
+  auto.
+Qed.
+
+Ltac symb_exec Hs :=
+  unfold kstate_run_prog in Hs;
+  repeat match type of Hs with
+         | context [projT1 ?e ] => simpl (projT1 e) in Hs
+         | context [projT2 ?e ] => simpl (projT2 e) in Hs
+         end;
+  repeat first
+         [ progress match type of Hs with
+           | context [ hdlr_kst _ _ _ _ _
+                         (hdlr_state_run_cmd _ _ _ _ _ _ _ _
+                            (hdlr_state_run_cmd _ _ _ _ _ _ _ _ _ _ _) _ _ ) ] =>
+             unfold hdlr_state_run_cmd at 2 in Hs;
+             unfold default_hdlr_state, mk_inter_ve_st,
+             eval_hdlr_payload_expr, mvar,
+             eval_payload_expr, eval_payload_expr',
+             shvec_replace_cast, shvec_replace_ith in Hs;
+             match type of Hs with
+             | context [ hdlr_kst _ _ _ _ _
+                         (hdlr_state_run_cmd _ _ _ _ _ _ _ _
+                            ?s _ _ ) ] =>
+               simpl s in Hs
+             end
+           end
+         | erewrite seq_rew in Hs; eauto
+         | match type of Hs with
+           | context [ if num_eq ?e1 ?e2 then _ else _ ]
+             => destruct (num_eq e1 e2)
+           end
+         | destruct_find_comp' Hs
+         | progress simpl in Hs
+         ].
+
+(*Ltac symb_exec H prog :=
+  unfold kstate_run_prog, init_state_run_cmd, shvec_replace_cast, shvec_replace_ith,
+    initial_init_state, eval_base_payload_expr, eval_payload_expr,
+    eval_payload_expr', eval_base_expr, eval_expr, eval_base_term in *;
+  unfold prog in *; simpl in *;
+  repeat destruct_find_comp' H; repeat destruct_cond' H; simpl in *.*)
 
 Ltac destruct_ite_pol :=
   match goal with
@@ -445,13 +487,58 @@ Ltac unpack :=
     => (*try solve [eapply no_enablee_init; eauto; simpl; intuition];*)
        inversion H;
        match goal with
-       | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ _ _,
+       | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ ?prog _,
+           Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
+         => clear H; subst s; simpl in Htr; destruct_input input;
+            symb_exec Hs; subst s'; simpl in *
+(*            match goal with
+            | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
+                => symb_exec Hs prog; subst s'; simpl in *
+            | _ => subst s'; symb_exec Htr prog
+            end*)
+       end
+  | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
+    => destruct_msg; destruct_comp;
+       (*try solve [eapply no_enablee_hdlr; eauto; simpl; intuition];*)
+       destruct H;
+       match goal with
+       | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
+           hdlrs : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
+         => subst s';
+            match goal with
+            | [ Htr : Reflex.ktr _ _ _ _
+                        (kstate_run_prog _ _ _ _ _ _ _ _ _ _ _) = inhabits ?tr |- _ ]
+              => let ksrp := fresh "ksrp" in
+                 match type of Htr with
+                 | Reflex.ktr _ _ _ _ ?s = inhabits _
+                   => remember s as ksrp;
+                   match goal with
+                   | [ Hksrp : ksrp = s |- _ ]
+                      => simpl in hdlrs;
+                         unfold seq, spawn, stupd, call, ite, send in hdlrs;
+                         unfold hdlrs in Hksrp; symb_exec Hksrp; subst ksrp;
+                         simpl in *
+                   end
+                 end
+            end
+       end
+  | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
+    => inversion H; subst s; clear H; simpl in *
+  end; try uninhabit.
+(*Ltac unpack :=
+  intros;
+  match goal with
+  | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input ?s |- _ ]
+    => (*try solve [eapply no_enablee_init; eauto; simpl; intuition];*)
+       inversion H;
+       match goal with
+       | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ ?prog _,
            Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
          => clear H; subst s; simpl in Htr; destruct_input input;
             match goal with
             | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
-                => symb_exec Hs; subst s'; simpl in *
-            | _ => subst s'; symb_exec Htr
+                => symb_exec Hs prog; subst s'; simpl in *
+            | _ => subst s'; symb_exec Htr prog
             end
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ ?s |- _ ]
@@ -461,17 +548,17 @@ Ltac unpack :=
        match goal with
        | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
            Htr : Reflex.ktr _ _ _ _ s = _,
-           Hs : _ = s |- _ ]
+           Hs : kstate_run_prog _ _ _ _ _ _ _ (projT1 ?hdlrs) _ _ _ = s |- _ ]
          => clear H; subst s';
             match goal with
             | [ _ : context [ s ], _ : context [ s ], _ : context [ s ] |- _ ]
-                => symb_exec Hs; subst s; simpl in *
-            | _ => subst s; symb_exec Htr
+                => symb_exec Hs hdlrs; subst s; simpl in *
+            | _ => subst s; symb_exec Htr hdlrs
             end
        end
   | [ H : Reflex.BogusExchange _ _ _ _ _ _ _ ?s |- _ ]
     => inversion H; subst s; clear H; simpl in *
-  end; try uninhabit.
+  end; try uninhabit.*)
 
 Ltac clear_useless_hyps :=
   repeat match goal with

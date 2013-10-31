@@ -121,3 +121,12 @@ Proof.
     apply Bool.not_true_iff_false.
     eapply find_comp_fail; eauto.
 Qed.
+
+Lemma comp_inv : forall COMPT COMPS ct cfd1 cfd2 cfg1 cfg2,
+  Build_comp COMPT COMPS ct cfd1 cfg1 = Build_comp COMPT COMPS ct cfd2 cfg2 ->
+  cfd1 = cfd2 /\ cfg1 = cfg2.
+Proof.
+  intros COMPT COMPS ct cfd1 cfd2 cfg1 cfg2 Heq.
+  inversion Heq.
+  apply Eqdep.EqdepTheory.inj_pair2 in H1; auto.
+Qed.

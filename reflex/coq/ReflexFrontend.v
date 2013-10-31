@@ -714,6 +714,23 @@ Ltac extract_match_facts :=
   repeat destruct_comp_var_pay; unfold Reflex.match_comp, Reflex.match_comp_pf in *;
   simpl in *; destruct_atom_eqs; try discriminate; simpl in *.
 
+Ltac invert_comp_eqs :=
+  repeat match goal with
+  | [ H : ?c1 = ?c2 \/ _ |- _ ]
+      => match type of c1 with
+         | Reflex.comp _ _ =>
+           decompose [or] H; clear H;
+           repeat match goal with
+                  | [ Heq : ?c1 = ?c2 |- _ ]
+                      => match type of c1 with
+                         | Reflex.comp _ _ =>
+                           compute in Heq;
+                           apply comp_inv in Heq
+                         end
+                  end
+         end
+  end.
+
 Ltac exists_past :=
   extract_match_facts;
   (*There may be conditions on s' (the intermediate state). We want
@@ -729,6 +746,7 @@ Ltac exists_past :=
       end;
   (*Should this take s as an argument?*)
   reach_induction idtac idtac;
+  invert_comp_eqs;
   try solve [ impossible
             | use_IH_releases
             | releaser_match

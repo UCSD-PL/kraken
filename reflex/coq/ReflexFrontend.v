@@ -437,33 +437,6 @@ Ltac destruct_ite :=
 Ltac ho_eq_solve_low :=
   simpl; auto.
 
-Ltac low_step :=
-  unfold low_ok; intros;
-  match goal with
-  | [ Hve : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s _,
-      Hlow : _ = false |- _ ]
-    => destruct_msg; destruct_comp;
-       try discriminate;
-       try solve [eapply prune_nop_1; eauto];
-       inversion Hve; repeat subst_inter_st; 
-       unfold kstate_run_prog; simpl;
-       repeat destruct_find_comp; repeat destruct_cond;
-       split;
-       match goal with
-       | [ |- high_out_eq _ _ _ _ _ _ _ ]
-         => ho_eq_tac ho_eq_solve_low Hlow
-       | [ |- vars_eq _ _ _ _ _ _ _ ]
-         => auto
-       | _ => idtac
-       end
-  end.
-
-Ltac ho_eq_solve_high :=
-  repeat match goal with
-         | [ |- _::_ = _::_ ] => f_equal; auto
-         | _ => auto
-         end.
-
 Ltac simpl_proj H :=
   repeat match type of H with
          | context [projT1 ?e ] => simpl (projT1 e) in H
@@ -506,6 +479,50 @@ Ltac simpl_step_hsrp H :=
                 unfold_eval_functions H;
                 simpl in H)
     ].
+
+Ltac symb_exec_low Hs :=
+  unfold kstate_run_prog in Hs;
+  simpl_proj Hs;
+  repeat simpl_step_hsrp Hs.
+
+Ltac low_step :=
+  unfold low_ok; intros;
+  match goal with
+  | [ Hve : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s _,
+      Hlow : _ = false |- _ ]
+    => destruct_msg; destruct_comp;
+       try discriminate;
+       try solve [eapply prune_nop_1; eauto];
+       destruct Hve; repeat subst_inter_st;
+       match goal with
+       |- context [ high_out_eq _ _ _ _ _ ?s _ ]
+         => let ksrp := fresh "ksrp" in
+            remember s as ksrp;
+            match goal with
+            | [ Heq : ksrp = s,
+                hdlrs : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
+              => simpl in hdlrs;
+                 unfold seq, spawn, stupd, call, ite, send in hdlrs;
+                 unfold hdlrs in Heq;
+                 symb_exec_low Heq;                  
+                 subst ksrp
+            end
+       end;
+       simpl; split;
+       match goal with
+       | [ |- high_out_eq _ _ _ _ _ _ _ ]
+         => ho_eq_tac ho_eq_solve_low Hlow
+       | [ |- vars_eq _ _ _ _ _ _ _ ]
+         => auto
+       | _ => idtac
+       end
+  end.
+
+Ltac ho_eq_solve_high :=
+  repeat match goal with
+         | [ |- _::_ = _::_ ] => f_equal; auto
+         | _ => auto
+         end.
 
 Ltac symb_exec_high Hs1 Hs2 :=
   unfold kstate_run_prog in Hs1, Hs2;

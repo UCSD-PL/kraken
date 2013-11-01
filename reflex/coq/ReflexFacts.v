@@ -130,3 +130,11 @@ Proof.
   inversion Heq.
   apply Eqdep.EqdepTheory.inj_pair2 in H1; auto.
 Qed.
+
+Lemma seq_rew : forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC c m envd cmd1 cmd2 s input,
+  hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd s (Seq PAYD COMPT COMPS KSTD _ _ cmd1 cmd2) input =
+  hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd
+    (hdlr_state_run_cmd _ _ COMPTDEC _ _ c m envd s cmd1 (fst input)) cmd2 (snd input).
+Proof.
+  auto.
+Qed.

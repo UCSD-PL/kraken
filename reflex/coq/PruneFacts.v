@@ -517,6 +517,8 @@ refine (
 ).
 Defined.
 
+Require Import Program.
+
 Lemma peval_hdlr_term_sound : forall cd envd ct mt
   (t:hdlr_term ct mt envd cd) cfgp v cfg f pl,
   peval_hdlr_term ct mt t cfgp = Some v ->
@@ -542,22 +544,23 @@ Proof.
                        {| tag := mt; pay := pl |} st h env).
   unfold peval_hdlr_term.
 
+  generalize (eq_refl (Comp COMPT ct')).
+
   pattern (eval_hdlr_term PAYD COMPT COMPS KSTD
                        {| comp_type := ct; comp_fd := f; comp_conf := cfg |}
                        {| tag := mt; pay := pl |} st h env).
 
-dependent inversion h with (fun (hndx : cdesc COMPT)
-  (hterm : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct mt envd hndx) =>
+  dependent inversion h with (fun (hndx : cdesc COMPT)
+    (hterm : Reflex.hdlr_term PAYD COMPT COMPS KSTD ct mt envd hndx) =>
 
 match hndx as _hndx return
-  hndx = _hndx ->
   sdenote_cdesc COMPT COMPS _hndx ->
   Prop
 with
-| Comp ct1 => fun EQndx x =>
+| Comp ct1 => fun x =>
 
   (fun s : sdenote_cdesc COMPT COMPS (Comp COMPT ct1) =>
-    forall
+    forall (e : hndx = Comp COMPT ct1)
       (cfgp : shvec sdenote_desc_conc_pat (projT2 (compd_conf (COMPS ct)))),
       (forall (i : fin (projT1 (compd_conf (COMPS ct))))
               (v : s[[svec_ith (projT2 (compd_conf (COMPS ct))) i]]),
@@ -600,7 +603,7 @@ match
          _ : Desc COMPT (svec_ith (projT2 (lkup_tag PAYD mt)) i0) =
              Comp COMPT ct1 => None
    | StVar i0 => fun _ : svec_ith (projT2 KSTD) i0 = Comp COMPT ct1 => None
-   end (*eq_refl (Comp COMPT ct1)*) EQndx = Some v ->
+   end e  = Some v ->
 
     match
       projT2 s in (_ = _ct)
@@ -621,10 +624,8 @@ match
     end i = v)
   x
 
-| _ => fun _ _ => True
+| _ => fun _ => True
 end
-
-(eq_refl hndx)
 
 (eval_hdlr_term PAYD COMPT COMPS KSTD
                 {| comp_type := ct; comp_fd := f; comp_conf := cfg |}
@@ -634,7 +635,10 @@ end
 
 intros.
 apply H.
-easy.
+unfold comp_conf_desc in H1.
+rewrite <- H1.
+dependent destruction e.
+reflexivity.
 
 generalize (shvec_ith (sdenote_cdesc COMPT COMPS) (projT2 KSTD) st i).
 rewrite H0.

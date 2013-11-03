@@ -443,7 +443,15 @@ Ltac simpl_proj H :=
          | context [projT2 ?e ] => simpl (projT2 e) in H
          end.
 
-Ltac unfold_eval_functions H :=
+Ltac unfold_init_eval_functions H :=
+  unfold initial_init_state,
+  eval_base_payload_expr, eval_payload_expr,
+  eval_payload_expr', shvec_replace_cast,
+  shvec_replace_ith, eval_base_comp_pat,
+  eval_base_payload_oexpr, eval_payload_oexpr
+  in H.
+
+Ltac unfold_hdlr_eval_functions H :=
   unfold default_hdlr_state, mk_inter_ve_st,
   eval_hdlr_payload_expr, mvar,
   eval_payload_expr, eval_payload_expr',
@@ -451,13 +459,25 @@ Ltac unfold_eval_functions H :=
   eval_hdlr_comp_pat, eval_hdlr_payload_oexpr,
   eval_payload_oexpr in H.
 
+Ltac simpl_nested_isrp H :=
+  match type of H with
+  | _ = init_state_run_cmd _ _ _ _ _ _
+          (init_state_run_cmd _ _ _ _ _ _ _ _ _) _ _ =>
+    unfold init_state_run_cmd at 2 in H;
+    unfold_init_eval_functions H;
+    match type of H with
+    | _ = init_state_run_cmd _ _ _ _ _ _ ?s _ _ =>
+      simpl s in H
+    end
+  end.
+
 Ltac simpl_nested_hsrp H :=
   match type of H with
   | context [ hdlr_kst _ _ _ _ _
                (hdlr_state_run_cmd _ _ _ _ _ _ _ _
                 (hdlr_state_run_cmd _ _ _ _ _ _ _ _ _ _ _) _ _ ) ] =>
     unfold hdlr_state_run_cmd at 2 in H;
-    unfold_eval_functions H;
+    unfold_hdlr_eval_functions H;
     match type of H with
     | context [ hdlr_kst _ _ _ _ _
                  (hdlr_state_run_cmd _ _ _ _ _ _ _ _
@@ -465,6 +485,20 @@ Ltac simpl_nested_hsrp H :=
       simpl s in H
     end
   end.
+
+Ltac simpl_step_isrp H :=
+  first
+    [ progress simpl_nested_isrp H
+    | erewrite seq_rew_init in H; eauto
+    | match type of H with
+      | context [ if num_eq ?e1 ?e2 then _ else _ ]
+        => destruct (num_eq e1 e2)
+      end
+    | destruct_find_comp' H
+    | progress (unfold init_state_run_cmd in H;
+                unfold_init_eval_functions H;
+                simpl in H)
+    ].
 
 Ltac simpl_step_hsrp H :=
   first
@@ -476,7 +510,7 @@ Ltac simpl_step_hsrp H :=
       end
     | destruct_find_comp' H
     | progress (unfold hdlr_state_run_cmd in H;
-                unfold_eval_functions H;
+                unfold_hdlr_eval_functions H;
                 simpl in H)
     ].
 
@@ -578,6 +612,9 @@ Ltac ni :=
 
 Ltac symb_exec Hs :=
   unfold kstate_run_prog in Hs;
+  simpl_proj Hs;
+  repeat simpl_step_hsrp Hs.
+(*  unfold kstate_run_prog in Hs;
   repeat match type of Hs with
          | context [projT1 ?e ] => simpl (projT1 e) in Hs
          | context [projT2 ?e ] => simpl (projT2 e) in Hs
@@ -606,7 +643,7 @@ Ltac symb_exec Hs :=
            end
          | destruct_find_comp' Hs
          | progress simpl in Hs
-         ].
+         ].*)
 
 (*Ltac symb_exec H prog :=
   unfold kstate_run_prog, init_state_run_cmd, shvec_replace_cast, shvec_replace_ith,
@@ -629,19 +666,15 @@ Ltac prune_finish :=
 Ltac unpack prune_init prune_hdlr :=
   intros;
   match goal with
-  | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input ?s |- _ ]
+  | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input _ |- _ ]
     => prune_init;
-       inversion H;
+       destruct H;
        match goal with
        | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ ?prog _,
            Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
-         => clear H; subst s; simpl in Htr; destruct_input input;
-            symb_exec Hs; subst s'; simpl in *
-(*            match goal with
-            | [ _ : context [ s' ], _ : context [ s' ], _ : context [ s' ] |- _ ]
-                => symb_exec Hs prog; subst s'; simpl in *
-            | _ => subst s'; symb_exec Htr prog
-            end*)
+         => simpl in Htr; destruct_input input;
+            unfold prog, seq, spawn, stupd, call, ite, send in Hs;
+            repeat simpl_step_isrp Hs; subst s'; simpl in *
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
     => destruct_msg; destruct_comp; prune_hdlr;
@@ -727,7 +760,11 @@ Ltac clear_useless_hyps :=
              => (*find_comp_fail*) revert H
          | _
            => idtac
-         end; clear; intros.
+         end; clear; intros;
+  repeat match goal with
+         | [ H : find_comp _ _ _ _ _ = _ |- _ ]
+             => clear H
+         end.
 
 Ltac destruct_unpack :=
   match goal with

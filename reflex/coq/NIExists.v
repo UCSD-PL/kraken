@@ -326,7 +326,7 @@ Proof.
     auto.
 Qed.
 
-Lemma hout_eq_find_eq : forall cp s s' clblr,
+Lemma hout_eq_find_eq1 : forall cp s s' clblr,
   Reach s -> Reach s' ->
   high_out_eq s s' clblr ->
   high_comp_pat COMPT COMPTDEC COMPS cp clblr ->
@@ -337,6 +337,18 @@ Proof.
   rewrite hfind_cs_filter with (clblr:=clblr) (cs:=Reflex.kcs _ _ _ _ s); auto.
   rewrite hfind_cs_filter with (clblr:=clblr) (cs:=Reflex.kcs _ _ _ _ s'); auto.
   erewrite hout_eq_hcs_eq; auto.
+Qed.
+
+Lemma hout_eq_find_eq2 : forall cp s s' cslblr,
+  cs_eq s s' cslblr ->
+  high_comp_pat COMPT COMPTDEC COMPS cp cslblr ->
+  find_comp COMPT COMPTDEC COMPS cp (kcs s) = 
+  find_comp COMPT COMPTDEC COMPS cp (kcs s').
+Proof.
+  intros cp s s' cslblr Hcs_eq Hcp.
+  rewrite hfind_cs_filter with (clblr:=cslblr) (cs:=Reflex.kcs _ _ _ _ s); auto.
+  rewrite hfind_cs_filter with (clblr:=cslblr) (cs:=Reflex.kcs _ _ _ _ s'); auto.
+  rewrite Hcs_eq. auto.
 Qed.
 
 Lemma init_inputs_nil : forall init i s tr lblr,

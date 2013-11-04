@@ -306,6 +306,12 @@ Ltac find_comp_tr_solve :=
   unfold Reflex.match_comp, Reflex.match_comp_pf in *; simpl in *;
   destruct_atom_eqs; try discriminate; try congruence.
 
+Ltac high_comp_pat_tac :=
+  unfold high_comp_pat, Reflex.match_comp, match_comp_pf; intros;
+  destruct_comp; try discriminate; simpl in *;
+  destruct_atom_eqs;
+  intuition; try discriminate; try congruence.
+
 Ltac find_comp_eq Hs1 Hs2 :=
   unfold NIExists.kcs in Hs1, Hs2;
   match type of Hs1 with
@@ -314,16 +320,21 @@ Ltac find_comp_eq Hs1 Hs2 :=
        | context[ find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s2)]
          => match goal with
             | [ _ : high_out_eq _ _ _ _ _ _ ?comp_lblr |- _ ]
-              => erewrite hout_eq_find_eq with
+              => erewrite hout_eq_find_eq1 with
                  (s':=s2) (clblr:=comp_lblr) in Hs1; eauto;
                  [ | clear Hs1 Hs2;
                      (*We have to clear these hypothesis for this goal so that
                        we can run simpl in * without worrying about performance
                        consequences.*)
-                     solve [unfold high_comp_pat, Reflex.match_comp, match_comp_pf; intros;
-                            destruct_comp; try discriminate; simpl in *;
-                            destruct_atom_eqs;
-                            intuition; try discriminate; try congruence] ]
+                     solve [high_comp_pat_tac] ]
+            | [ _ : cs_eq _ _ _ _ _ _ ?comp_lblr |- _ ]
+              => erewrite hout_eq_find_eq2 with
+                 (s':=s2) (clblr:=comp_lblr) in Hs1; eauto;
+                 [ | clear Hs1 Hs2;
+                     (*We have to clear these hypothesis for this goal so that
+                       we can run simpl in * without worrying about performance
+                       consequences.*)
+                     solve [high_comp_pat_tac] ]
             end
        end
   end.

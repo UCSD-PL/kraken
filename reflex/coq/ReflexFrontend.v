@@ -307,10 +307,11 @@ Ltac find_comp_tr_solve :=
   destruct_atom_eqs; try discriminate; try congruence.
 
 Ltac find_comp_eq Hs1 Hs2 :=
+  unfold NIExists.kcs in Hs1, Hs2;
   match type of Hs1 with
-  | context[ find_comp _ _ _ _ (kcs _ _ _ _ ?s1) ]
+  | context[ find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s1) ]
     => match type of Hs2 with
-       | context[ find_comp _ _ _ _ (kcs _ _ _ _ ?s2)]
+       | context[ find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s2)]
          => match goal with
             | [ _ : high_out_eq _ _ _ _ _ _ ?comp_lblr |- _ ]
               => erewrite hout_eq_find_eq with
@@ -327,9 +328,9 @@ Ltac find_comp_eq Hs1 Hs2 :=
        end
   end.
 (*  match type of Hs1 with
-  | context[match find_comp _ _ _ _ (kcs _ _ _ _ ?s1) with | Some _ => _ | None => _ end]
+  | context[match find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s1) with | Some _ => _ | None => _ end]
     => match type of Hs2 with
-       | context[match find_comp _ _ _ _ (kcs _ _ _ _ ?s2) with | Some _ => _ | None => _ end]
+       | context[match find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s2) with | Some _ => _ | None => _ end]
          => unfold eval_hdlr_comp_pat, eval_hdlr_payload_oexpr, eval_payload_oexpr in Hs1, Hs2;
             match type of Hs1 with
             | context[match ?e1 with | Some _ => _ | None => _ end]
@@ -414,7 +415,11 @@ Ltac ho_eq_tac tac Hlblr :=
   repeat match goal with
   | [ H1 : context [ find_comp _ _ _ _ _ ],
       H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
-    => find_comp_eq H1 H2; rewrite H1 in H2; inversion H2
+    => find_comp_eq H1 H2; unfold NIExists.kcs in H1, H2;
+       rewrite H1 in H2; inversion H2
+  | [ H1 : context [ find_comp _ _ _ _ _ ],
+      H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
+    => unfold NIExists.kcs in H1, H2; rewrite H1 in H2; inversion H2
   end;
   try solve[
           auto; try impossible
@@ -542,20 +547,28 @@ Ltac low_step :=
                  subst ksrp
             end
        end;
-       simpl; split;
+       simpl; repeat split;
        match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
          => ho_eq_tac ho_eq_solve_low Hlow
        | [ |- vars_eq _ _ _ _ _ _ _ ]
          => auto
+       | [ |- cs_eq _ _ _ _ _ _ _ ]
+         => unfold cs_eq; simpl; auto
        | _ => idtac
        end
   end.
 
-Ltac ho_eq_solve_high :=
+Ltac ho_eq_solve_high := auto.
+(*  repeat match goal with
+         | [ |- _::_ = _::_ ] => f_equal; auto
+         | _ => solve [auto]
+         end.*)
+
+Ltac cs_eq_solve_high :=
   repeat match goal with
          | [ |- _::_ = _::_ ] => f_equal; auto
-         | _ => auto
+         | _ => solve [auto]
          end.
 
 Ltac symb_exec_high Hs1 Hs2 :=
@@ -595,12 +608,14 @@ Ltac high_steps :=
                  subst ksrp1; subst ksrp2
             end
        end;
-       simpl; split;
+       simpl; repeat split;
        match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
          => ho_eq_tac ho_eq_solve_high Hhigh
        | [ |- vars_eq _ _ _ _ _ _ _ ]
          => vars_eq_tac
+       | [ |- cs_eq _ _ _ _ _ _ _ ]
+         => unfold cs_eq in *; simpl; cs_eq_solve_high
        | _ => idtac
        end
   end.

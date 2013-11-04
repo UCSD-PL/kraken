@@ -26,6 +26,7 @@ Definition KTrace := KTrace PAYD COMPT COMPS.
 Definition KAction := KAction PAYD COMPT COMPS.
 Definition kstate := kstate PAYD COMPT COMPS KSTD.
 Definition ktr := ktr PAYD COMPT COMPS KSTD.
+Definition kcs := kcs PAYD COMPT COMPS KSTD.
 
 Definition is_input labeler (act : KAction) :=
   match act with
@@ -55,6 +56,9 @@ Definition vars_eq (s1 s2 : kstate)
   (lblr : fin (projT1 KSTD) -> bool) :=  
   shvec_erase _ lblr _ (kst _ _ _ _ s1) = shvec_erase _ lblr _ (kst _ _ _ _ s2).
 
+Definition cs_eq (s1 s2 : kstate) cslblr :=
+  filter cslblr (kcs s1) = filter cslblr (kcs s2).
+
 Definition high_in_eq (s s' : kstate) clblr :=
   forall tr tr',
     ktr s = [tr]%inhabited ->
@@ -72,31 +76,35 @@ Definition low_in_nil (s : kstate) clblr :=
     ktr s = [tr]%inhabited ->
     inputs (fun c => negb (clblr c)) tr = nil.
 
-Definition NI clblr vlblr := forall s,
+Definition NI clblr vlblr cslblr := forall s,
   Reach s ->
   (exists snil,
     Reach snil /\
     high_in_eq s snil clblr /\
     low_in_nil snil clblr /\
     high_out_eq s snil clblr /\
-    vars_eq s snil vlblr).
+    vars_eq s snil vlblr /\
+    cs_eq s snil cslblr).
 
-Definition low_ok clblr vlblr := forall c m i s s',
+Definition low_ok clblr vlblr cslblr := forall c m i s s',
   clblr c = false ->
   Reach s ->
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m i s s' ->
   high_out_eq s s' clblr /\
-  vars_eq s s' vlblr.
+  vars_eq s s' vlblr /\
+  cs_eq s s' cslblr.
 
-Definition high_ok clblr vlblr :=
+Definition high_ok clblr vlblr cslblr :=
   forall c m i s1 s1' s2 s2',
     clblr c = true ->
     high_out_eq s1 s2 clblr ->
     vars_eq s1 s2 vlblr ->
+    cs_eq s1 s2 cslblr ->
     Reach s1 -> Reach s2 ->
     ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m i s1 s1' ->
     ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m i s2 s2' ->
-    high_out_eq s1' s2' clblr /\ vars_eq s1' s2' vlblr.
+    high_out_eq s1' s2' clblr /\ vars_eq s1' s2' vlblr /\
+    cs_eq s1' s2' cslblr.
 
 Ltac uninhabit :=
   match goal with
@@ -173,7 +181,7 @@ Qed.
 Lemma hout_init : forall clblr init i s tr,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init i s ->
   ktr s = [tr]%inhabited ->
-  filter clblr (kcs _ _ _ _ s) = fold_right exec_comps nil (outputs clblr tr).
+  filter clblr (kcs s) = fold_right exec_comps nil (outputs clblr tr).
 Proof.
   intros clblr init i s tr Hinit Htr.
   inversion Hinit. subst s0.
@@ -188,10 +196,10 @@ Qed.
 
 Lemma hout_hdlr' : forall clblr envd cc m s cmd input tr tr',
   ktr (hdlr_kst _ _ _ _ envd s) = [tr]%inhabited ->
-  filter clblr (kcs _ _ _ _ (hdlr_kst _ _ _ _ _ s)) = fold_right exec_comps nil (outputs clblr tr) ->
+  filter clblr (kcs (hdlr_kst _ _ _ _ _ s)) = fold_right exec_comps nil (outputs clblr tr) ->
   let s' := hdlr_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD cc m envd s cmd input in
   ktr (hdlr_kst _ _ _ _ _ s') = [tr']%inhabited ->
-  filter clblr (kcs _ _ _ _ (hdlr_kst _ _ _ _ _ s')) = fold_right exec_comps nil (outputs clblr tr').
+  filter clblr (kcs (hdlr_kst _ _ _ _ _ s')) = fold_right exec_comps nil (outputs clblr tr').
 Proof.
   intros clblr envd cc m s cmd input tr tr' Htr Heq s' Htr'. subst s'.
   generalize dependent s. generalize dependent tr. generalize dependent tr'.
@@ -242,7 +250,7 @@ Proof.
     destruct (find_comp COMPT COMPTDEC COMPS
                   (eval_hdlr_comp_pat PAYD COMPT COMPS KSTD cc m
                      (kst PAYD COMPT COMPS KSTD hdlr_kst) envd hdlr_env cp)
-                  (kcs PAYD COMPT COMPS KSTD hdlr_kst)).
+                  (Reflex.kcs _ _ _ _ hdlr_kst)).
       apply IHcmd1 with (tr:=tr); auto.
       apply IHcmd2 with (tr:=tr); auto.
 Qed.
@@ -250,9 +258,9 @@ Qed.
 Lemma hout_hdlr : forall clblr cc m s s' input tr tr',
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS cc m input s s' ->
   ktr s = [tr]%inhabited ->
-  filter clblr (kcs _ _ _ _ s) = fold_right exec_comps nil (outputs clblr tr) ->
+  filter clblr (kcs s) = fold_right exec_comps nil (outputs clblr tr) ->
   ktr s' = [tr']%inhabited ->
-  filter clblr (kcs _ _ _ _ s') = fold_right exec_comps nil (outputs clblr tr').
+  filter clblr (kcs s') = fold_right exec_comps nil (outputs clblr tr').
 Proof.
   intros clblr cc m s s' input tr tr' Hve Htr Heq Htr'.
   inversion Hve. subst s'0. unfold kstate_run_prog.
@@ -272,7 +280,7 @@ Qed.
 Lemma hout_hcs : forall clblr s tr,
   Reach s ->
   ktr s = [tr]%inhabited ->
-  filter clblr (kcs _ _ _ _ s) = fold_right exec_comps nil (outputs clblr tr).
+  filter clblr (kcs s) = fold_right exec_comps nil (outputs clblr tr).
 Proof.
   intros clblr s tr HReach Htr.
   generalize dependent tr.
@@ -290,7 +298,7 @@ Qed.
 Lemma hout_eq_hcs_eq : forall s s' clblr,
   Reach s -> Reach s' ->
   high_out_eq s s' clblr ->
-  filter clblr (kcs _ _ _ _ s) = filter clblr (kcs _ _ _ _ s').
+  filter clblr (kcs s) = filter clblr (kcs s').
 Proof.
   intros s s' clblr HReach HReach' Hout_eq.
   destruct s as [ ? [tr] ? ]; destruct s' as [ ? [tr'] ? ].
@@ -322,12 +330,12 @@ Lemma hout_eq_find_eq : forall cp s s' clblr,
   Reach s -> Reach s' ->
   high_out_eq s s' clblr ->
   high_comp_pat COMPT COMPTDEC COMPS cp clblr ->
-  find_comp COMPT COMPTDEC COMPS cp (kcs _ _ _ _ s) = 
-  find_comp COMPT COMPTDEC COMPS cp (kcs _ _ _ _ s').
+  find_comp COMPT COMPTDEC COMPS cp (kcs s) = 
+  find_comp COMPT COMPTDEC COMPS cp (kcs s').
 Proof.
   intros cp s s' clblr HReach HReach' Hout_eq Hcp.
-  rewrite hfind_cs_filter with (clblr:=clblr) (cs:=kcs _ _ _ _ s); auto.
-  rewrite hfind_cs_filter with (clblr:=clblr) (cs:=kcs _ _ _ _ s'); auto.
+  rewrite hfind_cs_filter with (clblr:=clblr) (cs:=Reflex.kcs _ _ _ _ s); auto.
+  rewrite hfind_cs_filter with (clblr:=clblr) (cs:=Reflex.kcs _ _ _ _ s'); auto.
   erewrite hout_eq_hcs_eq; auto.
 Qed.
 
@@ -634,13 +642,13 @@ Proof.
     apply IHx; eauto.
 Qed.
 
-Theorem ni_suf : forall clblr vlblr,
-  low_ok clblr vlblr ->
-  high_ok clblr vlblr ->
-  NI clblr vlblr.
+Theorem ni_suf : forall clblr vlblr cslblr,
+  low_ok clblr vlblr cslblr ->
+  high_ok clblr vlblr cslblr ->
+  NI clblr vlblr cslblr.
 Proof.
   unfold NI.
-  intros clblr vlblr Hlow Hhigh s HReach.
+  intros clblr vlblr cslblr Hlow Hhigh s HReach.
   induction HReach.
     exists s.
       split. econstructor; eauto.
@@ -656,7 +664,9 @@ Proof.
       rewrite Hktr' in Hktr. apply pack_injective in Hktr.
       subst tr. reflexivity.
 
-      reflexivity.
+      split.
+        reflexivity.
+        reflexivity.
 
     destruct IHHReach as [snil_ind IHsnil].
     case_eq (clblr c); intro Hclblr.
@@ -679,7 +689,7 @@ Proof.
           (projT2 hdlrs) input)) as Hve.
         decompose [and] IHsnil.
         econstructor; eauto; eauto.
-        pose proof (filter_In clblr c (kcs _ _ _ _ snil_ind)) as [Hcs ?].
+        pose proof (filter_In clblr c (Reflex.kcs _ _ _ _ snil_ind)) as [Hcs ?].
         apply Hcs. rewrite <- hout_eq_hcs_eq with (s:=s); subst snil_ind; auto.
         apply filter_In; auto. subst snil_ind; auto.
 
@@ -741,7 +751,11 @@ Proof.
             (kst PAYD COMPT COMPS KSTD s')) as Heq.
             eapply Hlow; eauto.
           rewrite <- Heq.
-          eapply IHsnil; eauto.
+          split.
+            eapply IHsnil; eauto.
+            unfold cs_eq in *.
+            simpl in *. transitivity (filter cslblr (kcs s)).
+            symmetry. eapply Hss'. eapply IHsnil.
 
     match goal with
     | [ H : BogusExchange _ _ _ _ _ _ _ _ |- _ ]
@@ -756,7 +770,7 @@ Proof.
         subst snil_ind; eapply IHsnil; eauto.
         decompose [and] IHsnil.
         econstructor; eauto.
-        pose proof (filter_In clblr c (kcs _ _ _ _ snil_ind)) as [Hcs ?].
+        pose proof (filter_In clblr c (Reflex.kcs _ _ _ _ snil_ind)) as [Hcs ?].
         apply Hcs. rewrite <- hout_eq_hcs_eq with (s:=s); subst snil_ind; auto.
         apply filter_In; auto. subst snil_ind; auto.
 

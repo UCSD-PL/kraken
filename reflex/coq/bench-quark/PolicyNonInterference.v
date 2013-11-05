@@ -12,7 +12,7 @@ Definition clblr d (c : comp COMPT COMPS) :=
     then true
     else false
   | Build_comp CProc _ cfg =>
-    let cfgd := comp_conf_desc COMPT COMPS Tab in
+    let cfgd := comp_conf_desc COMPT COMPS CProc in
     if str_eq (@shvec_ith _ _ (projT1 cfgd) (projT2 cfgd)
                                cfg None) d
     then true

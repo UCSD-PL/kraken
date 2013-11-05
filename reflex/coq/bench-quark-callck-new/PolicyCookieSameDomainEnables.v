@@ -8,7 +8,7 @@ Local Opaque str_of_string.
 Import SystemFeatures Language Spec.
 
 Definition Tab_pat d : conc_pat COMPT COMPS :=
-  Build_conc_pat COMPT COMPS Tab (Some d, tt).
+  Build_conc_pat COMPT COMPS Tab (Some d, (None, tt)).
 
 Definition CK_pat d : conc_pat COMPT COMPS :=
   Build_conc_pat COMPT COMPS CProc (Some d, tt).

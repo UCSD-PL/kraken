@@ -253,8 +253,74 @@ Ltac destruct_find_comp :=
   | pose proof (find_comp_fail _ _ _ _ _ Heq);
     pose proof (find_comp_fail_prop _ _ _ _ _ Heq); clear Heq ].
 
+Ltac destruct_atom_eqs :=
+  repeat match goal with
+         | [ _ : context [str_eq ?a ?b] |- _ ]
+           => destruct (str_eq a b)
+         | [ |- context [str_eq ?a ?b] ]
+           => destruct (str_eq a b)
+         | [ _ : context [num_eq ?a ?b] |- _ ]
+           => destruct (num_eq a b)
+         | [ |- context [num_eq ?a ?b] ]
+           => destruct (num_eq a b)
+         | [ _ : context [fd_eq ?a ?b] |- _ ]
+           => destruct (fd_eq a b)
+         | [ |- context [fd_eq ?a ?b] ]
+           => destruct (fd_eq a b)
+         end.
+
+Ltac high_comp_pat_tac :=
+  unfold high_comp_pat, Reflex.match_comp, match_comp_pf; intros;
+  destruct_comp; try discriminate; simpl in *;
+  destruct_atom_eqs;
+  intuition; try discriminate; try congruence.
+
+Ltac find_comp_eq Hs1 Hs2 :=
+  match type of Hs1 with
+  | context[ find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s1) ]
+    => match type of Hs2 with
+       | context[ find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s2)]
+         => match goal with
+            | [ _ : high_out_eq _ _ _ _ _ _ ?comp_lblr |- _ ]
+              => erewrite hout_eq_find_eq1 with
+                 (s':=s2) (clblr:=comp_lblr) in Hs1; eauto;
+                 match goal with
+                 | [ |- high_comp_pat _ _ _ _ _ ]
+                     => clear Hs1 Hs2;
+                       (*We have to clear these hypothesis for this goal so that
+                         we can run simpl in * without worrying about performance
+                         consequences.*)
+                        high_comp_pat_tac; fail 1
+                 | [ |- high_out_eq _ _ _ _ _ _ _ ]
+                     => apply high_out_eq_sym; auto
+                 | [ |- _ ]
+                     => idtac
+                 end
+            | [ _ : cs_eq _ _ _ _ _ _ ?comp_lblr |- _ ]
+              => erewrite hout_eq_find_eq2 with
+                 (s':=s2) (cslblr:=comp_lblr) in Hs1; eauto;
+                 match goal with
+                 | [ |- high_comp_pat _ _ _ _ _ ]
+                     => clear Hs1 Hs2;
+                       (*We have to clear these hypothesis for this goal so that
+                         we can run simpl in * without worrying about performance
+                         consequences.*)
+                        high_comp_pat_tac; fail 1
+                 | [ |- cs_eq _ _ _ _ _ _ _ ]
+                     => apply cs_eq_sym; auto
+                 | [ |- _ ]
+                     => idtac
+                 end
+            end
+       end
+  end.
+
 Ltac destruct_find_comp' H :=
-  let find_comp_expr :=
+  match goal with
+  | [ H' : find_comp _ _ _ _ _ = _ |- _ ]
+      =>  find_comp_eq H H'; rewrite H' in H
+  | [ |- _ ]
+    => let find_comp_expr :=
       match type of H with
       | context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
         => (constr:(find_comp a b c d e))
@@ -264,7 +330,8 @@ Ltac destruct_find_comp' H :=
   destruct find_comp_expr as [? | ?]_eqn:Heq; try rewrite Heq;
   [ pose proof (find_comp_suc_match _ _ _ _ _ _ Heq) as Heq'; destruct Heq'
   | pose proof (find_comp_fail _ _ _ _ _ Heq);
-    pose proof (find_comp_fail_prop _ _ _ _ _ Heq) ].
+    pose proof (find_comp_fail_prop _ _ _ _ _ Heq) ]
+  end.
 
 (*Ltac destruct_find_comp' H1 H2 :=
   let find_comp_expr :=
@@ -285,59 +352,11 @@ Ltac destruct_comp_pf :=
     => destruct cpf; destruct_comp
   end.
 
-Ltac destruct_atom_eqs :=
-  repeat match goal with
-         | [ _ : context [str_eq ?a ?b] |- _ ]
-           => destruct (str_eq a b)
-         | [ |- context [str_eq ?a ?b] ]
-           => destruct (str_eq a b)
-         | [ _ : context [num_eq ?a ?b] |- _ ]
-           => destruct (num_eq a b)
-         | [ |- context [num_eq ?a ?b] ]
-           => destruct (num_eq a b)
-         | [ _ : context [fd_eq ?a ?b] |- _ ]
-           => destruct (fd_eq a b)
-         | [ |- context [fd_eq ?a ?b] ]
-           => destruct (fd_eq a b)
-         end.
-
 Ltac find_comp_tr_solve :=
   repeat destruct_comp_pf; try discriminate;
   unfold Reflex.match_comp, Reflex.match_comp_pf in *; simpl in *;
   destruct_atom_eqs; try discriminate; try congruence.
 
-Ltac high_comp_pat_tac :=
-  unfold high_comp_pat, Reflex.match_comp, match_comp_pf; intros;
-  destruct_comp; try discriminate; simpl in *;
-  destruct_atom_eqs;
-  intuition; try discriminate; try congruence.
-
-Ltac find_comp_eq Hs1 Hs2 :=
-  unfold NIExists.kcs in Hs1, Hs2;
-  match type of Hs1 with
-  | context[ find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s1) ]
-    => match type of Hs2 with
-       | context[ find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s2)]
-         => match goal with
-            | [ _ : high_out_eq _ _ _ _ _ _ ?comp_lblr |- _ ]
-              => erewrite hout_eq_find_eq1 with
-                 (s':=s2) (clblr:=comp_lblr) in Hs1; eauto;
-                 [ | clear Hs1 Hs2;
-                     (*We have to clear these hypothesis for this goal so that
-                       we can run simpl in * without worrying about performance
-                       consequences.*)
-                     solve [high_comp_pat_tac] ]
-            | [ _ : cs_eq _ _ _ _ _ _ ?comp_lblr |- _ ]
-              => erewrite hout_eq_find_eq2 with
-                 (s':=s2) (clblr:=comp_lblr) in Hs1; eauto;
-                 [ | clear Hs1 Hs2;
-                     (*We have to clear these hypothesis for this goal so that
-                       we can run simpl in * without worrying about performance
-                       consequences.*)
-                     solve [high_comp_pat_tac] ]
-            end
-       end
-  end.
 (*  match type of Hs1 with
   | context[match find_comp _ _ _ _ (Reflex.kcs _ _ _ _ ?s1) with | Some _ => _ | None => _ end]
     => match type of Hs2 with
@@ -426,11 +445,11 @@ Ltac ho_eq_tac tac Hlblr :=
   repeat match goal with
   | [ H1 : context [ find_comp _ _ _ _ _ ],
       H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
-    => find_comp_eq H1 H2; unfold NIExists.kcs in H1, H2;
+    => find_comp_eq H1 H2;
        rewrite H1 in H2; inversion H2
   | [ H1 : context [ find_comp _ _ _ _ _ ],
       H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
-    => unfold NIExists.kcs in H1, H2; rewrite H1 in H2; inversion H2
+    => rewrite H1 in H2; inversion H2
   end;
   try solve[
           auto; try impossible
@@ -500,32 +519,126 @@ Ltac simpl_nested_hsrp H :=
                    ?s _ _ ) ] =>
       simpl s in H
     end
+  | _ = hdlr_state_run_cmd _ _ _ _ _ _ _ _
+          (hdlr_state_run_cmd _ _ _ _ _ _ _ _ _ _ _) _ _ =>
+    unfold hdlr_state_run_cmd at 2 in H;
+    unfold_hdlr_eval_functions H;
+    match type of H with
+    | _ = hdlr_state_run_cmd _ _ _ _ _ _ _ _
+                   ?s _ _  =>
+      simpl s in H
+    end
   end.
 
 Ltac simpl_step_isrp H :=
-  first
-    [ progress simpl_nested_isrp H
-    | erewrite seq_rew_init in H; eauto
-    | match type of H with
-      | context [ if num_eq ?e1 ?e2 then _ else _ ]
-        => destruct (num_eq e1 e2)
+  repeat first
+    [ erewrite seq_rew_init in H; eauto;
+      match type of H with
+      | context [ init_state_run_cmd _ _ _ _ _ _
+          (init_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j) _ _ ]
+        => let isrp := fresh "isrp" in
+           remember (init_state_run_cmd a b c d e f g h j) as isrp;
+           match goal with
+           | [ Heq : isrp = _ |- _ ]
+             => simpl_step_isrp Heq; subst isrp
+           end
       end
-    | destruct_find_comp' H
+    | erewrite ite_rew_init in H; eauto;
+      match type of H with
+      | context [ if num_eq ?e1 ?e2 then _ else _ ]
+        => simpl (num_eq e1 e2) in H;
+           match type of H with
+           | context [ if num_eq ?e1 ?e2 then _ else _ ]
+             => destruct (num_eq e1 e2);
+                match type of H with
+                | context [ init_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ]
+                  => let isrp := fresh "isrp" in
+                     remember (init_state_run_cmd a b c d e f g h j) as hsrp;
+                     match goal with
+                     | [ Heq : isrp = _ |- _ ]
+                       => simpl_step_isrp Heq; subst isrp
+                     end
+                end
+           end
+      end
+    | erewrite complkup_rew_init in H; eauto;
+      match type of H with
+      | context[ match find_comp _ _ _ _ _ with | Some _ => _ | None => _ end ]
+        => unfold eval_base_comp_pat, eval_base_payload_oexpr,
+           eval_payload_oexpr in H;
+           match type of H with
+           | context[ match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+             => simpl (find_comp a b c d e) in H;
+                destruct_find_comp' H;
+                match type of H with
+                | context [ init_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ]
+                  => let isrp := fresh "isrp" in
+                     remember (init_state_run_cmd a b c d e f g h j) as hsrp;
+                     match goal with
+                     | [ Heq : isrp = _ |- _ ]
+                       => simpl_step_isrp Heq; subst isrp
+                     end
+                end
+           end
+      end
     | progress (unfold init_state_run_cmd in H;
                 unfold_init_eval_functions H;
                 simpl in H)
     ].
 
 Ltac simpl_step_hsrp H :=
-  first
-    [ progress simpl_nested_hsrp H
-    | erewrite seq_rew in H; eauto
-    | match type of H with
-      | context [ if num_eq ?e1 ?e2 then _ else _ ]
-        => destruct (num_eq e1 e2)
+  let t := type of H in idtac t;
+  repeat first
+    [ idtac "seq"; erewrite seq_rew in H; eauto;
+      match type of H with
+      | context [ hdlr_state_run_cmd _ _ _ _ _ _ _ _
+          (hdlr_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ?k ?i) _ _ ]
+        => let hsrp := fresh "hsrp" in
+           remember (hdlr_state_run_cmd a b c d e f g h j k i) as hsrp;
+           match goal with
+           | [ Heq : hsrp = _ |- _ ]
+             => simpl_step_hsrp Heq; subst hsrp
+           end
       end
-    | destruct_find_comp' H
-    | progress (unfold hdlr_state_run_cmd in H;
+    | idtac "ite"; erewrite ite_rew_hdlr in H; eauto;
+      match type of H with
+      | context [ if num_eq ?e1 ?e2 then _ else _ ]
+        => simpl (num_eq e1 e2) in H;
+           match type of H with
+           | context [ if num_eq ?e1 ?e2 then _ else _ ]
+             => destruct (num_eq e1 e2);
+                match type of H with
+                | context [ hdlr_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ?k ?i ]
+                  => let hsrp := fresh "hsrp" in
+                     remember (hdlr_state_run_cmd a b c d e f g h j k i) as hsrp;
+                     match goal with
+                     | [ Heq : hsrp = _ |- _ ]
+                       => simpl_step_hsrp Heq; subst hsrp
+                     end
+                end
+           end
+      end
+    | idtac "complkup"; erewrite complkup_rew_hdlr in H; eauto;
+      match type of H with
+      | context[ match find_comp _ _ _ _ _ with | Some _ => _ | None => _ end ]
+        => unfold eval_hdlr_comp_pat, eval_hdlr_payload_oexpr,
+           eval_payload_oexpr in H;
+           match type of H with
+           | context[ match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+             => simpl (find_comp a b c d e) in H;
+                destruct_find_comp' H;
+                match type of H with
+                | context [ hdlr_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ?k ?i ]
+                  => let hsrp := fresh "hsrp" in
+                     remember (hdlr_state_run_cmd a b c d e f g h j k i) as hsrp;
+                     match goal with
+                     | [ Heq : hsrp = _ |- _ ]
+                       => simpl_step_hsrp Heq; subst hsrp
+                     end
+                end
+           end
+      end
+    | idtac "base"; progress (unfold hdlr_state_run_cmd in H;
                 unfold_hdlr_eval_functions H;
                 simpl in H)
     ].
@@ -533,7 +646,7 @@ Ltac simpl_step_hsrp H :=
 Ltac symb_exec_low Hs :=
   unfold kstate_run_prog in Hs;
   simpl_proj Hs;
-  repeat simpl_step_hsrp Hs.
+  simpl_step_hsrp Hs.
 
 Ltac low_step :=
   unfold low_ok; intros;
@@ -552,7 +665,7 @@ Ltac low_step :=
             | [ Heq : ksrp = s,
                 hdlrs : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
               => simpl in hdlrs;
-                 unfold seq, spawn, stupd, call, ite, send in hdlrs;
+                 unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
                  unfold hdlrs in Heq;
                  symb_exec_low Heq;                  
                  subst ksrp
@@ -585,9 +698,14 @@ Ltac cs_eq_solve_high :=
 Ltac symb_exec_high Hs1 Hs2 :=
   unfold kstate_run_prog in Hs1, Hs2;
   simpl_proj Hs1; simpl_proj Hs2;
-  repeat (simpl_step_hsrp Hs1;
-          simpl_step_hsrp Hs2;
-          try find_comp_eq Hs1 Hs2).
+  simpl_step_hsrp Hs1;
+  simpl_step_hsrp Hs2.
+(*          repeat match goal with
+          | [ H1 : context [ find_comp _ _ _ _ _ ],
+              H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
+            => find_comp_eq H1 H2;
+               rewrite H1 in H2; inversion H2
+          end).*)
 
 Ltac high_steps :=
   unfold high_ok; intros;
@@ -611,8 +729,8 @@ Ltac high_steps :=
                 hdlrs1 : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _),
                 hdlrs2 : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
               => simpl in hdlrs1; simpl in hdlrs2;
-                 unfold seq, spawn, stupd, call, ite, send in hdlrs1;
-                 unfold seq, spawn, stupd, call, ite, send in hdlrs2;
+                 unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs1;
+                 unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs2;
                  unfold hdlrs1 in Heq1, Heq2;
                  unfold hdlrs2 in Heq1, Heq2;
                  symb_exec_high Heq1 Heq2;                  
@@ -639,7 +757,7 @@ Ltac ni :=
 Ltac symb_exec Hs :=
   unfold kstate_run_prog in Hs;
   simpl_proj Hs;
-  repeat simpl_step_hsrp Hs.
+  simpl_step_hsrp Hs.
 (*  unfold kstate_run_prog in Hs;
   repeat match type of Hs with
          | context [projT1 ?e ] => simpl (projT1 e) in Hs
@@ -699,7 +817,7 @@ Ltac unpack prune_init prune_hdlr :=
        | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ ?prog _,
            Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
          => simpl in Htr; destruct_input input;
-            unfold prog, seq, spawn, stupd, call, ite, send in Hs;
+            unfold prog, seq, spawn, stupd, call, ite, send, complkup in Hs;
             repeat simpl_step_isrp Hs; subst s'; simpl in *
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
@@ -719,7 +837,7 @@ Ltac unpack prune_init prune_hdlr :=
                    match goal with
                    | [ Hksrp : ksrp = s |- _ ]
                       => simpl in hdlrs;
-                         unfold seq, spawn, stupd, call, ite, send in hdlrs;
+                         unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
                          unfold hdlrs in Hksrp; symb_exec Hksrp; subst ksrp;
                          simpl in *
                    end

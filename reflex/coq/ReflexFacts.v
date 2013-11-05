@@ -147,3 +147,122 @@ Lemma seq_rew : forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC c m
 Proof.
   auto.
 Qed.
+
+Lemma complkup_rew_init :
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC envd cp cmd1 cmd2 s i,
+  init_state_run_cmd _ _ COMPTDEC _ _ envd s (CompLkup PAYD COMPT COMPS KSTD _ _ cp cmd1 cmd2) i =
+      match find_comp COMPT COMPTDEC COMPS
+          (eval_base_comp_pat COMPT COMPS envd
+             (init_env _ _ _ _ envd s) cp)
+          (init_comps _ _ _ _ envd s) with
+      | Some cdp =>
+          let c := projT1 cdp in
+          let d :=
+            Comp COMPT (comp_pat_type COMPT COMPS (base_term COMPT) envd cp) in
+          let new_envd :=
+            existT (ReflexVec.svec (cdesc COMPT)) (S (projT1 envd))
+              (ReflexVec.svec_shift d (projT2 envd)) in
+          let s' :=
+            Build_init_state _ _ _ _ new_envd
+                             (init_comps _ _ _ _ envd s)
+                             (init_ktr _ _ _ _ envd s)
+                             (ReflexHVec.shvec_shift (sdenote_cdesc COMPT COMPS) d
+                                                     (existT
+                                                        (fun c0 : comp COMPT COMPS =>
+                                                           comp_type COMPT COMPS c0 =
+                                                           conc_pat_type COMPT COMPS
+                                                                         (eval_base_comp_pat COMPT COMPS envd
+                                                                                             (init_env _ _ _ _ envd s)
+                                                                                             cp)) c (projT2 cdp)) 
+                                                     (projT2 envd)
+                                                     (init_env _ _ _ _ envd s))
+                             (init_kst _ _ _ _ envd s) in
+          let s'' := init_state_run_cmd _ _ COMPTDEC _ _ new_envd s' cmd1 (fst i) in
+          {|
+          init_comps := init_comps _ _ _ _ new_envd s'';
+          init_ktr := init_ktr _ _ _ _ new_envd s'';
+          init_env := ReflexHVec.shvec_unshift (cdesc COMPT)
+                        (sdenote_cdesc COMPT COMPS) 
+                        (projT1 envd) d (projT2 envd)
+                        (init_env _ _ _ _ new_envd s'');
+          init_kst := init_kst _ _ _ _ new_envd s'' |}
+      | None => init_state_run_cmd _ _ COMPTDEC _ _ envd s cmd2 (snd i)
+      end.
+Proof.
+  auto.
+Qed.
+
+Lemma complkup_rew_hdlr :
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC cc m envd0 cp cmd1 cmd2 s0 i,
+  hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0
+                     (CompLkup PAYD COMPT COMPS KSTD _
+                               envd0 cp cmd1 cmd2) i =
+      match find_comp COMPT COMPTDEC COMPS
+          (eval_hdlr_comp_pat PAYD COMPT COMPS KSTD cc m
+             (kst PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0)) envd0 (hdlr_env _ _ _ _ _ s0) cp)
+          (kcs PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0)) with
+      | Some cdp =>
+          let c := projT1 cdp in
+          let d :=
+            Comp COMPT
+              (comp_pat_type COMPT COMPS _
+                 (*(hdlr_term PAYD COMPT COMPS KSTD (CT COMPT COMPS c)
+                    (CTAG PAYD m))*) envd0 cp) in
+          let new_envd :=
+            existT (ReflexVec.svec (cdesc COMPT)) (S (projT1 envd0))
+              (ReflexVec.svec_shift d (projT2 envd0)) in
+          let s'0 :=
+            Build_hdlr_state _ _ _ _ new_envd
+                       {|
+                        kcs := kcs PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0);
+                        ktr := ktr PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0);
+                        kst := kst PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0) |}
+                       (ReflexHVec.shvec_shift (sdenote_cdesc COMPT COMPS) d
+                          (existT
+                             (fun c0 : comp COMPT COMPS =>
+                              comp_type COMPT COMPS c0 =
+                              conc_pat_type COMPT COMPS
+                                (eval_hdlr_comp_pat PAYD COMPT COMPS KSTD cc
+                                   m (kst PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0)) envd0
+                                   (hdlr_env _ _ _ _ _ s0) cp)) c (projT2 cdp)) 
+                          (projT2 envd0) (hdlr_env _ _ _ _ _ s0) ) in
+          let s'' := hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m new_envd s'0 cmd1 (fst i) in
+          {|
+          hdlr_kst := hdlr_kst PAYD COMPT COMPS KSTD new_envd s'';
+          hdlr_env := ReflexHVec.shvec_unshift (cdesc COMPT)
+                        (sdenote_cdesc COMPT COMPS) 
+                        (projT1 envd0) d (projT2 envd0)
+                        (hdlr_env PAYD COMPT COMPS KSTD new_envd s'') |}
+      | None => hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0 cmd2 (snd i)
+      end.
+Proof.
+  simpl. destruct s0. auto.
+Qed.
+
+Lemma ite_rew_init :
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC envd0 cond cmd1 cmd2 s0 i,
+  init_state_run_cmd _ _ COMPTDEC _ _ envd0 s0 (Ite PAYD COMPT COMPS KSTD _ _ cond cmd1 cmd2) i =
+  if ReflexBase.num_eq
+           (eval_base_expr COMPT COMPS
+              (init_env _ _ _ _ envd0 s0) cond)
+           (ReflexBase.Num "000" "000")
+      then init_state_run_cmd _ _ COMPTDEC _ _ envd0 s0 cmd2 (snd i)
+      else init_state_run_cmd _ _ COMPTDEC _ _ envd0 s0 cmd1 (fst i).
+Proof.
+  auto.
+Qed.
+
+Lemma ite_rew_hdlr :
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC cc m envd0 cond cmd1 cmd2 s0 i,
+  hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0 (Ite PAYD COMPT COMPS KSTD _ _ cond cmd1 cmd2) i =
+        if ReflexBase.num_eq
+           (eval_hdlr_expr _ COMPT COMPS KSTD cc m
+              (kst _ COMPT COMPS KSTD
+                 (hdlr_kst _ COMPT COMPS KSTD envd0 s0))
+              (hdlr_env _ COMPT COMPS KSTD envd0 s0) cond)
+           (ReflexBase.Num "000" "000")
+      then hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0 cmd2 (snd i)
+      else hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0 cmd1 (fst i).
+Proof.
+  auto.
+Qed.

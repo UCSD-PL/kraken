@@ -14,7 +14,7 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 12.
+Definition NB_MSG : nat := 13.
 
 (*Cookies:
 For now, we won't have cookies go through the kernel. Instead, when
@@ -35,8 +35,9 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ; ("KeyPress",    [str_d])
   ; ("MouseClick",  [str_d; str_d; num_d])
   ; ("Go",          [str_d])
-  ; ("NewTab",      [str_d])
+  ; ("NewTab",      [str_d; str_d])
   ; ("CProcFD", [fd_d])
+  ; ("SwitchTab", [str_d])
   ].
 
 Notation Display     := 0%fin (only parsing).
@@ -51,6 +52,7 @@ Notation MouseClick  := 8%fin (only parsing).
 Notation Go          := 9%fin (only parsing).
 Notation NewTab      := 10%fin (only parsing).
 Notation CProcFD     := 11%fin (only parsing).
+Notation SwitchTab   := 12%fin (only parsing).
 
 Inductive COMPT' : Set := UserInput | Output | Tab | CProc | DomainBar.
 
@@ -67,7 +69,7 @@ Definition COMPS (t : COMPT) : compd :=
   match t with
   | UserInput => mk_compd "UserInput" (test_dir ++ "user-input.py")       [] (mk_vdesc [])
   | Output    => mk_compd "Output"    (test_dir ++ "screen.py")    [] (mk_vdesc [])
-  | Tab       => mk_compd "Tab"       (test_dir ++ "tab.py")     [] (mk_vdesc [str_d])
+  | Tab       => mk_compd "Tab"       (test_dir ++ "tab.py")     [] (mk_vdesc [str_d; str_d])
   | CProc     => mk_compd "CProc"     (test_dir ++ "cproc.py")     [] (mk_vdesc [str_d])
   | DomainBar => mk_compd "DomainBar" (test_dir ++ "domainbar.py") [] (mk_vdesc [])
   end.
@@ -102,7 +104,7 @@ Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
-  seq (spawn _ IENVD Tab       (i_slit default_domain, tt) i_curtab    (Logic.eq_refl _)) (
+  seq (spawn _ IENVD Tab       (i_slit default_domain, (i_slit nil, tt)) i_curtab    (Logic.eq_refl _)) (
   seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
   seq (send (i_envvar IENVD i_curtab) Go (i_slit default_url, tt)) (
   seq (stupd _ IENVD v_output (i_envvar IENVD i_output)) (
@@ -181,8 +183,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | UserInput, NewTab =>
       let envd := mk_vcdesc [Comp _ Tab] in
       [[ envd :
-         seq (spawn _ envd Tab (mvar NewTab 0%fin, tt) 0%fin (Logic.eq_refl _)) (
-             (stupd _ envd v_curtab (envvar envd 0%fin)))
+         complkup (envd:=envd) (mk_comp_pat _ _ Tab (None, (Some (mvar NewTab 1%fin), tt)))
+                  nop
+                  (seq (spawn _ envd Tab (mvar NewTab 0%fin, (mvar NewTab 1%fin, tt)) 0%fin (Logic.eq_refl _)) (
+                       (stupd _ envd v_curtab (envvar envd 0%fin))))
       ]]
   | UserInput, Navigate =>
      [[ mk_vcdesc [] :
@@ -194,6 +198,13 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
               nop
             )
      ]]
+  | UserInput, SwitchTab =>
+    let envd := mk_vcdesc [] in
+    [[ envd :
+         complkup (envd:=envd) (mk_comp_pat _ _ Tab (None, (Some (mvar SwitchTab 0%fin), tt)))
+                  (stupd _ _ v_curtab (envvar (mk_vcdesc [Comp _ Tab]) 0%fin))
+                  nop
+    ]]
   | _, _ =>
     [[ mk_vcdesc [] : nop ]]
   end.

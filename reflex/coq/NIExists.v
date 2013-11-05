@@ -122,6 +122,20 @@ Definition exec_comps (a : KAction) (l : list comp) : list comp :=
   | _           => l
   end.
 
+Lemma high_out_eq_sym : forall s s' clblr,
+  high_out_eq s s' clblr -> high_out_eq s' s clblr.
+Proof.
+  unfold high_out_eq. intros.
+  symmetry. auto.
+Qed.
+
+Lemma cs_eq_sym : forall s s' clblr,
+  cs_eq s s' clblr -> cs_eq s' s clblr.
+Proof.
+  unfold cs_eq. intros.
+  symmetry. auto.
+Qed.
+
 Lemma hout_init' : forall clblr envd s cmd input tr tr',
   init_ktr _ _ _ _ _ s = [tr]%inhabited ->
   filter clblr (init_comps _ _ _ _ _ s) = fold_right exec_comps nil (outputs clblr tr) ->
@@ -330,8 +344,8 @@ Lemma hout_eq_find_eq1 : forall cp s s' clblr,
   Reach s -> Reach s' ->
   high_out_eq s s' clblr ->
   high_comp_pat COMPT COMPTDEC COMPS cp clblr ->
-  find_comp COMPT COMPTDEC COMPS cp (kcs s) = 
-  find_comp COMPT COMPTDEC COMPS cp (kcs s').
+  find_comp COMPT COMPTDEC COMPS cp (Reflex.kcs _ _ _ _ s) = 
+  find_comp COMPT COMPTDEC COMPS cp (Reflex.kcs _ _ _ _ s').
 Proof.
   intros cp s s' clblr HReach HReach' Hout_eq Hcp.
   rewrite hfind_cs_filter with (clblr:=clblr) (cs:=Reflex.kcs _ _ _ _ s); auto.
@@ -342,8 +356,8 @@ Qed.
 Lemma hout_eq_find_eq2 : forall cp s s' cslblr,
   cs_eq s s' cslblr ->
   high_comp_pat COMPT COMPTDEC COMPS cp cslblr ->
-  find_comp COMPT COMPTDEC COMPS cp (kcs s) = 
-  find_comp COMPT COMPTDEC COMPS cp (kcs s').
+  find_comp COMPT COMPTDEC COMPS cp (Reflex.kcs _ _ _ _ s) = 
+  find_comp COMPT COMPTDEC COMPS cp (Reflex.kcs _ _ _ _ s').
 Proof.
   intros cp s s' cslblr Hcs_eq Hcp.
   rewrite hfind_cs_filter with (clblr:=cslblr) (cs:=Reflex.kcs _ _ _ _ s); auto.

@@ -14,7 +14,7 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 12.
+Definition NB_MSG : nat := 14.
 
 (*Cookies:
 For now, we won't have cookies go through the kernel. Instead, when
@@ -25,34 +25,50 @@ will be sent the fd of the cookie proc and the cookie proc will be sent the fd
 of the new tab.*)
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
-  [ ("Display",     [str_d])
-  ; ("Navigate",    [str_d])
-  ; ("ReqResource", [str_d])
-  ; ("ResResource", [fd_d])
-  ; ("ReqSocket",   [str_d])
-  ; ("ResSocket",   [fd_d])
-  ; ("SetDomain",   [str_d])
-  ; ("KeyPress",    [str_d])
-  ; ("MouseClick",  [str_d; str_d; num_d])
-  ; ("Go",          [str_d])
-  ; ("NewTab",      [str_d])
-  ; ("CProcFD", [fd_d])
+  [ 
+  (*  Input -> Kernel *)
+  ("TabCreate", [str_d])
+  ;("TabSwitch", [str_d; str_d])
+  (*  Input -> Kernel -> (focused) Tab *)
+  ;("Navigate", [str_d]) 
+  ;("KeyPress", [str_d]) 
+  ;("MouseClick", [str_d]) 
+  (*  Kernel -> Input *)
+  ;("AddrUpdate", [str_d]) 
+  (*  Tab -> Kernel -> Screen *)
+  ;("RenderCompleted", [str_d]) 
+  (*  Kernel -> Tab *)
+  ;("RenderRequest", [str_d]) 
+  (*  Tab -> Kernel *)
+  ;("URLRequest", [str_d]) 
+  (*  Kernel -> Tab *)
+  ;("URLResponse", [fd_d]) 
+  (*  Tab -> Kernel *)
+  ;("SocketRequest", [str_d])
+  (*  Kernel -> Tab (Sending out a socket to a CreateSocket.py process) *)
+  ;("SocketResponse", [fd_d])
+  (*  Tab -> Kernel *)
+  ;("CookieChannelInit", [fd_d])
+  (*  Kernel -> Cookie  *)
+  ;("TabProcessRegister", [fd_d])
   ].
 
-Notation Display     := 0%fin (only parsing).
-Notation Navigate    := 1%fin (only parsing).
-Notation ReqResource := 2%fin (only parsing).
-Notation ResResource := 3%fin (only parsing).
-Notation ReqSocket   := 4%fin (only parsing).
-Notation ResSocket   := 5%fin (only parsing).
-Notation SetDomain   := 6%fin (only parsing).
-Notation KeyPress    := 7%fin (only parsing).
-Notation MouseClick  := 8%fin (only parsing).
-Notation Go          := 9%fin (only parsing).
-Notation NewTab      := 10%fin (only parsing).
-Notation CProcFD     := 11%fin (only parsing).
+Notation TabCreate   := 0%fin (only parsing).
+Notation TabSwitch   := 1%fin (only parsing).
+Notation Navigate    := 2%fin (only parsing).
+Notation KeyPress    := 3%fin (only parsing).
+Notation MouseClick  := 4%fin (only parsing).
+Notation AddrUpdate  := 5%fin (only parsing).
+Notation RenderCompleted := 6%fin (only parsing).
+Notation RenderRequest := 7%fin (only parsing).
+Notation URLRequest := 8%fin (only parsing).
+Notation URLResponse := 9%fin (only parsing).
+Notation SocketRequest := 10%fin (only parsing).
+Notation SocketResponse := 11%fin (only parsing).
+Notation CookieChannelInit := 12%fin (only parsing).
+Notation TabProcessRegister := 13%fin (only parsing).
 
-Inductive COMPT' : Set := UserInput | Output | Tab | CProc | DomainBar.
+Inductive COMPT' : Set := UserInput | Output | Tab | CProc.
 
 Definition COMPT := COMPT'.
 

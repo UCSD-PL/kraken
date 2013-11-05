@@ -29,7 +29,8 @@ extract:
 policies: clean kernel $(POLICIES:.v=.vo)
 
 %.vo: %.v
-	-timeout --foreground 1h $(COQC) $(INCLUDES) $*.v
+	$(COQC) $(INCLUDES) $*.v
+#	-timeout --foreground 1h $(COQC) $(INCLUDES) $*.v
 
 clean:
 	rm -f *.vo *.glob

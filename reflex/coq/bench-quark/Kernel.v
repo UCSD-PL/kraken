@@ -14,7 +14,7 @@ Open Scope string_scope.
 
 Module SystemFeatures <: SystemFeaturesInterface.
 
-Definition NB_MSG : nat := 15.
+Definition NB_MSG : nat := 16.
 
 (*Cookies:
 For now, we won't have cookies go through the kernel. Instead, when
@@ -55,6 +55,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   ;("TabProcessRegister", [fd_d])
   (*  Kernel -> Input (id) *)
   ;("AddrFocus", [str_d]) 
+  ;("DomainSet", [str_d])
   ].
 
 Notation TabCreate   := 0%fin (only parsing).
@@ -72,6 +73,7 @@ Notation SocketResponse := 11%fin (only parsing).
 Notation CookieChannelInit := 12%fin (only parsing).
 Notation TabProcessRegister := 13%fin (only parsing).
 Notation AddrFocus := 14%fin (only parsing).
+Notation DomainSet := 15%fin (only parsing).
 
 Inductive COMPT' : Set := UserInput | Output | Tab | CProc.
 
@@ -152,9 +154,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       [[ envd :
           seq (spawn _ envd Tab (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt))
                      0%fin (Logic.eq_refl _))
+         (seq (send (envvar envd 0%fin) DomainSet (mvar TabCreate 1%fin, tt))
          (seq (stupd _ envd v_curtab (envvar envd 0%fin))
               (send (stvar v_userinput) AddrAdd
-                    (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt))))
+                    (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt)))))
       ]]
   | UserInput, TabSwitch =>
       let envd := mk_vcdesc [] in
@@ -200,16 +203,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | Tab, URLRequest =>
       let envd := mk_vcdesc [Desc _ fd_d] in
       [[ envd :
-         ite (eq (dom_op (mvar URLRequest 0%fin)) hdlr_tab_dom)
-             (
-               seq (call _ envd (slit (str_of_string (wget)))
-                                 [mvar URLRequest 0%fin] None (Logic.eq_refl _))
-                   (send ccomp URLResponse (envvar envd 0%fin, tt))
-
-             )
-             (
-               nop
-             )
+         seq (call _ envd (slit (str_of_string (wget)))
+                   [mvar URLRequest 0%fin] None (Logic.eq_refl _))
+             (send ccomp URLResponse (envvar envd 0%fin, tt))
        ]]
   | Tab, SocketRequest =>
     let envd := mk_vcdesc [Desc _ fd_d] in
@@ -231,7 +227,8 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                  (send (envvar (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
                    TabProcessRegister (mvar CookieChannelInit 0%fin, tt))
                  (seq (spawn _ envd CProc (hdlr_tab_dom, tt) 0%fin
-                             (Logic.eq_refl _)) (
+                             (Logic.eq_refl _))
+                 (seq (send (envvar envd 0%fin) DomainSet (hdlr_tab_dom, tt))
                       (send (envvar envd 0%fin) TabProcessRegister
                             (mvar CookieChannelInit 0%fin, tt))))
       ]]

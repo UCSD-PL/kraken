@@ -532,7 +532,7 @@ Ltac simpl_nested_hsrp H :=
 
 Ltac simpl_step_isrp H :=
   repeat first
-    [ rewrite seq_rew_init in H; auto;
+    [ rewrite seq_rew_init in H;
       match type of H with
       | context [ init_state_run_cmd _ _ _ _ _ _
           (init_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j) _ _ ]
@@ -543,7 +543,7 @@ Ltac simpl_step_isrp H :=
              => simpl_step_isrp Heq; subst isrp
            end
       end
-    | rewrite ite_rew_init in H; auto;
+    | rewrite ite_rew_init in H;
       match type of H with
       | context [ if num_eq ?e1 ?e2 then _ else _ ]
         => simpl (num_eq e1 e2) in H;
@@ -561,7 +561,7 @@ Ltac simpl_step_isrp H :=
                 end
            end
       end
-    | rewrite complkup_rew_init in H; auto;
+    | rewrite complkup_rew_init in H;
       match type of H with
       | context[ match find_comp _ _ _ _ _ with | Some _ => _ | None => _ end ]
         => unfold eval_base_comp_pat, eval_base_payload_oexpr,
@@ -588,7 +588,7 @@ Ltac simpl_step_isrp H :=
 
 Ltac simpl_step_hsrp H :=
   repeat first
-    [ rewrite seq_rew in H; auto;
+    [ rewrite seq_rew in H;
       match type of H with
       | context [ hdlr_state_run_cmd _ _ _ _ _ _ _ _
           (hdlr_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ?k ?i) _ _ ]
@@ -599,7 +599,7 @@ Ltac simpl_step_hsrp H :=
              => simpl_step_hsrp Heq; subst hsrp
            end
       end
-    | rewrite ite_rew_hdlr in H; auto;
+    | rewrite ite_rew_hdlr in H;
       match type of H with
       | context [ if num_eq ?e1 ?e2 then _ else _ ]
         => simpl (num_eq e1 e2) in H;
@@ -617,7 +617,7 @@ Ltac simpl_step_hsrp H :=
                 end
            end
       end
-    | rewrite complkup_rew_hdlr in H; auto;
+    | rewrite complkup_rew_hdlr in H;
       match type of H with
       | context[ match find_comp _ _ _ _ _ with | Some _ => _ | None => _ end ]
         => unfold eval_hdlr_comp_pat, eval_hdlr_payload_oexpr,

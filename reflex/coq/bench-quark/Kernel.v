@@ -134,11 +134,13 @@ Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
   seq (stupd _ IENVD v_output (i_envvar IENVD i_output)) (
   (stupd _ IENVD v_userinput (i_envvar IENVD i_userinput))))).
 
+Definition cfg_dom : fin 2 := 1%fin.
+
 Definition hdlr_tab_dom {t envd} :=
-  cconf (envd:=envd) (t:=t) Tab Tab 0%fin (CComp PAYD COMPT COMPS KSTD Tab t envd).
+  cconf (envd:=envd) (t:=t) Tab Tab cfg_dom (CComp PAYD COMPT COMPS KSTD Tab t envd).
 
 Definition cur_tab_dom {t envd ct} :=
-  cconf (envd:=envd) (t:=t) ct Tab 0%fin (StVar _ _ _ KSTD _ _ _ v_curtab).
+  cconf (envd:=envd) (t:=t) ct Tab cfg_dom (StVar _ _ _ KSTD _ _ _ v_curtab).
 
 Definition dom_op {envd term} e :=
   unop_str envd term (Desc _ str_d) dom e.

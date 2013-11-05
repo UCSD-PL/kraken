@@ -27,8 +27,10 @@ of the new tab.*)
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [ 
   (*  Input -> Kernel *)
+   (*(id,domain)*)
   ("TabCreate", [str_d; str_d])
-  ;("TabSwitch", [str_d; str_d])
+   (*(id)*)
+  ;("TabSwitch", [str_d])
   (*  Input -> Kernel -> (focused) Tab *)
   ;("Navigate", [str_d]) 
   ;("KeyPress", [str_d]) 
@@ -84,10 +86,14 @@ Definition wget := "../test/quark/common/pywget.py".
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | UserInput => mk_compd "UserInput" (comp_dir ++ "input/run.sh")       [] (mk_vdesc [])
-  | Output    => mk_compd "Output"    (comp_dir ++ "output/output.sh")    [] (mk_vdesc [])
-  | Tab       => mk_compd "Tab"       (comp_dir ++ "tab/tab.sh")     [] (mk_vdesc [str_d;str_d])
-  | CProc     => mk_compd "CProc"     (comp_dir ++ "cookie/cookie.py")     [] (mk_vdesc [str_d])
+  | UserInput => mk_compd "UserInput" (comp_dir ++ "input/run.sh") 
+                          [] (mk_vdesc [])
+  | Output    => mk_compd "Output"    (comp_dir ++ "output/output.sh")
+                          [] (mk_vdesc [])
+  | Tab       => mk_compd "Tab"       (comp_dir ++ "tab/tab.sh")
+                          [] (mk_vdesc [str_d;str_d]) (*id,domain*)
+  | CProc     => mk_compd "CProc"     (comp_dir ++ "cookie/cookie.py")
+                          [] (mk_vdesc [str_d])
   end.
 
 (*
@@ -145,84 +151,90 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       let envd := mk_vcdesc [Comp _ Tab] in
       [[ envd :
           seq (spawn _ envd Tab (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt))
-           0%fin (Logic.eq_refl _)) (
-         (seq (stupd _ envd v_curtab (envvar envd 0%fin)))
-              (send (stvar v_userinput) AddrAdd (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt))))
+                     0%fin (Logic.eq_refl _))
+         (seq (stupd _ envd v_curtab (envvar envd 0%fin))
+              (send (stvar v_userinput) AddrAdd
+                    (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt))))
       ]]
-(*
-  | UserInput, TabCreate =>
-    
-  | Tab, ReqSocket =>
-    let envd := mk_vcdesc [Desc _ fd_d] in
-    [[ envd :
-       ite (eq (dom_op (mvar ReqSocket None)) hdlr_tab_dom)
-       (
-         seq (call _ envd (slit (str_of_string (create_socket)))
-                                [mvar ReqSocket 0%fin] 0%fin (Logic.eq_refl _))
-             (send ccomp ResSocket (envvar envd None, tt))
-       )
-       (
-         nop
-       )
-    ]]
-  | Tab, Display =>
+  | UserInput, TabSwitch =>
+      let envd := mk_vcdesc [] in
+      [[ envd :
+           complkup (envd:=envd)
+                    (mk_comp_pat _ _ Tab
+                                 (Some (mvar TabSwitch 0%fin), (None, tt)))
+                    (seq (stupd _ _ v_curtab (envvar (mk_vcdesc [Comp _ Tab]) 0%fin))
+                    (seq (send (stvar v_userinput) AddrFocus
+                               (mvar TabSwitch 0%fin, tt))
+                         (send (stvar v_curtab) RenderRequest
+                               (slit nil, tt))))
+                    nop
+      ]]
+  | UserInput, Navigate =>
+      [[ mk_vcdesc [] :
+           ite (eq (dom_op (mvar Navigate 0%fin)) cur_tab_dom)
+               (
+                 send (stvar v_curtab) Navigate (mvar Navigate 0%fin, tt)
+               )
+               (
+                 nop
+               )
+     ]]
+  | UserInput, KeyPress =>
+      [[ mk_vcdesc [] :
+           send (stvar v_curtab) KeyPress (mvar KeyPress 0%fin, tt)
+      ]]
+  | UserInput, MouseClick =>
+      [[ mk_vcdesc [] :
+           send (stvar v_curtab) MouseClick (mvar MouseClick 0%fin, tt)
+      ]]
+  | Tab, RenderCompleted =>
       [[ mk_vcdesc [] :
          ite (eq ccomp (stvar v_curtab))
              (
-               send (stvar v_output) Display (mvar Display None, tt)
+               send (stvar v_output) RenderCompleted (mvar RenderCompleted 0%fin, tt)
              )
              (
                nop
              )
        ]]
-  | Tab, ReqResource =>
+  | Tab, URLRequest =>
       let envd := mk_vcdesc [Desc _ fd_d] in
       [[ envd :
-         ite (eq (dom_op (mvar ReqResource None)) hdlr_tab_dom)
+         ite (eq (dom_op (mvar URLRequest 0%fin)) hdlr_tab_dom)
              (
                seq (call _ envd (slit (str_of_string (wget)))
-                                 [mvar ReqResource None] None (Logic.eq_refl _))
-                   (send ccomp ResResource (envvar envd None, tt))
+                                 [mvar URLRequest 0%fin] None (Logic.eq_refl _))
+                   (send ccomp URLResponse (envvar envd 0%fin, tt))
 
              )
              (
                nop
              )
        ]]
-  | Tab, CProcFD =>
+  | Tab, SocketRequest =>
+    let envd := mk_vcdesc [Desc _ fd_d] in
+    [[ envd :
+       ite (eq (dom_op (mvar SocketRequest 0%fin)) hdlr_tab_dom)
+       (
+         seq (call _ envd (slit (str_of_string (create_socket)))
+                                [mvar SocketRequest 0%fin] 0%fin (Logic.eq_refl _))
+             (send ccomp SocketResponse (envvar envd 0%fin, tt))
+       )
+       (
+         nop
+       )
+    ]]
+  | Tab, CookieChannelInit =>
       let envd := mk_vcdesc [Comp _ CProc] in
       [[ envd :
         complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some hdlr_tab_dom, tt))
                  (send (envvar (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
-                   CProcFD (mvar CProcFD 0%fin, tt))
-                 (seq (spawn _ envd CProc (hdlr_tab_dom, tt) 0%fin (Logic.eq_refl _)) (
-                      (send (envvar envd 0%fin) CProcFD (mvar CProcFD 0%fin, tt))))
+                   TabProcessRegister (mvar CookieChannelInit 0%fin, tt))
+                 (seq (spawn _ envd CProc (hdlr_tab_dom, tt) 0%fin
+                             (Logic.eq_refl _)) (
+                      (send (envvar envd 0%fin) TabProcessRegister
+                            (mvar CookieChannelInit 0%fin, tt))))
       ]]
-  | UserInput, KeyPress =>
-      [[ mk_vcdesc [] :
-      seq (send (stvar v_curtab) KeyPress (mvar KeyPress None, tt))
-      nop ]]
-  | UserInput, MouseClick =>
-      [[ mk_vcdesc [] :
-      seq (send (stvar v_curtab) MouseClick
-        (mvar MouseClick 0%fin, (mvar MouseClick 1%fin, (mvar MouseClick 2%fin, tt))))
-      nop ]]
-  | UserInput, NewTab =>
-      let envd := mk_vcdesc [Comp _ Tab] in
-      [[ envd :
-         seq (spawn _ envd Tab (mvar NewTab 0%fin, tt) 0%fin (Logic.eq_refl _)) (
-             (stupd _ envd v_curtab (envvar envd 0%fin)))
-      ]]
-  | UserInput, Navigate =>
-     [[ mk_vcdesc [] :
-        ite (eq (dom_op (mvar Navigate 0%fin)) cur_tab_dom)
-            (
-              send (stvar v_curtab) Go (mvar Navigate 0%fin, tt)
-            )
-            (
-              nop
-            )
-     ]]*)
   | _, _ =>
     [[ mk_vcdesc [] : nop ]]
   end.

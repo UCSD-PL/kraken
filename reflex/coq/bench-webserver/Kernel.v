@@ -91,21 +91,21 @@ Definition COMPT := COMPT'.
 Definition COMPTDEC : forall (x y : COMPT), decide (x = y).
 Proof. decide equality. Defined.
 
-Definition comp_dir := "".
+Definition comp_dir := "../test/webserver/".
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
   | AccessControl => mk_compd
-                     "AccessControl" (comp_dir ++ "/access-control.py") []
+                     "AccessControl" (comp_dir ++ "access-control.py") []
                      (mk_vdesc [])
   | Disk  => mk_compd
-             "Disk" (comp_dir ++ "/disk.py") []
+             "Disk" (comp_dir ++ "disk.py") []
              (mk_vdesc [])
   | Listener  => mk_compd
-                 "Listener" (comp_dir ++ "/listener.py") []
+                 "Listener" (comp_dir ++ "listener.py") []
                  (mk_vdesc [])
   | Client  => mk_compd
-               "Client" (comp_dir ++ "/client.py") []
+               "Client" (comp_dir ++ "client.py") []
                (mk_vdesc [str_d; str_d])
   end.
 

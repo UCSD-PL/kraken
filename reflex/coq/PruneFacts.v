@@ -841,6 +841,81 @@ Proof.
       simpl. apply IHn; auto.
 Qed.
 
+Definition desc_eq_dec {d:desc} :
+  forall (e1 e2:s[[d]]), decide (e1 = e2) :=
+  match d with
+  | num_d => num_eq
+  | str_d => str_eq
+  | fd_d  => fd_eq
+  end.
+
+Definition elt_incl_bool {d:desc} (oelt1 oelt2:option s[[d]]) : bool :=
+  match oelt2 with
+  | Some e1 =>
+    match oelt1 with
+    | Some e2 => if desc_eq_dec e1 e2 then true else false
+    | None    => false
+    end
+  | None    => true
+  end.
+
+Lemma elt_incl_bool_sound : forall (d:desc) (oelt1 oelt2:option s[[d]]),
+  elt_incl_bool oelt1 oelt2 = true ->
+  elt_incl d oelt1 oelt2.
+Proof.
+  unfold elt_incl, elt_incl_bool, desc_eq_dec. intros d oelt1 oelt2 Hincl elt.
+  unfold elt_match. destruct oelt2; destruct oelt1; destruct d; auto;
+    repeat match goal with
+    | [ |- context [num_eq ?e1 ?e2] ]
+      => destruct (num_eq e1 e2)
+    | [ _ : context [num_eq ?e1 ?e2] |- _ ]
+      => destruct (num_eq e1 e2)
+    | [ |- context [str_eq ?e1 ?e2] ]
+      => destruct (str_eq e1 e2)
+    | [ _ : context [str_eq ?e1 ?e2] |- _ ]
+      => destruct (str_eq e1 e2)
+    | [ |- context [fd_eq ?e1 ?e2] ]
+      => destruct (fd_eq e1 e2)
+    | [ _ : context [fd_eq ?e1 ?e2] |- _ ]
+      => destruct (fd_eq e1 e2)
+    end; intuition congruence.
+Qed.
+
+Fixpoint cfgp_incl_bool (n:nat) :
+  forall (vd:svec desc n) (v1 v2:shvec sdenote_desc_conc_pat vd), bool :=
+  match n with
+  | O => fun _ _ _ => true
+  | S n' => fun vd =>
+    match vd with
+    | (vd0, vd') => fun v1 v2 =>
+      andb (elt_incl_bool (fst v1) (fst v2))
+           (cfgp_incl_bool n' vd' (snd v1) (snd v2))
+    end
+  end.
+
+Lemma cfgp_incl_bool_sound : forall (n:nat)
+  (vd:svec desc n) (v1 v2:shvec sdenote_desc_conc_pat vd),
+  cfgp_incl_bool n vd v1 v2 = true ->
+  cfgp_incl (existT _ n vd) v1 v2.
+Proof.
+  intros n vd v1 v2 Hincl cfg.
+  induction n.
+    auto.
+
+    destruct vd; destruct v1; destruct v2;
+      destruct cfg; simpl in *. apply andb_prop in Hincl.
+      destruct Hincl as [Helt_incl Hrest_incl].
+      apply elt_incl_bool_sound in Helt_incl.
+      unfold elt_incl in *; simpl in *.
+      specialize (Helt_incl s4).
+      repeat match goal with
+             |- context[elt_match ?d ?e1 ?e2] =>
+               destruct (elt_match d e1 e2)
+             end; simpl; auto; discriminate.
+Qed.
+
+Check cp_incl_dec.
+
 Definition is_high_comp_pat ct mt envd cp clblr cfgp : bool :=
   let conf := peval_payload_oexpr ct _ _ _ _
     (comp_pat_conf COMPT COMPS (hdlr_term ct mt) envd cp) 

@@ -21,14 +21,18 @@ do (
   $COQC $BENCHINCLUDES Kernel.v;
   for b in `find . -name "Policy*.v"`;
   do (
-    echo `basename $b .v`;
+    policy=`basename $b .v`;
+    echo $policy;
     echo -n `basename $d`,    | sed -e "s/^$PREFIX-//" >> ../$BENCHFULL.csv;
-    echo -n `basename $b .v`, | sed -e "s/^Policy//"   >> ../$BENCHFULL.csv;
+    echo -n `basename $b .v`\
+      | sed -e "s/^Policy//"\
+      | ../benchnames.py >> ../$BENCHFULL.csv;
+    echo -n , >> ../$BENCHFULL.csv;
     coqres=`timeout --foreground 1h $COQC $BENCHINCLUDES $b 2>&1`;
     status=$?;
     coqtime=`echo "$coqres" \
       | grep "Finished transaction" \
-      | sed -r 's/Finished transaction in (.*)/\1/'
+      | sed -r 's/Finished transaction in (.*)\. secs.*/\1/'
       `;
     if [[ "$status" = "124" ]];
     then echo "Timeout" >> ../$BENCHFULL.csv;
@@ -41,7 +45,7 @@ do (
             | tr -d '"'\
             | sed -e 's/_/\\_/'\
             | sed -r 's/(.*)/{\1}/' >> ../$BENCHFULL.csv;
-        else echo {$coqtime} >> ../$BENCHFULL.csv;
+        else echo $coqtime >> ../$BENCHFULL.csv;
         fi;
       else
         echo "Error with status code: $status" >> ../$BENCHFULL.csv;

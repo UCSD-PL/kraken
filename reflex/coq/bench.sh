@@ -12,7 +12,7 @@ BENCHNAME=$PREFIX-`date +"%y-%m-%d-%H:%M:%S"`
 BENCHDIR=benchmarks
 BENCHFULL=$BENCHDIR/$BENCHNAME
 
-echo "Benchmark,Policy,Time" >> $BENCHFULL.csv
+echo "Benchmark,Policy,Time (Ltac),Time (Qed)" >> $BENCHFULL.csv
 
 for d in `ls -d -- $PREFIX-*`;
 do (
@@ -30,9 +30,10 @@ do (
     echo -n , >> ../$BENCHFULL.csv;
     coqres=`timeout --foreground 1h $COQC $BENCHINCLUDES $b 2>&1`;
     status=$?;
-    coqtime=`echo "$coqres" \
-      | grep "Finished transaction" \
-      | sed -r 's/Finished transaction in (.*)\. secs.*/\1/'
+    coqtime=`echo -n "$coqres"\
+      | grep "Finished transaction"\
+      | sed -r 's/Finished transaction in (.*)\. secs.*/\1/'\
+      | paste -sd ","
       `;
     if [[ "$status" = "124" ]];
     then echo "Timeout" >> ../$BENCHFULL.csv;

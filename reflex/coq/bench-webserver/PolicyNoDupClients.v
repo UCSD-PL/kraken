@@ -13,4 +13,5 @@ Theorem auth_correct : forall st tr u a,
     tr.
 Proof.
   Time solve [crush].
-Qed.
+Time Qed.
+

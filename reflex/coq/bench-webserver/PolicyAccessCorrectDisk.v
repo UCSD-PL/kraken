@@ -17,4 +17,5 @@ Theorem access_correct_disk : forall st tr u a r f,
     tr.
 Proof.
   Time solve [crush].
-Qed.
+Time Qed.
+

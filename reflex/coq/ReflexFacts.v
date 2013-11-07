@@ -1,4 +1,5 @@
 Require Import Reflex.
+Require Import ReflexBase.
 Require Import ActionMatch.
 
 Lemma find_comp_suc_match :
@@ -265,4 +266,189 @@ Lemma ite_rew_hdlr :
       else hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0 cmd1 (fst i).
 Proof.
   auto.
+Qed.
+
+Lemma comp_in_ve :
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPTDEC COMPS KSTD HANDLERS s s' cc m i c,
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS cc m i s s' ->
+  List.In c (kcs _ _ _ _ s) -> List.In c (kcs _ _ _ _ s').
+Proof.
+  intros NB_MSG PAYD COMPT COMPTDEC COMPS KSTD HANDLERS s s' cc m i c Hve Hin.
+  destruct Hve. subst hdlrs.
+  destruct (HANDLERS (tag PAYD m) (comp_type COMPT COMPS cc)) as [envd cmd].
+  subst s'. simpl in *. unfold kstate_run_prog.
+  assert (forall c,
+    List.In c (kcs _ _ _ _ s) ->
+    List.In c (kcs _ _ _ _ (hdlr_kst _ _ _ _ _
+                (default_hdlr_state PAYD COMPT COMPS KSTD
+                (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd)))) as Hcs by auto.
+  revert Hcs. revert Hin.
+  generalize (default_hdlr_state PAYD COMPT COMPS KSTD
+    (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd).
+  intros s' Hin Hcs.
+  generalize dependent c.
+  induction cmd; simpl in *; auto.
+    destruct i as [i1 i2].
+    match goal with
+    |- context[ if ?e then _ else _ ]
+      => destruct e
+    end; eauto.
+
+    destruct s'; simpl in *; auto.
+
+    destruct s'; simpl in *; auto.
+
+    destruct s'; simpl in *; auto.
+
+    destruct s'; simpl in *; auto.
+
+    destruct s'; simpl in *;
+    match goal with
+    |- context[ match ?e with | Some _ => _ | None => _ end ]
+      => destruct e
+    end; simpl in *; eauto.
+Qed.
+
+Lemma comp_in_prop :
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPTDEC COMPS KSTD HANDLERS s s'
+         (P:comp _ _ -> Prop) cc m i,
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS cc m i s s' ->
+  (forall c, List.In c (kcs _ _ _ _ s') -> P c) ->
+  forall c, List.In c (kcs _ _ _ _ s) -> P c.
+Proof.
+  intros NB_MSG PAYD COMPT COMPTDEC COMPS KSTD HANDLERS s s' P cc m i Hve Hin c ?.
+  apply Hin. eapply comp_in_ve; eauto.
+Qed.
+
+Fixpoint no_spawn {NB_MSG} {PAYD:vvdesc NB_MSG} {COMPT:Set}
+         (COMPTDEC:forall (x y : COMPT), decide (x = y))
+         {COMPS KSTD envd term}
+         ct (c:cmd PAYD COMPT COMPS KSTD term envd) :=
+  match c with
+  | Reflex.Spawn _ ct' _ _ _ =>
+    if COMPTDEC ct ct'
+    then False
+    else True
+  | Reflex.Seq _ c1 c2 =>
+    no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
+  | Reflex.Ite _ _ c1 c2 =>
+    no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
+  | Reflex.CompLkup _ _ c1 c2 =>
+    no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
+  | _ => True
+  end.
+
+Lemma no_spawn_cs :
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPTDEC COMPS KSTD HANDLERS s s' cc m i c,
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS cc m i s s' ->
+  no_spawn COMPTDEC (comp_type _ _ c) (projT2 (HANDLERS (tag _ m) (comp_type _ _ cc))) ->
+  List.In c (kcs _ _ _ _ s') ->
+  List.In c (kcs _ _ _ _ s).
+Proof.
+  intros NB_MSG PAYD COMPT COMPTDEC COMPS KSTD HANDLERS
+         s s' cc m i c Hve Hno_spawn Hin.
+  destruct Hve. subst hdlrs.
+  destruct (HANDLERS (tag PAYD m) (comp_type COMPT COMPS cc)) as [envd cmd].
+  subst s'. unfold kstate_run_prog in *. simpl in *.
+  assert (List.In c (kcs _ _ _ _ (hdlr_kst _ _ _ _ _
+                (default_hdlr_state PAYD COMPT COMPS KSTD
+                (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd))) ->
+          List.In c (kcs _ _ _ _ s)) as Hcs by auto.
+  revert Hin Hcs.
+  generalize (default_hdlr_state PAYD COMPT COMPS KSTD
+    (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd).
+  intros s' Hin Hcs.
+  generalize dependent c.
+  induction cmd; intros; auto; simpl in *.
+    destruct i as [i1 i2].
+    destruct Hno_spawn.
+    eauto.
+
+    destruct i as [i1 i2].
+    destruct Hno_spawn.
+    match type of Hin with
+    | context [ if ?e then _ else _ ]
+      => destruct e
+    end; eauto.
+
+    destruct s'; simpl in *; auto.
+
+    destruct s'; simpl in *;
+    destruct c; simpl in *;
+    destruct (COMPTDEC comp_type t);
+    destruct Hin; try contradiction;
+    try congruence; auto.
+
+    destruct s'; simpl in *; auto.
+
+    destruct s'; simpl in *; auto.
+
+    destruct i as [i1 i2].
+    destruct Hno_spawn.
+    destruct s'; simpl in *.
+    match type of Hin with
+    | context [ match ?e with | Some _ => _ | None => _ end ]
+      => destruct e
+    end; eauto.
+Qed.
+
+Fixpoint no_stupd {NB_MSG} {PAYD:vvdesc NB_MSG} {COMPT:Set}
+         {COMPS KSTD envd term}
+         (c:cmd PAYD COMPT COMPS KSTD term envd) :=
+  match c with
+  | Reflex.Seq _ c1 c2 =>
+    no_stupd c1 /\ no_stupd c2
+  | Reflex.Ite _ _ c1 c2 =>
+    no_stupd c1 /\ no_stupd c2
+  | Reflex.CompLkup _ _ c1 c2 =>
+    no_stupd c1 /\ no_stupd c2
+  | Reflex.StUpd _ _ _ => False
+  | _ => True
+  end.
+
+Lemma no_stupd_kst :
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPTDEC COMPS KSTD HANDLERS s s' cc m i,
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS cc m i s s' ->
+  no_stupd (projT2 (HANDLERS (tag _ m) (comp_type _ _ cc))) ->
+  kst _ _ _ _ s' = kst _ _ _ _ s.
+Proof.
+  intros NB_MSG PAYD COMPT COMPTDEC COMPS KSTD HANDLERS
+         s s' cc m i Hve Hno_stupd.
+  destruct Hve. subst hdlrs.
+  destruct (HANDLERS (tag PAYD m) (comp_type COMPT COMPS cc)) as [envd cmd].
+  subst s'. unfold kstate_run_prog in *. simpl in *.
+  assert (kst _ _ _ _ (hdlr_kst _ _ _ _ _ (default_hdlr_state PAYD COMPT COMPS KSTD
+              (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd)) =
+          kst _ _ _ _ s) as Hst by auto.
+  revert Hst.
+  generalize (default_hdlr_state PAYD COMPT COMPS KSTD
+    (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd).
+  induction cmd; intros; auto; simpl in *.
+    destruct i as [i1 i2].
+    destruct Hno_stupd.
+    erewrite IHcmd2; eauto.
+
+    destruct i as [i1 i2].
+    destruct Hno_stupd.
+    match goal with
+    |- context [ if ?e then _ else _ ]
+      => destruct e
+    end; eauto.
+
+    destruct h; simpl in *; auto.
+
+    destruct h; simpl in *; auto.
+
+    destruct h; simpl in *; auto.
+
+    contradiction.
+
+    destruct i as [i1 i2].
+    destruct Hno_stupd.
+    destruct h; simpl in *.
+    match goal with
+    |- context [ match ?e with | Some _ => _ | None => _ end ]
+      => destruct e
+    end; eauto.
+      simpl in *. erewrite IHcmd1; eauto.
 Qed.

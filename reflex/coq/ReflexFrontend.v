@@ -810,7 +810,7 @@ Ltac unpack prune_init prune_hdlr :=
   intros;
   match goal with
   | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input _ |- _ ]
-    => prune_init;
+    => try solve [prune_init];
        destruct H;
        match goal with
        | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ ?prog _,
@@ -820,7 +820,7 @@ Ltac unpack prune_init prune_hdlr :=
             repeat simpl_step_isrp Hs; subst s'; simpl in *
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
-    => destruct_msg; destruct_comp; prune_hdlr;
+    => destruct_msg; destruct_comp; try solve [prune_hdlr];
        destruct H;
        match goal with
        | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
@@ -1144,6 +1144,42 @@ Ltac rewrite_st_eqs :=
       => rewrite <- H in *
   end.
 
+Ltac no_disabler_init_tac disabler :=
+  match goal with
+  | [ _ : InitialState ?payd ?compt ?comptdec ?comps ?kstd ?ienvd ?init ?i ?s,
+      _ : Reflex.ktr _ _ _ _ ?s = inhabits ?trs |- _ ]
+    => apply (no_disabler_init payd compt comptdec comps ienvd kstd init i
+                               disabler s)
+       with (tr:=trs); auto; simpl; intuition; fail
+end.
+
+Ltac no_disabler_hdlr_tac disabler :=
+  match goal with
+  | [ _ : @Reflex.ValidExchange ?nb_msg ?payd ?compt ?comptdec ?comps ?kstd ?handlers ?cc ?mm ?i ?s ?s',
+      _ : Reflex.ktr _ _ _ _ ?s' = inhabits ?tr' |- _ ]
+    => apply (no_disabler_hdlr payd compt comptdec comps kstd handlers cc mm i
+         disabler s s') with (tr:=tr');
+       auto;
+       match goal with
+       | [ |- no_match _ _ _ _ _ _ _ ]
+         => simpl; intuition; fail 1
+       | [ IHReach : context[forall tr' : Reflex.KTrace _ _ _, _] |- _ ]
+         => apply IHReach; auto;
+            match goal with
+            | [ |- List.In _ (Reflex.kcs _ _ _ _ _) ]
+                => solve [apply (no_spawn_cs nb_msg payd compt comptdec comps
+                                      kstd handlers s s' cc mm i); simpl; auto]
+            | [ |- context [ Reflex.kst _ _ _ _ _ ] ]
+                => solve [rewrite <- (no_stupd_kst nb_msg payd compt comptdec comps kstd handlers
+                                         s s' cc mm i); simpl; auto]
+            | [ |- context [ Reflex.kcs _ _ _ _ _ ] ]
+                => solve [apply (comp_in_prop nb_msg payd compt
+                                       comptdec comps kstd handlers s s' _ cc mm i);
+                   auto]
+            end
+       end
+  end.
+
 (*This function should be passed a state. It will then attempt to prove
   that there are no instances of the disabler (should it be passed the disabler?)
   anywhere in the trace of that state.*)
@@ -1154,8 +1190,9 @@ Ltac forall_not_disabler n act Hact disabler :=
 (*  destruct_action_matches;*)
   try solve [impossible];
   extract_match_facts;
-  simpl in Hact; decompose [or] Hact; try subst act;
-  try solve [auto | tauto | intuition];
+  simpl in Hact; decompose [or] Hact;
+  try (subst act; solve [auto | tauto | intuition]);
+  try contradiction;
 (*   (*There may be conditions on s' (the intermediate state). We want
     to use these conditions to derive conditions on s.*)
   subst_states;*)
@@ -1168,9 +1205,13 @@ Ltac forall_not_disabler n act Hact disabler :=
              => clear H
            end
       end;
+  try match goal with
+      | [ H : List.In _ (Reflex.kcs _ _ _ _ _) |- _ ]
+          => clear H
+      end;
   (*Should this take s as an argument?*)
-  let prune_init := try solve [eapply no_disabler_init with (oact:=disabler); prune_finish] in
-  let prune_hdlr := try solve [eapply no_disabler_hdlr with (oact:=disabler); prune_finish] in
+  let prune_init := try solve [no_disabler_init_tac disabler] in
+  let prune_hdlr := try solve [no_disabler_hdlr_tac disabler] in
   reach_induction prune_init prune_hdlr;
   match goal with
   | [ H :  context[ List.In ?act _ ] |- _ ]
@@ -1231,7 +1272,7 @@ Ltac match_disables disabler :=
             [ match_disables disabler
              | let act := fresh "act" in
                let Hact := fresh "Hact" in
-               intros act Hact; try solve [forall_not_disabler 3 act Hact disabler] ])
+               intros act Hact; try forall_not_disabler 3 act Hact disabler ])
          | tauto ||
            (destruct_neg_conjuncts A; apply D_not_disablee;
             [ match_disables disabler | assumption ]) ]

@@ -8,14 +8,14 @@ try:
   sys.stdout.write(
 {
 'AirbagImmAfterCrash'     : 'Airbags are deployed immediately after crash',
-'CrashDisablesLock'       : 'Crash disables the locks',
-'CrashEnablesAirbag'      : 'Crash enables the airbags',
+'CrashDisablesLock'       : 'Doors do not lock after crash',
+'CrashEnablesAirbag'      : 'Airbags only deploy if there has been a crash',
 'CruiseOffImmAfterBrakes' : 'Cruise control turns off immediately after braking',
-'NonInterference'         : 'Non-interference',
+'NonInterference'         : 'Components do not interfere with the engine',
 'UnlockImmAfterAirbag'    : 'Doors unlock immediately after the airbags are deployed',
 'CProcUnique'             : 'Cookie processes are unique per domain',
 'CookieSameDomain'        : 'Cookies may only be forwarded to the cookie process of the proper domain',
-'CounterObeyed'           : 'Login messages are tagged with the count dictated by the Counter component',
+'CounterObeyed'           : 'Login attempts are preceeded by approval from counter component',
 'LoginAtt0'               : 'The first attempt to login disables itself',
 'LoginAtt1'               : 'The second attempt to login disables itself',
 'LoginAtt2'               : 'The third attempt to login disables all attempts',

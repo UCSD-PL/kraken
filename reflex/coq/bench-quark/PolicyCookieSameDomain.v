@@ -8,7 +8,7 @@ Local Opaque str_of_string.
 Import SystemFeatures Language Spec.
 
 Definition Tab_pat d : conc_pat COMPT COMPS :=
-  Build_conc_pat COMPT COMPS Tab (Some d, (None, tt)).
+  Build_conc_pat COMPT COMPS Tab (None, (Some d, tt)).
 
 Definition CK_pat d : conc_pat COMPT COMPS :=
   Build_conc_pat COMPT COMPS CProc (Some d, tt).
@@ -19,10 +19,10 @@ Theorem enable : forall st tr d f,
   Enables PAYD COMPT COMPS COMPTDEC
     (KORecv PAYD COMPT COMPS (Some (Tab_pat d))
       (Some (Build_opt_msg PAYD
-        CProcFD (Some f, tt))))
+        CookieChannelInit (Some f, tt))))
     (KOSend PAYD COMPT COMPS (Some (CK_pat d))
       (Some (Build_opt_msg PAYD
-        CProcFD (Some f, tt))))
+        TabProcessRegister (Some f, tt))))
           tr.
 Proof.
   Time solve [crush].

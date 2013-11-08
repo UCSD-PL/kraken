@@ -8,7 +8,7 @@ Local Opaque str_of_string.
 Import SystemFeatures Language Spec.
 
 Definition Tab_pat id : conc_pat COMPT COMPS :=
-  Build_conc_pat COMPT COMPS Tab (None, (Some id, tt)).
+  Build_conc_pat COMPT COMPS Tab (Some id, (None, tt)).
 
 Theorem enable : forall st tr id,
   Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->

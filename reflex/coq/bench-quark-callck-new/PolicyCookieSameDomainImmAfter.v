@@ -16,7 +16,7 @@ Theorem imm_after : forall st tr f,
   ImmAfter PAYD COMPT COMPS COMPTDEC
     (KOSend PAYD COMPT COMPS (Some (Tab_pat))
             (Some (Build_opt_msg PAYD
-                                 CProcFD (Some f, tt))))
+                                 CookieProcessRegister (Some f, tt))))
     (KOCall PAYD COMPT COMPS
             (Some (str_of_string create_ckchan)) (Some nil) (Some f))
     tr.

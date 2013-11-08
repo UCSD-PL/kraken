@@ -18,14 +18,6 @@ Module SystemFeatures <: SystemFeaturesInterface.
 
 Definition NB_MSG : nat := 16.
 
-(*Cookies:
-For now, we won't have cookies go through the kernel. Instead, when
-a tab is spawned for a new domain, a new cookie proc will be spawned for that
-domain. The fd for that cookie proc will be sent to the tab and the fd for the
-tab will be sent to the cookie proc. Each subsequent tab spawned for that domain
-will be sent the fd of the cookie proc and the cookie proc will be sent the fd
-of the new tab.*)
-
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   [ 
   (*  Input -> Kernel *)
@@ -154,12 +146,14 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | UserInput, TabCreate =>
       let envd := mk_vcdesc [Comp _ Tab] in
       [[ envd :
-          seq (spawn _ envd Tab (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt))
-                     0%fin (Logic.eq_refl _))
-         (seq (send (envvar envd 0%fin) DomainSet (mvar TabCreate 1%fin, tt))
-         (seq (stupd _ envd v_curtab (envvar envd 0%fin))
-              (send (stvar v_userinput) AddrAdd
-                    (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt)))))
+          complkup (envd:=envd) (mk_comp_pat _ _ Tab (Some (mvar TabCreate 0%fin), (None, tt)))
+                   nop
+                   (seq (spawn _ envd Tab (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt))
+                               0%fin (Logic.eq_refl _))
+                   (seq (send (envvar envd 0%fin) DomainSet (mvar TabCreate 1%fin, tt))
+                   (seq (stupd _ envd v_curtab (envvar envd 0%fin))
+                        (send (stvar v_userinput) AddrAdd
+                              (mvar TabCreate 0%fin, (mvar TabCreate 1%fin, tt))))))
       ]]
   | UserInput, TabSwitch =>
       let envd := mk_vcdesc [] in
@@ -224,9 +218,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
     ]]
   | Tab, CookieChannelInit =>
       let envd := mk_vcdesc [Comp _ CProc] in
+      let envd' := (mk_vcdesc [Comp _ CProc; Comp _ CProc]) in
       [[ envd :
         complkup (envd:=envd) (mk_comp_pat _ _ CProc (Some hdlr_tab_dom, tt))
-                 (send (envvar (mk_vcdesc [Comp _ CProc; Comp _ CProc]) 1%fin)
+                 (send (envvar envd' 1%fin)
                    TabProcessRegister (mvar CookieChannelInit 0%fin, tt))
                  (seq (spawn _ envd CProc (hdlr_tab_dom, tt) 0%fin
                              (Logic.eq_refl _))

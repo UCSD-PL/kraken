@@ -526,27 +526,23 @@ Proof.
   intros. eapply no_match_init; eauto.
 Qed.
 
-Lemma no_disabler_hdlr : forall c m input oact s s',
+Lemma no_disabler_hdlr : forall c m input oact s s' act,
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
   no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact ->
   not_recv_match (comp_type _ _ c) (tag _ m) oact ->
   not_select_match (comp_type _ _ c) oact ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
-   ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
-   forall act,
      List.In act tr ->
+     ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
      ~ActionMatch.AMatch _ _ _ COMPTDEC oact act) ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
-   ktr PAYD COMPT COMPS KSTD s' = inhabits tr ->
-   forall act,
-     List.In act tr ->
-     ~ActionMatch.AMatch _ _ _ COMPTDEC oact act.
+    List.In act tr ->
+    ktr PAYD COMPT COMPS KSTD s' = inhabits tr ->
+    ~ActionMatch.AMatch _ _ _ COMPTDEC oact act.
 Proof.
-  intros. generalize dependent act.
+  intros. revert H4.
   eapply no_match_hdlr with
-  (P:=fun tr => forall act,
-                  List.In act tr ->
-                  ~ActionMatch.AMatch _ _ _ COMPTDEC oact act);
+  (P:=fun tr => List.In act tr -> ~ActionMatch.AMatch _ _ _ COMPTDEC oact act);
     eauto.
   intros. apply List.in_app_or in H7.
   destruct H7; eauto.

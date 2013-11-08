@@ -666,12 +666,12 @@ Ltac low_step :=
               => simpl in hdlrs;
                  unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
                  unfold hdlrs in Heq;
-                 symb_exec_low Heq;                  
+                 symb_exec_low Heq;
                  subst ksrp
             end
        end;
        simpl; repeat split;
-       match goal with
+       abstract match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
          => ho_eq_tac ho_eq_solve_low Hlow
        | [ |- vars_eq _ _ _ _ _ _ _ ]
@@ -706,7 +706,7 @@ Ltac symb_exec_high Hs1 Hs2 :=
                rewrite H1 in H2; inversion H2
           end).*)
 
-Ltac high_steps :=
+Ltac high_step :=
   unfold high_ok; intros;
   match goal with
   | [ Hve1 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s1 _,
@@ -732,12 +732,12 @@ Ltac high_steps :=
                  unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs2;
                  unfold hdlrs1 in Heq1, Heq2;
                  unfold hdlrs2 in Heq1, Heq2;
-                 symb_exec_high Heq1 Heq2;                  
+                 symb_exec_high Heq1 Heq2;
                  subst ksrp1; subst ksrp2
             end
        end;
        simpl; repeat split;
-       match goal with
+       abstract match goal with
        | [ |- high_out_eq _ _ _ _ _ _ _ ]
          => ho_eq_tac ho_eq_solve_high Hhigh
        | [ |- vars_eq _ _ _ _ _ _ _ ]
@@ -749,7 +749,7 @@ Ltac high_steps :=
   end.
 
 Ltac ni :=
-  intros; apply ni_suf; [low_step | high_steps].
+  intros; apply ni_suf; [low_step | high_step].
 
 (*Policy language tactics*)
 
@@ -1213,7 +1213,7 @@ Ltac forall_not_disabler n act Hact disabler :=
   let prune_init := try solve [no_disabler_init_tac disabler] in
   let prune_hdlr := try solve [no_disabler_hdlr_tac disabler] in
   reach_induction prune_init prune_hdlr;
-  match goal with
+  abstract match goal with
   | [ H :  context[ List.In ?act _ ] |- _ ]
       => simpl in *; decompose [or] H; try subst;
          try specialize_comp_hyps; autounfold; simpl;
@@ -1362,40 +1362,23 @@ Ltac match_immafter :=
       => apply IA_nB; [ match_immafter | act_match ]
   end.
 
-Ltac build_prune_tac lem :=
-  try solve [ eapply lem; prune_finish].
+Ltac crush_with_lem lem_init lem_hdlr match_policy :=
+  let prune_init := solve [ eapply lem_init; prune_finish ] in
+  let prune_hdlr := solve [ eapply lem_hdlr; prune_finish ] in
+  reach_induction prune_init prune_hdlr;
+  try abstract match_policy.
 
 Ltac crush :=
   intros;
   match goal with
   | [ |- context [ ImmBefore _ _ _ _ _ _ _ ] ]
-     => let lem_init := constr:(@no_after_IB_init) in
-        let lem_hdlr := constr:(@no_after_IB_hdlr) in
-        let prune_init := build_prune_tac lem_init in
-        let prune_hdlr := build_prune_tac lem_hdlr in
-        reach_induction prune_init prune_hdlr;
-        try abstract match_immbefore
+    => crush_with_lem (@no_after_IB_init) (@no_after_IB_hdlr) ltac:(idtac; match_immbefore)
   | [ |- context [ ImmAfter _ _ _ _ _ _ _ ] ]
-     => let lem_init := constr:(@no_before_IA_init) in
-        let lem_hdlr := constr:(@no_before_IA_hdlr) in
-        let prune_init := build_prune_tac lem_init in
-        let prune_hdlr := build_prune_tac lem_hdlr in
-        reach_induction prune_init prune_hdlr;
-        try abstract match_immafter
+    => crush_with_lem (@no_before_IA_init) (@no_before_IA_hdlr) ltac:(idtac; match_immafter)
   | [ |- context [ Enables _ _ _ _ _ _ _ ] ]
-     => let lem_init := constr:(@no_enablee_init) in
-        let lem_hdlr := constr:(@no_enablee_hdlr) in
-        let prune_init := build_prune_tac lem_init in
-        let prune_hdlr := build_prune_tac lem_hdlr in
-        reach_induction prune_init prune_hdlr;
-        try match_releases
+    => crush_with_lem (@no_enablee_init) (@no_enablee_hdlr) ltac:(idtac; match_releases)
   | [ |- context [ Disables _ _ _ _ ?disabler _ _ ] ]
-     => let lem_init := constr:(@no_disablee_init) in
-        let lem_hdlr := constr:(@no_disablee_hdlr) in
-        let prune_init := build_prune_tac lem_init in
-        let prune_hdlr := build_prune_tac lem_hdlr in
-        reach_induction prune_init prune_hdlr;
-        try match_disables disabler
+    => crush_with_lem (@no_disablee_init) (@no_disablee_hdlr) ltac:(idtac; match_disables disabler)
   end.
 
 End MkLanguage.

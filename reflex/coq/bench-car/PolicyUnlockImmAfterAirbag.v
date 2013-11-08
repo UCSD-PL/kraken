@@ -26,4 +26,5 @@ Theorem immafter : forall st tr,
           tr.
 Proof.
   Time solve [crush].
-Qed.
+Time Qed.
+

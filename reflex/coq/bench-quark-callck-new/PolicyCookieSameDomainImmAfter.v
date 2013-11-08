@@ -22,4 +22,5 @@ Theorem imm_after : forall st tr f,
     tr.
 Proof.
   Time solve [crush].
-Qed.
+Time Qed.
+

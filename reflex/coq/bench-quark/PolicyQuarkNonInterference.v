@@ -39,4 +39,5 @@ Theorem ni : forall d, NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS (clblr d) vlblr cslblr.
 Proof.
   Time solve [ni].
-Qed.
+Time Qed.
+

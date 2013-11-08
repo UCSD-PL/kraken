@@ -24,4 +24,5 @@ Theorem enable : forall st tr u,
           tr.
 Proof.
   Time solve [crush].
-Qed.
+Time Qed.
+

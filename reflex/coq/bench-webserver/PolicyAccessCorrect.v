@@ -17,4 +17,5 @@ Theorem access_correct : forall st tr u a r,
     tr.
 Proof.
   Time solve [crush].
-Qed.
+Time Qed.
+

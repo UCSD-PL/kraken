@@ -24,4 +24,5 @@ Theorem ni : NI PAYD COMPT COMPTDEC COMPS
   IENVD KSTD INIT HANDLERS clblr vlblr cslblr.
 Proof.
   Time solve [ni].
-Qed.
+Time Qed.
+

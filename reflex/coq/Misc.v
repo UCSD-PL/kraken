@@ -3,7 +3,7 @@ Require Import Ascii.
 Require Import ReflexBase.
 Require Import Reflex.
 
-Definition dom (s:str) :=
+Definition dom (d:ascii) (s:str) :=
   let fix dom_aux s n res :=
     match s with
     | nil => List.rev res
@@ -14,4 +14,4 @@ Definition dom (s:str) :=
                     end
                else dom_aux s' n (h::res)
     end in
-  List.rev (dom_aux (List.rev (fst (splitAt "/" s))) 1 nil).
+  List.rev (dom_aux (List.rev (fst (splitAt d s))) 1 nil).

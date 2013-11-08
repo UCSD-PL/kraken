@@ -133,8 +133,10 @@ let exec cprog cargs _ =
 
 let call cprog cargs _ =
   let prog = string_of_str cprog in
+  log (Printf.sprintf "call : %s " prog);
   let args = List.map string_of_str cargs in
-  let r, w = Unix.pipe () in
+  (* let r, w = Unix.pipe () in *)
+  let r, w = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   match Unix.fork () with
   | 0 -> (* child *) begin
     Unix.close r;
@@ -172,7 +174,7 @@ let recv cfd n _ =
       Unix.recv fd s 0 i []) ()
   in
   if r <> i then
-    failwith "recv - wrong # of bytes"
+    failwith (Printf.sprintf "recv - wrong # of bytes from %d (%d <> %d):(%s)" (int_of_fd fd) r i s)
   else begin
     log (Printf.sprintf "recv : %d %d -> \"%s\""
           (int_of_fd fd) i (String.escaped s));

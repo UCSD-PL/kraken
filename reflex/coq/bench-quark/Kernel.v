@@ -9,6 +9,8 @@ Require Import ReflexHVec.
 Require Import ReflexIO.
 Require Import ReflexVec.
 Require Import Misc.
+Require Import Ascii.
+
 
 Open Scope string_scope.
 
@@ -140,8 +142,8 @@ Definition hdlr_tab_dom {t envd} :=
 Definition cur_tab_dom {t envd ct} :=
   cconf (envd:=envd) (t:=t) ct Tab 1%fin (StVar _ _ _ KSTD _ _ _ v_curtab).
 
-Definition dom_op {envd term} e :=
-  unop_str envd term (Desc _ str_d) dom e.
+Definition dom_op {envd term} d e :=
+  unop_str envd term (Desc _ str_d) (dom d) e.
 
 Open Scope hdlr.
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
@@ -174,7 +176,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       ]]
   | UserInput, Navigate =>
       [[ mk_vcdesc [] :
-           ite (eq (dom_op (mvar Navigate 0%fin)) cur_tab_dom)
+           ite (eq (dom_op ("/") (mvar Navigate 0%fin)) cur_tab_dom)
                (
                  send (stvar v_curtab) Navigate (mvar Navigate 0%fin, tt)
                )
@@ -210,7 +212,7 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   | Tab, SocketRequest =>
     let envd := mk_vcdesc [Desc _ fd_d] in
     [[ envd :
-       ite (eq (dom_op (mvar SocketRequest 0%fin)) hdlr_tab_dom)
+       ite (eq (dom_op (":") (mvar SocketRequest 0%fin)) hdlr_tab_dom)
        (
          seq (call _ envd (slit (str_of_string (create_socket)))
                                 [mvar SocketRequest 0%fin] 0%fin (Logic.eq_refl _))

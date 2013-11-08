@@ -15,6 +15,7 @@ Require Import List.
 Require Import ActionMatch.
 Require Import PolLang.
 Require Import PolLangFacts.
+Require Import Opt.
 
 Module Type SystemFeaturesInterface.
   Parameter NB_MSG   : nat.
@@ -125,6 +126,12 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
 
 (*Unfortunately, I need to put tactics here because one of them
   must refer to ite in a match.*)
+Ltac run_opt o t_on t_off :=
+  match eval unfold o in o with
+  | true => t_on
+  | false => t_off
+  end.
+
 Ltac destruct_fin f :=
   match type of f with
   | False => destruct f
@@ -318,7 +325,8 @@ Ltac find_comp_eq Hs1 Hs2 :=
 Ltac destruct_find_comp' H :=
   match goal with
   | [ H' : find_comp _ _ _ _ _ = _ |- _ ]
-      =>  find_comp_eq H H'; rewrite H' in H
+      => run_opt ni_branch_prune ltac:(find_comp_eq H H'; rewrite H' in H)
+                                 ltac:(fail 0)
   | [ |- _ ]
     => let find_comp_expr :=
       match type of H with
@@ -530,7 +538,7 @@ Ltac simpl_nested_hsrp H :=
     end
   end.
 
-Ltac simpl_step_isrp H :=
+Ltac simpl_step_isrp_opt H :=
   repeat first
     [ rewrite seq_rew_init in H;
       match type of H with
@@ -540,7 +548,7 @@ Ltac simpl_step_isrp H :=
            remember (init_state_run_cmd a b c d e f g h j) as isrp;
            match goal with
            | [ Heq : isrp = _ |- _ ]
-             => simpl_step_isrp Heq; subst isrp
+             => simpl_step_isrp_opt Heq; subst isrp
            end
       end
     | rewrite ite_rew_init in H;
@@ -556,7 +564,7 @@ Ltac simpl_step_isrp H :=
                      remember (init_state_run_cmd a b c d e f g h j) as hsrp;
                      match goal with
                      | [ Heq : isrp = _ |- _ ]
-                       => simpl_step_isrp Heq; subst isrp
+                       => simpl_step_isrp_opt Heq; subst isrp
                      end
                 end
            end
@@ -576,7 +584,7 @@ Ltac simpl_step_isrp H :=
                      remember (init_state_run_cmd a b c d e f g h j) as hsrp;
                      match goal with
                      | [ Heq : isrp = _ |- _ ]
-                       => simpl_step_isrp Heq; subst isrp
+                       => simpl_step_isrp_opt Heq; subst isrp
                      end
                 end
            end
@@ -586,7 +594,15 @@ Ltac simpl_step_isrp H :=
                 simpl in H)
     ].
 
-Ltac simpl_step_hsrp H :=
+Ltac simpl_step_isrp_no_opt H :=
+  simpl in H; repeat destruct_find_comp' H;
+  repeat destruct_cond' H; simpl in H.
+
+Ltac simpl_step_isrp_run_opt H :=
+  run_opt rewrite_symb ltac:(simpl_step_isrp_opt H)
+                       ltac:(simpl_step_isrp_no_opt H).
+
+Ltac simpl_step_hsrp_opt H :=
   repeat first
     [ rewrite seq_rew in H;
       match type of H with
@@ -596,7 +612,7 @@ Ltac simpl_step_hsrp H :=
            remember (hdlr_state_run_cmd a b c d e f g h j k i) as hsrp;
            match goal with
            | [ Heq : hsrp = _ |- _ ]
-             => simpl_step_hsrp Heq; subst hsrp
+             => simpl_step_hsrp_opt Heq; subst hsrp
            end
       end
     | rewrite ite_rew_hdlr in H;
@@ -612,7 +628,7 @@ Ltac simpl_step_hsrp H :=
                      remember (hdlr_state_run_cmd a b c d e f g h j k i) as hsrp;
                      match goal with
                      | [ Heq : hsrp = _ |- _ ]
-                       => simpl_step_hsrp Heq; subst hsrp
+                       => simpl_step_hsrp_opt Heq; subst hsrp
                      end
                 end
            end
@@ -632,7 +648,7 @@ Ltac simpl_step_hsrp H :=
                      remember (hdlr_state_run_cmd a b c d e f g h j k i) as hsrp;
                      match goal with
                      | [ Heq : hsrp = _ |- _ ]
-                       => simpl_step_hsrp Heq; subst hsrp
+                       => simpl_step_hsrp_opt Heq; subst hsrp
                      end
                 end
            end
@@ -642,10 +658,18 @@ Ltac simpl_step_hsrp H :=
                 simpl in H)
     ].
 
+Ltac simpl_step_hsrp_no_opt H :=
+  simpl in H; repeat destruct_find_comp' H;
+  repeat destruct_cond' H; simpl in H.
+
+Ltac simpl_step_hsrp_run_opt H :=
+  run_opt rewrite_symb ltac:(simpl_step_hsrp_opt H)
+                       ltac:(simpl_step_hsrp_no_opt H).
+
 Ltac symb_exec_low Hs :=
   unfold kstate_run_prog in Hs;
   simpl_proj Hs;
-  simpl_step_hsrp Hs.
+  simpl_step_hsrp_run_opt Hs.
 
 Ltac low_step :=
   unfold low_ok; intros;
@@ -654,7 +678,8 @@ Ltac low_step :=
       Hlow : _ = false |- _ ]
     => destruct_msg; destruct_comp;
        try discriminate;
-       try solve [eapply prune_nop_1; eauto];
+       run_opt prune_ni ltac:(try solve [eapply prune_nop_1; eauto])
+                        ltac:(idtac);
        destruct Hve; repeat subst_inter_st;
        match goal with
        |- context [ high_out_eq _ _ _ _ _ ?s _ ]
@@ -663,9 +688,11 @@ Ltac low_step :=
             match goal with
             | [ Heq : ksrp = s,
                 hdlrs : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
-              => simpl in hdlrs;
-                 unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
-                 unfold hdlrs in Heq;
+              => run_opt rewrite_symb
+                         ltac:(simpl in hdlrs;
+                               unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
+                               unfold hdlrs in Heq)
+                         ltac:(idtac);
                  symb_exec_low Heq;                  
                  subst ksrp
             end
@@ -697,8 +724,8 @@ Ltac cs_eq_solve_high :=
 Ltac symb_exec_high Hs1 Hs2 :=
   unfold kstate_run_prog in Hs1, Hs2;
   simpl_proj Hs1; simpl_proj Hs2;
-  simpl_step_hsrp Hs1;
-  simpl_step_hsrp Hs2.
+  simpl_step_hsrp_run_opt Hs1;
+  simpl_step_hsrp_run_opt Hs2.
 (*          repeat match goal with
           | [ H1 : context [ find_comp _ _ _ _ _ ],
               H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
@@ -714,7 +741,8 @@ Ltac high_steps :=
       Hhigh : _ = true |- _ ]
     => destruct_msg; destruct_comp;
        try discriminate;
-       try solve [eapply prune_nop_2; eauto];
+       run_opt prune_ni ltac:(try solve [eapply prune_nop_2; eauto])
+                        ltac:(idtac);
        destruct Hve1; destruct Hve2;
        repeat subst_inter_st;
        match goal with
@@ -727,11 +755,13 @@ Ltac high_steps :=
             | [ Heq1 : ksrp1 = s1, Heq2 : ksrp2 = s2,
                 hdlrs1 : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _),
                 hdlrs2 : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
-              => simpl in hdlrs1; simpl in hdlrs2;
-                 unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs1;
-                 unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs2;
-                 unfold hdlrs1 in Heq1, Heq2;
-                 unfold hdlrs2 in Heq1, Heq2;
+              => run_opt rewrite_symb
+                         ltac:(simpl in hdlrs1; simpl in hdlrs2;
+                               unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs1;
+                               unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs2;
+                               unfold hdlrs1 in Heq1, Heq2;
+                               unfold hdlrs2 in Heq1, Heq2)
+                         ltac:(idtac);
                  symb_exec_high Heq1 Heq2;                  
                  subst ksrp1; subst ksrp2
             end
@@ -756,7 +786,7 @@ Ltac ni :=
 Ltac symb_exec Hs :=
   unfold kstate_run_prog in Hs;
   simpl_proj Hs;
-  simpl_step_hsrp Hs.
+  simpl_step_hsrp_run_opt Hs.
 (*  unfold kstate_run_prog in Hs;
   repeat match type of Hs with
          | context [projT1 ?e ] => simpl (projT1 e) in Hs
@@ -810,17 +840,21 @@ Ltac unpack prune_init prune_hdlr :=
   intros;
   match goal with
   | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input _ |- _ ]
-    => try solve [prune_init];
+    => run_opt prune_pol ltac:(try solve [prune_init])
+                         ltac:(idtac);
        destruct H;
        match goal with
        | [ Hs : ?s' = init_state_run_cmd _ _ _ _ _ _ _ ?prog _,
            Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
          => simpl in Htr; destruct_input input;
-            unfold prog, seq, spawn, stupd, call, ite, send, complkup in Hs;
-            repeat simpl_step_isrp Hs; subst s'; simpl in *
+            run_opt rewrite_symb
+                    ltac:(unfold prog, seq, spawn, stupd, call, ite, send, complkup in Hs)
+                    ltac:(idtac);
+            simpl_step_isrp_run_opt Hs; subst s'; simpl in *
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
-    => destruct_msg; destruct_comp; try solve [prune_hdlr];
+    => destruct_msg; destruct_comp;
+       run_opt prune_pol ltac:(try solve [prune_hdlr]) ltac:(idtac);
        destruct H;
        match goal with
        | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
@@ -835,9 +869,12 @@ Ltac unpack prune_init prune_hdlr :=
                    => remember s as ksrp;
                    match goal with
                    | [ Hksrp : ksrp = s |- _ ]
-                      => simpl in hdlrs;
-                         unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
-                         unfold hdlrs in Hksrp; symb_exec Hksrp; subst ksrp;
+                      => run_opt rewrite_symb
+                                 ltac:(simpl in hdlrs;
+                                       unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
+                                       unfold hdlrs in Hksrp)
+                                 ltac:(idtac);
+                         symb_exec Hksrp; subst ksrp;
                          simpl in *
                    end
                  end

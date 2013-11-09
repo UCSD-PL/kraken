@@ -23,7 +23,8 @@ function run_opt {
   echo "Definition rewrite_symb := $3." >> Opt.v
   echo "Definition ni_branch_prune := $4." >> Opt.v
   echo "Definition abstract_pf := $5." >> Opt.v
-  OUT=bench-$GIT_BRANCH-$6
+  T=`date +"%y-%m-%d-%H:%M:%S"`
+  OUT=bench-$GIT_BRANCH-$T-$6
   CONFIG=benchmarks/Opt-$OUT.v
   cp Opt.v $CONFIG
   make bench BENCHOUT=$OUT

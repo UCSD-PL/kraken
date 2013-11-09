@@ -22,7 +22,7 @@ function run_opt {
   echo "Definition prune_ni := $2." >> Opt.v
   echo "Definition rewrite_symb := $3." >> Opt.v
   echo "Definition ni_branch_prune := $4." >> Opt.v
-  echo "Definition ni_branch_prune := $5." >> Opt.v
+  echo "Definition abstract_pf := $5." >> Opt.v
   OUT=bench-$GIT_BRANCH-$6
   CONFIG=benchmarks/Opt-$OUT.v
   cp Opt.v $CONFIG

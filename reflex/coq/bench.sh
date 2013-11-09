@@ -1,6 +1,6 @@
 #!/bin/bash
 
-if [ $# -ne 3 ]
+if [ $# -ne 4 ]
 then echo "Usage: bench COQC YNOT PREFIX"; exit 65
 fi
 

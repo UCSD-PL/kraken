@@ -28,8 +28,25 @@ do (
       | sed -e "s/^Policy//"\
       | ../benchnames.py >> ../$BENCHFULL.csv;
     echo -n , >> ../$BENCHFULL.csv;
-    coqres=`timeout --foreground 5h $COQC $BENCHINCLUDES $b 2>&1`;
+    tmp=`mktemp`;
+    timeout 5h $COQC $BENCHINCLUDES $b &> "$tmp" &
+    timeoutpid=$!
+    coqpid=`pidof coqtop.opt`;
+    while [[ -z coqpid ]]; do
+        sleep 0.1;
+	coqpid=`pidof coqtop.opt`
+    done;
+    peak=0;
+    while ps -p $coqpid > /dev/null; do
+      sleep 1
+      sample=`ps -o rss= $coqpid 2>&1`
+      if [[ "$sample" > "$peak" ]]; then
+          peak=$sample
+      fi
+    done
+    wait $timeoutpid
     status=$?;
+    coqres=$(<$tmp) && rm $tmp
     coqtime=`echo -n "$coqres"\
       | grep "Finished transaction"\
       | sed -r 's/Finished transaction in (.*)\. secs.*/\1/'\
@@ -42,12 +59,13 @@ do (
       then
         if [[ -z "$coqtime" ]];
         then
-          echo $coqres\
+          echo -n $coqres\
             | tr -d '"'\
             | sed -e 's/_/\\_/'\
             | sed -r 's/(.*)/{\1}/' >> ../$BENCHFULL.csv;
-        else echo $coqtime >> ../$BENCHFULL.csv;
+        else echo -n $coqtime >> ../$BENCHFULL.csv;
         fi;
+        echo ,$peak >> ../$BENCHFULL.csv;
       else
         echo "Error with status code: $status" >> ../$BENCHFULL.csv;
       fi;

@@ -25,7 +25,7 @@ function run_opt {
   OUT=bench-$GIT_BRANCH-$5
   CONFIG=benchmarks/Opt-$OUT.v
   cp Opt.v $CONFIG
-
+  make bench BENCHOUT=$OUT
 }
 
 git diff-index --quiet HEAD

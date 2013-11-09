@@ -38,7 +38,7 @@ do (
     done;
     peak=0;
     while ps -p $coqpid > /dev/null; do
-      sleep 1
+      sleep 0.2
       sample=`ps -o rss= $coqpid 2>&1`
       if [[ "$sample" > "$peak" ]]; then
           peak=$sample

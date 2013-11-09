@@ -22,7 +22,8 @@ function run_opt {
   echo "Definition prune_ni := $2." >> Opt.v
   echo "Definition rewrite_symb := $3." >> Opt.v
   echo "Definition ni_branch_prune := $4." >> Opt.v
-  OUT=bench-$GIT_BRANCH-$5
+  echo "Definition ni_branch_prune := $5." >> Opt.v
+  OUT=bench-$GIT_BRANCH-$6
   CONFIG=benchmarks/Opt-$OUT.v
   cp Opt.v $CONFIG
   make bench BENCHOUT=$OUT
@@ -30,8 +31,9 @@ function run_opt {
 
 git diff-index --quiet HEAD
 if [ $? = 0 ]; then
-  run_opt false false false false 1
-  run_opt true true false false 2
-  run_opt true true true false 3
-  run_opt true true true true 4
+  run_opt false false false false false 1
+  run_opt true true false false false 2
+  run_opt true true true false false 3
+  run_opt true true true true false 4
+  run_opt true true true true true 5
 fi

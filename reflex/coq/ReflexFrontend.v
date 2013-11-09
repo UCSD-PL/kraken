@@ -671,6 +671,18 @@ Ltac symb_exec_low Hs :=
   simpl_proj Hs;
   simpl_step_hsrp_run_opt Hs.
 
+Ltac solve_low_step Hlow :=
+  idtac;
+  match goal with
+  | [ |- high_out_eq _ _ _ _ _ _ _ ]
+    => ho_eq_tac ho_eq_solve_low Hlow
+  | [ |- vars_eq _ _ _ _ _ _ _ ]
+    => auto
+  | [ |- cs_eq _ _ _ _ _ _ _ ]
+    => unfold cs_eq; simpl; auto
+  | _ => idtac
+  end.
+
 Ltac low_step :=
   unfold low_ok; intros;
   match goal with
@@ -698,15 +710,8 @@ Ltac low_step :=
             end
        end;
        simpl; repeat split;
-       match goal with
-       | [ |- high_out_eq _ _ _ _ _ _ _ ]
-         => ho_eq_tac ho_eq_solve_low Hlow
-       | [ |- vars_eq _ _ _ _ _ _ _ ]
-         => auto
-       | [ |- cs_eq _ _ _ _ _ _ _ ]
-         => unfold cs_eq; simpl; auto
-       | _ => idtac
-       end
+       run_opt abstract_pf ltac:(abstract solve_low_step Hlow)
+                           ltac:(solve_low_step Hlow)
   end.
 
 Ltac ho_eq_solve_high := auto.
@@ -733,7 +738,19 @@ Ltac symb_exec_high Hs1 Hs2 :=
                rewrite H1 in H2; inversion H2
           end).*)
 
-Ltac high_steps :=
+Ltac solve_high_step Hhigh :=
+  idtac;
+  match goal with
+  | [ |- high_out_eq _ _ _ _ _ _ _ ]
+    => ho_eq_tac ho_eq_solve_high Hhigh
+  | [ |- vars_eq _ _ _ _ _ _ _ ]
+    => vars_eq_tac
+  | [ |- cs_eq _ _ _ _ _ _ _ ]
+    => unfold cs_eq in *; simpl; cs_eq_solve_high
+  | _ => idtac
+  end.
+
+Ltac high_step :=
   unfold high_ok; intros;
   match goal with
   | [ Hve1 : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ ?s1 _,
@@ -767,19 +784,12 @@ Ltac high_steps :=
             end
        end;
        simpl; repeat split;
-       match goal with
-       | [ |- high_out_eq _ _ _ _ _ _ _ ]
-         => ho_eq_tac ho_eq_solve_high Hhigh
-       | [ |- vars_eq _ _ _ _ _ _ _ ]
-         => vars_eq_tac
-       | [ |- cs_eq _ _ _ _ _ _ _ ]
-         => unfold cs_eq in *; simpl; cs_eq_solve_high
-       | _ => idtac
-       end
+       run_opt abstract_pf ltac:(abstract solve_high_step Hhigh)
+                           ltac:(solve_high_step Hhigh)
   end.
 
 Ltac ni :=
-  intros; apply ni_suf; [low_step | high_steps].
+  intros; apply ni_suf; [low_step | high_step].
 
 (*Policy language tactics*)
 
@@ -1217,6 +1227,27 @@ Ltac no_disabler_hdlr_tac disabler :=
        end
   end.
 
+Ltac solve_forall_not_disabler n act disabler cont :=
+  match goal with
+  | [ H :  context[ List.In ?act _ ] |- _ ]
+      => simpl in *; decompose [or] H; try subst;
+         try specialize_comp_hyps; autounfold; simpl;
+         try solve [try decompose_not_match; try rewrite_st_eqs;
+                    try solve [ impossible
+                              | tauto
+                              | use_IH_disables
+                              | intuition; try congruence]
+                   | match n with
+                     | O => fail
+                     | S ?n' =>
+                       match goal with
+                       | [ Hact' : List.In act _ |- _ ]
+                           => cont n' act Hact' disabler
+                       end
+                     end
+                   ]
+  end.
+
 (*This function should be passed a state. It will then attempt to prove
   that there are no instances of the disabler (should it be passed the disabler?)
   anywhere in the trace of that state.*)
@@ -1250,25 +1281,8 @@ Ltac forall_not_disabler n act Hact disabler :=
   let prune_init := try solve [no_disabler_init_tac disabler] in
   let prune_hdlr := try solve [no_disabler_hdlr_tac disabler] in
   reach_induction prune_init prune_hdlr;
-  match goal with
-  | [ H :  context[ List.In ?act _ ] |- _ ]
-      => simpl in *; decompose [or] H; try subst;
-         try specialize_comp_hyps; autounfold; simpl;
-         try solve [try decompose_not_match; try rewrite_st_eqs;
-                    try solve [ impossible
-                              | tauto
-                              | use_IH_disables
-                              | intuition; try congruence]
-                   | match n with
-                     | O => fail
-                     | S ?n' =>
-                       match goal with
-                       | [ Hact' : List.In act _ |- _ ]
-                           => forall_not_disabler n' act Hact' disabler
-                       end
-                     end
-                   ]
-  end.
+  run_opt abstract_pf ltac:(abstract (solve_forall_not_disabler n act disabler forall_not_disabler))
+                      ltac:(solve_forall_not_disabler n act disabler forall_not_disabler).
 (*
   match goal with
   | [ H : _ = init_state_run_cmd _ _ _ _ _ _ _ _ _,
@@ -1399,40 +1413,24 @@ Ltac match_immafter :=
       => apply IA_nB; [ match_immafter | act_match ]
   end.
 
-Ltac build_prune_tac lem :=
-  try solve [ eapply lem; prune_finish].
+Ltac crush_with_lem lem_init lem_hdlr match_policy :=
+  let prune_init := solve [ eapply lem_init; prune_finish ] in
+  let prune_hdlr := solve [ eapply lem_hdlr; prune_finish ] in
+  reach_induction prune_init prune_hdlr;
+  run_opt abstract_pf ltac:(try abstract match_policy)
+                      ltac:(try match_policy).
 
 Ltac crush :=
   intros;
   match goal with
   | [ |- context [ ImmBefore _ _ _ _ _ _ _ ] ]
-     => let lem_init := constr:(@no_after_IB_init) in
-        let lem_hdlr := constr:(@no_after_IB_hdlr) in
-        let prune_init := build_prune_tac lem_init in
-        let prune_hdlr := build_prune_tac lem_hdlr in
-        reach_induction prune_init prune_hdlr;
-        try abstract match_immbefore
+    => crush_with_lem (@no_after_IB_init) (@no_after_IB_hdlr) ltac:(idtac; match_immbefore)
   | [ |- context [ ImmAfter _ _ _ _ _ _ _ ] ]
-     => let lem_init := constr:(@no_before_IA_init) in
-        let lem_hdlr := constr:(@no_before_IA_hdlr) in
-        let prune_init := build_prune_tac lem_init in
-        let prune_hdlr := build_prune_tac lem_hdlr in
-        reach_induction prune_init prune_hdlr;
-        try abstract match_immafter
+    => crush_with_lem (@no_before_IA_init) (@no_before_IA_hdlr) ltac:(idtac; match_immafter)
   | [ |- context [ Enables _ _ _ _ _ _ _ ] ]
-     => let lem_init := constr:(@no_enablee_init) in
-        let lem_hdlr := constr:(@no_enablee_hdlr) in
-        let prune_init := build_prune_tac lem_init in
-        let prune_hdlr := build_prune_tac lem_hdlr in
-        reach_induction prune_init prune_hdlr;
-        try match_releases
+    => crush_with_lem (@no_enablee_init) (@no_enablee_hdlr) ltac:(idtac; match_releases)
   | [ |- context [ Disables _ _ _ _ ?disabler _ _ ] ]
-     => let lem_init := constr:(@no_disablee_init) in
-        let lem_hdlr := constr:(@no_disablee_hdlr) in
-        let prune_init := build_prune_tac lem_init in
-        let prune_hdlr := build_prune_tac lem_hdlr in
-        reach_induction prune_init prune_hdlr;
-        try match_disables disabler
+    => crush_with_lem (@no_disablee_init) (@no_disablee_hdlr) ltac:(idtac; match_disables disabler)
   end.
 
 End MkLanguage.

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+T=`date +"%y-%m-%d-%H:%M:%S"`
+
 # checks if branch has something pending
 function parse_git_dirty() {
   git diff --quiet --ignore-submodules HEAD 2>/dev/null; [ $? -eq 1 ] && echo "*"
@@ -24,7 +26,6 @@ function run_opt {
   echo "Definition ni_branch_prune := $4." >> Opt.v
   echo "Definition abstract_pf := $5." >> Opt.v
   echo "Definition abstract_pf_deep := $6." >> Opt.v
-  T=`date +"%y-%m-%d-%H:%M:%S"`
   OUT=bench-$GIT_BRANCH-$T-$7
   CONFIG=benchmarks/Opt-$OUT.v
   cp Opt.v $CONFIG

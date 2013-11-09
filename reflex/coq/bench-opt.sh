@@ -16,14 +16,13 @@ function parse_git_hash() {
 }
 
 function run_opt {
+  GIT_BRANCH=$(parse_git_branch)$(parse_git_hash)
   rm -f Opt.v
   echo "Definition prune_pol := $1." > Opt.v
   echo "Definition prune_ni := $2." >> Opt.v
   echo "Definition rewrite_symb := $3." >> Opt.v
   echo "Definition ni_branch_prune := $4." >> Opt.v
-  T=`date +"%y-%m-%d-%H:%M:%S"`
-  GIT_BRANCH=$(parse_git_branch)$(parse_git_hash)
-  OUT=bench-$T-$GIT_BRANCH
+  OUT=bench-$GIT_BRANCH-$5
   CONFIG=benchmarks/Opt-$OUT.v
   cp Opt.v $CONFIG
 
@@ -31,8 +30,8 @@ function run_opt {
 
 git diff-index --quiet HEAD
 if [ $? = 0 ]; then
-  run_opt false false false false
-  run_opt true true false false
-  run_opt true true true false
-  run_opt true true true true
+  run_opt false false false false 1
+  run_opt true true false false 2
+  run_opt true true true false 3
+  run_opt true true true true 4
 fi

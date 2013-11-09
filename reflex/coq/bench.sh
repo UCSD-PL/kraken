@@ -32,7 +32,7 @@ do (
     timeout 5h $COQC $BENCHINCLUDES $b &> "$tmp" &
     timeoutpid=$!
     coqpid=`pidof coqtop.opt`;
-    while [[ -z coqpid ]]; do
+    while [[ -z $coqpid ]]; do
         sleep 0.1;
 	coqpid=`pidof coqtop.opt`
     done;

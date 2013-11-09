@@ -23,18 +23,22 @@ function run_opt {
   echo "Definition rewrite_symb := $3." >> Opt.v
   echo "Definition ni_branch_prune := $4." >> Opt.v
   echo "Definition abstract_pf := $5." >> Opt.v
+  echo "Definition abstract_pf_deep := $6." >> Opt.v
   T=`date +"%y-%m-%d-%H:%M:%S"`
-  OUT=bench-$GIT_BRANCH-$T-$6
+  OUT=bench-$GIT_BRANCH-$T-$7
   CONFIG=benchmarks/Opt-$OUT.v
   cp Opt.v $CONFIG
   make bench BENCHOUT=$OUT
 }
 
+git checkout Opt.v
 git diff-index --quiet HEAD
 if [ $? = 0 ]; then
-  run_opt false false false false false 1
-  run_opt true true false false false 2
-  run_opt true true true false false 3
-  run_opt true true true true false 4
-  run_opt true true true true true 5
+  run_opt true true true true true true 6
+  run_opt true true true true true false 5
+  run_opt true true true true false false 4
+  run_opt true true true false false false 3
+  run_opt true true false false false false 2
+  run_opt false false false false false false 1
 fi
+git checkout Opt.v

@@ -325,8 +325,8 @@ Ltac find_comp_eq Hs1 Hs2 :=
 Ltac destruct_find_comp' H :=
   match goal with
   | [ H' : find_comp _ _ _ _ _ = _ |- _ ]
-      => run_opt ni_branch_prune ltac:(find_comp_eq H H'; rewrite H' in H)
-                                 ltac:(fail 0)
+      => run_opt ni_branch_prune ltac:(idtac; find_comp_eq H H'; rewrite H' in H)
+                                 ltac:(idtac; fail 0)
   | [ |- _ ]
     => let find_comp_expr :=
       match type of H with
@@ -599,8 +599,8 @@ Ltac simpl_step_isrp_no_opt H :=
   repeat destruct_cond' H; simpl in H.
 
 Ltac simpl_step_isrp_run_opt H :=
-  run_opt rewrite_symb ltac:(simpl_step_isrp_opt H)
-                       ltac:(simpl_step_isrp_no_opt H).
+  run_opt rewrite_symb ltac:(idtac; simpl_step_isrp_opt H)
+                       ltac:(idtac; simpl_step_isrp_no_opt H).
 
 Ltac simpl_step_hsrp_opt H :=
   repeat first
@@ -663,8 +663,8 @@ Ltac simpl_step_hsrp_no_opt H :=
   repeat destruct_cond' H; simpl in H.
 
 Ltac simpl_step_hsrp_run_opt H :=
-  run_opt rewrite_symb ltac:(simpl_step_hsrp_opt H)
-                       ltac:(simpl_step_hsrp_no_opt H).
+  run_opt rewrite_symb ltac:(idtac; simpl_step_hsrp_opt H)
+                       ltac:(idtac; simpl_step_hsrp_no_opt H).
 
 Ltac symb_exec_low Hs :=
   unfold kstate_run_prog in Hs;
@@ -690,7 +690,7 @@ Ltac low_step :=
       Hlow : _ = false |- _ ]
     => destruct_msg; destruct_comp;
        try discriminate;
-       run_opt prune_ni ltac:(try solve [eapply prune_nop_1; eauto])
+       run_opt prune_ni ltac:(idtac; try solve [eapply prune_nop_1; eauto])
                         ltac:(idtac);
        destruct Hve; repeat subst_inter_st;
        match goal with
@@ -701,7 +701,7 @@ Ltac low_step :=
             | [ Heq : ksrp = s,
                 hdlrs : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
               => run_opt rewrite_symb
-                         ltac:(simpl in hdlrs;
+                         ltac:(idtac; simpl in hdlrs;
                                unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
                                unfold hdlrs in Heq)
                          ltac:(idtac);
@@ -710,8 +710,8 @@ Ltac low_step :=
             end
        end;
        simpl; repeat split;
-       run_opt abstract_pf ltac:(abstract solve_low_step Hlow)
-                           ltac:(solve_low_step Hlow)
+       run_opt abstract_pf ltac:(idtac; abstract solve_low_step Hlow)
+                           ltac:(idtac; solve_low_step Hlow)
   end.
 
 Ltac ho_eq_solve_high := auto.
@@ -758,7 +758,7 @@ Ltac high_step :=
       Hhigh : _ = true |- _ ]
     => destruct_msg; destruct_comp;
        try discriminate;
-       run_opt prune_ni ltac:(try solve [eapply prune_nop_2; eauto])
+       run_opt prune_ni ltac:(idtac; try solve [eapply prune_nop_2; eauto])
                         ltac:(idtac);
        destruct Hve1; destruct Hve2;
        repeat subst_inter_st;
@@ -773,7 +773,7 @@ Ltac high_step :=
                 hdlrs1 : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _),
                 hdlrs2 : sigT (fun _ :vcdesc _ => hdlr_prog _ _ _ _ _ _ _) |- _ ]
               => run_opt rewrite_symb
-                         ltac:(simpl in hdlrs1; simpl in hdlrs2;
+                         ltac:(idtac; simpl in hdlrs1; simpl in hdlrs2;
                                unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs1;
                                unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs2;
                                unfold hdlrs1 in Heq1, Heq2;
@@ -784,8 +784,8 @@ Ltac high_step :=
             end
        end;
        simpl; repeat split;
-       run_opt abstract_pf ltac:(abstract solve_high_step Hhigh)
-                           ltac:(solve_high_step Hhigh)
+       run_opt abstract_pf ltac:(idtac; abstract solve_high_step Hhigh)
+                           ltac:(idtac; solve_high_step Hhigh)
   end.
 
 Ltac ni :=
@@ -850,7 +850,7 @@ Ltac unpack prune_init prune_hdlr :=
   intros;
   match goal with
   | [ H : Reflex.InitialState _ _ _ _ _ _ _ ?input _ |- _ ]
-    => run_opt prune_pol ltac:(try solve [prune_init])
+    => run_opt prune_pol ltac:(idtac; try solve [prune_init])
                          ltac:(idtac);
        destruct H;
        match goal with
@@ -858,13 +858,13 @@ Ltac unpack prune_init prune_hdlr :=
            Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
          => simpl in Htr; destruct_input input;
             run_opt rewrite_symb
-                    ltac:(unfold prog, seq, spawn, stupd, call, ite, send, complkup in Hs)
+                    ltac:(idtac; unfold prog, seq, spawn, stupd, call, ite, send, complkup in Hs)
                     ltac:(idtac);
             simpl_step_isrp_run_opt Hs; subst s'; simpl in *
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
     => destruct_msg; destruct_comp;
-       run_opt prune_pol ltac:(try solve [prune_hdlr]) ltac:(idtac);
+       run_opt prune_pol ltac:(idtac; try solve [prune_hdlr]) ltac:(idtac);
        destruct H;
        match goal with
        | [ _ : ?s' = mk_inter_ve_st _ _ _ _ _ _ _ _,
@@ -880,7 +880,7 @@ Ltac unpack prune_init prune_hdlr :=
                    match goal with
                    | [ Hksrp : ksrp = s |- _ ]
                       => run_opt rewrite_symb
-                                 ltac:(simpl in hdlrs;
+                                 ltac:(idtac; simpl in hdlrs;
                                        unfold seq, spawn, stupd, call, ite, send, complkup in hdlrs;
                                        unfold hdlrs in Hksrp)
                                  ltac:(idtac);
@@ -1094,6 +1094,13 @@ Ltac invert_comp_eqs :=
          end
   end.
 
+Ltac solve_exists_past :=
+  invert_comp_eqs;
+  try solve [ impossible
+            | use_IH_releases
+            | releaser_match
+            | auto].
+
 Ltac exists_past :=
   extract_match_facts;
   (*There may be conditions on s' (the intermediate state). We want
@@ -1109,11 +1116,8 @@ Ltac exists_past :=
       end;
   (*Should this take s as an argument?*)
   reach_induction idtac idtac;
-  invert_comp_eqs;
-  try solve [ impossible
-            | use_IH_releases
-            | releaser_match
-            | auto].
+  run_opt abstract_pf_deep ltac:(idtac; abstract solve_exists_past)
+                           ltac:(idtac; solve_exists_past).
 
 Ltac match_releases :=
   match goal with
@@ -1281,8 +1285,8 @@ Ltac forall_not_disabler n act Hact disabler :=
   let prune_init := try solve [no_disabler_init_tac disabler] in
   let prune_hdlr := try solve [no_disabler_hdlr_tac disabler] in
   reach_induction prune_init prune_hdlr;
-  run_opt abstract_pf ltac:(abstract (solve_forall_not_disabler n act disabler forall_not_disabler))
-                      ltac:(solve_forall_not_disabler n act disabler forall_not_disabler).
+  run_opt abstract_pf_deep ltac:(idtac; abstract (solve_forall_not_disabler n act disabler forall_not_disabler))
+                           ltac:(idtac; solve_forall_not_disabler n act disabler forall_not_disabler).
 (*
   match goal with
   | [ H : _ = init_state_run_cmd _ _ _ _ _ _ _ _ _,
@@ -1417,8 +1421,8 @@ Ltac crush_with_lem lem_init lem_hdlr match_policy :=
   let prune_init := solve [ eapply lem_init; prune_finish ] in
   let prune_hdlr := solve [ eapply lem_hdlr; prune_finish ] in
   reach_induction prune_init prune_hdlr;
-  run_opt abstract_pf ltac:(try abstract match_policy)
-                      ltac:(try match_policy).
+  run_opt abstract_pf ltac:(idtac; try abstract match_policy)
+                      ltac:(idtac; try match_policy).
 
 Ltac crush :=
   intros;

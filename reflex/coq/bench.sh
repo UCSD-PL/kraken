@@ -8,7 +8,7 @@ COQC=$1
 YNOT=$2
 PREFIX=$3
 BENCHINCLUDES="-R $YNOT Ynot -I . -I .."
-BENCHNAME=$PREFIX-`date +"%y-%m-%d-%H:%M:%S"`
+BENCHNAME=$4
 BENCHDIR=benchmarks
 BENCHFULL=$BENCHDIR/$BENCHNAME
 
@@ -28,7 +28,7 @@ do (
       | sed -e "s/^Policy//"\
       | ../benchnames.py >> ../$BENCHFULL.csv;
     echo -n , >> ../$BENCHFULL.csv;
-    coqres=`timeout --foreground 1h $COQC $BENCHINCLUDES $b 2>&1`;
+    coqres=`timeout --foreground 5h $COQC $BENCHINCLUDES $b 2>&1`;
     status=$?;
     coqtime=`echo -n "$coqres"\
       | grep "Finished transaction"\

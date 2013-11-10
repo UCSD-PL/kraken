@@ -322,23 +322,54 @@ Ltac find_comp_eq Hs1 Hs2 :=
        end
   end.
 
+Ltac unfold_base_comp_pat H :=
+  unfold eval_base_comp_pat,
+  eval_base_payload_oexpr, eval_payload_oexpr
+  in H.
+
+Ltac unfold_init_eval_functions H :=
+  unfold initial_init_state,
+  eval_base_payload_expr, eval_payload_expr,
+  eval_payload_expr', shvec_replace_cast,
+  shvec_replace_ith in H;
+  unfold_base_comp_pat H.
+
+Ltac unfold_hdlr_comp_pat H :=
+  unfold eval_hdlr_comp_pat, eval_hdlr_payload_oexpr,
+  eval_payload_oexpr in H.
+
+Ltac unfold_hdlr_eval_functions H :=
+  unfold default_hdlr_state, mk_inter_ve_st,
+  eval_hdlr_payload_expr, mvar,
+  eval_payload_expr, eval_payload_expr',
+  shvec_replace_cast, shvec_replace_ith
+  in H; unfold_hdlr_comp_pat H.
+
 Ltac destruct_find_comp' H :=
+  match type of H with
+  | context[ match find_comp _ _ _ _ _ with | Some _ => _ | None => _ end ]
+    => unfold_hdlr_comp_pat H; unfold_base_comp_pat H;
+       match type of H with
+       | context[ match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+         => simpl (find_comp a b c d e) in H
+       end
+  end;
   match goal with
   | [ H' : find_comp _ _ _ _ _ = _ |- _ ]
       => run_opt ni_branch_prune ltac:(idtac; find_comp_eq H H'; rewrite H' in H)
                                  ltac:(idtac; fail 0)
   | [ |- _ ]
     => let find_comp_expr :=
-      match type of H with
-      | context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-        => (constr:(find_comp a b c d e))
-      end in
-  let Heq := fresh "Heq" in
-  let Heq' := fresh "Heq'" in
-  destruct find_comp_expr as [? | ?]_eqn:Heq; try rewrite Heq;
-  [ pose proof (find_comp_suc_match _ _ _ _ _ _ Heq) as Heq'; destruct Heq'
-  | pose proof (find_comp_fail _ _ _ _ _ Heq);
-    pose proof (find_comp_fail_prop _ _ _ _ _ Heq) ]
+           match type of H with
+           | context[match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
+             => (constr:(find_comp a b c d e))
+           end in
+       let Heq := fresh "Heq" in
+       let Heq' := fresh "Heq'" in
+       destruct find_comp_expr as [? | ?]_eqn:Heq; try rewrite Heq;
+       [ pose proof (find_comp_suc_match _ _ _ _ _ _ Heq) as Heq'; destruct Heq'
+       | pose proof (find_comp_fail _ _ _ _ _ Heq);
+         pose proof (find_comp_fail_prop _ _ _ _ _ Heq) ]
   end.
 
 (*Ltac destruct_find_comp' H1 H2 :=
@@ -404,11 +435,23 @@ Ltac find_comp_tr_solve :=
        end
   end.*)
 
+Ltac invert_find_comp_eqs :=
+  repeat match goal with
+  | [ H1 : context [ find_comp _ _ _ _ _ ],
+      H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
+    => find_comp_eq H1 H2;
+       rewrite H1 in H2; inversion H2
+  | [ H1 : context [ find_comp _ _ _ _ _ ],
+      H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
+    => rewrite H1 in H2; inversion H2
+  end.
+
 Ltac vars_eq_tac :=
   match goal with
   | [ Hvars :  vars_eq _ _ _ _ _ _ _ |- _ ]
-    => solve [ unfold vars_eq; simpl; auto
-      | unfold vars_eq; simpl; inversion Hvars; auto ]
+    => invert_find_comp_eqs;
+      solve [ unfold vars_eq; simpl; auto
+            | unfold vars_eq; simpl; inversion Hvars; auto ]
   end.
 
 Ltac rewrite_ind_hyps :=
@@ -450,15 +493,7 @@ Ltac ho_eq_tac tac Hlblr :=
   simpl in Hlblr; try rewrite Hlblr;
   try rewrite_ind_hyps;
   destruct_atom_eqs; try discriminate;
-  repeat match goal with
-  | [ H1 : context [ find_comp _ _ _ _ _ ],
-      H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
-    => find_comp_eq H1 H2;
-       rewrite H1 in H2; inversion H2
-  | [ H1 : context [ find_comp _ _ _ _ _ ],
-      H2 : context [ find_comp _ _ _ _ _ ] |- _ ]
-    => rewrite H1 in H2; inversion H2
-  end;
+  invert_find_comp_eqs;
   try solve[
           auto; try impossible
         | intuition; try congruence
@@ -485,22 +520,6 @@ Ltac simpl_proj H :=
          | context [projT1 ?e ] => simpl (projT1 e) in H
          | context [projT2 ?e ] => simpl (projT2 e) in H
          end.
-
-Ltac unfold_init_eval_functions H :=
-  unfold initial_init_state,
-  eval_base_payload_expr, eval_payload_expr,
-  eval_payload_expr', shvec_replace_cast,
-  shvec_replace_ith, eval_base_comp_pat,
-  eval_base_payload_oexpr, eval_payload_oexpr
-  in H.
-
-Ltac unfold_hdlr_eval_functions H :=
-  unfold default_hdlr_state, mk_inter_ve_st,
-  eval_hdlr_payload_expr, mvar,
-  eval_payload_expr, eval_payload_expr',
-  shvec_replace_cast, shvec_replace_ith,
-  eval_hdlr_comp_pat, eval_hdlr_payload_oexpr,
-  eval_payload_oexpr in H.
 
 Ltac simpl_nested_isrp H :=
   match type of H with
@@ -570,23 +589,14 @@ Ltac simpl_step_isrp_opt H :=
            end
       end
     | rewrite complkup_rew_init in H;
+      destruct_find_comp' H;
       match type of H with
-      | context[ match find_comp _ _ _ _ _ with | Some _ => _ | None => _ end ]
-        => unfold eval_base_comp_pat, eval_base_payload_oexpr,
-           eval_payload_oexpr in H;
-           match type of H with
-           | context[ match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-             => simpl (find_comp a b c d e) in H;
-                destruct_find_comp' H;
-                match type of H with
-                | context [ init_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ]
-                  => let isrp := fresh "isrp" in
-                     remember (init_state_run_cmd a b c d e f g h j) as hsrp;
-                     match goal with
-                     | [ Heq : isrp = _ |- _ ]
-                       => simpl_step_isrp_opt Heq; subst isrp
-                     end
-                end
+      | context [ init_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ]
+        => let isrp := fresh "isrp" in
+           remember (init_state_run_cmd a b c d e f g h j) as hsrp;
+           match goal with
+           | [ Heq : isrp = _ |- _ ]
+             => simpl_step_isrp_opt Heq; subst isrp
            end
       end
     | progress (unfold init_state_run_cmd in H;
@@ -634,23 +644,14 @@ Ltac simpl_step_hsrp_opt H :=
            end
       end
     | rewrite complkup_rew_hdlr in H;
+      destruct_find_comp' H;
       match type of H with
-      | context[ match find_comp _ _ _ _ _ with | Some _ => _ | None => _ end ]
-        => unfold eval_hdlr_comp_pat, eval_hdlr_payload_oexpr,
-           eval_payload_oexpr in H;
-           match type of H with
-           | context[ match find_comp ?a ?b ?c ?d ?e with | Some _ => _ | None => _ end ]
-             => simpl (find_comp a b c d e) in H;
-                destruct_find_comp' H;
-                match type of H with
-                | context [ hdlr_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ?k ?i ]
-                  => let hsrp := fresh "hsrp" in
-                     remember (hdlr_state_run_cmd a b c d e f g h j k i) as hsrp;
-                     match goal with
-                     | [ Heq : hsrp = _ |- _ ]
-                       => simpl_step_hsrp_opt Heq; subst hsrp
-                     end
-                end
+      | context [ hdlr_state_run_cmd ?a ?b ?c ?d ?e ?f ?g ?h ?j ?k ?i ]
+        => let hsrp := fresh "hsrp" in
+           remember (hdlr_state_run_cmd a b c d e f g h j k i) as hsrp;
+           match goal with
+           | [ Heq : hsrp = _ |- _ ]
+             => simpl_step_hsrp_opt Heq; subst hsrp
            end
       end
     | progress (unfold hdlr_state_run_cmd in H;
@@ -746,7 +747,8 @@ Ltac solve_high_step Hhigh :=
   | [ |- vars_eq _ _ _ _ _ _ _ ]
     => vars_eq_tac
   | [ |- cs_eq _ _ _ _ _ _ _ ]
-    => unfold cs_eq in *; simpl; cs_eq_solve_high
+    => invert_find_comp_eqs; unfold cs_eq in *;
+       simpl; cs_eq_solve_high
   | _ => idtac
   end.
 

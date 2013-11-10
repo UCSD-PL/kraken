@@ -29,7 +29,7 @@ do (
       | ../benchnames.py >> ../$BENCHFULL.csv;
     echo -n , >> ../$BENCHFULL.csv;
     tmp=`mktemp`;
-    timeout 5h $COQC $BENCHINCLUDES $b &> "$tmp" &
+    timeout 5s $COQC $BENCHINCLUDES $b &> "$tmp" &
     timeoutpid=$!
     coqpid=`pidof coqtop.opt`;
     while [[ -z $coqpid ]]; do
@@ -53,7 +53,7 @@ do (
       | paste -sd ","
       `;
     if [[ "$status" = "124" ]];
-    then echo "Timeout" >> ../$BENCHFULL.csv;
+    then echo "Timeout,,$peak" >> ../$BENCHFULL.csv;
     else
       if [[ "$status" = "0" ]];
       then
@@ -67,7 +67,7 @@ do (
         fi;
         echo ,$peak >> ../$BENCHFULL.csv;
       else
-        echo "Error with status code: $status" >> ../$BENCHFULL.csv;
+        echo "Error with status code: $status,,$peak" >> ../$BENCHFULL.csv;
       fi;
     fi;
   );

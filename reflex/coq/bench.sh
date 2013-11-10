@@ -74,10 +74,3 @@ do (
   done;
 );
 done
-
-(
-  cd $BENCHDIR;
-  sed -e "s;%CSV%;$BENCHNAME.csv;" template.tex > $BENCHNAME.tex;
-  pdflatex $BENCHNAME.tex
-)
-

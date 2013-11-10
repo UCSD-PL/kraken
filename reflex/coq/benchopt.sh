@@ -45,6 +45,15 @@ function run_opt {
     grep MemTotal /proc/meminfo >> $SYSTEMSPEC
     cat /proc/version >> $SYSTEMSPEC
     make bench BENCHOUT=$OUTDIR TIMEOUT=$TIMEOUT
+
+    (
+      CURRENTDIR=`pwd`
+      sed -e "s;%CSV%;$BENCHNAME.csv;" $BENCHMARKS/template.tex > $OUTDIR/results.tex;
+      cd $OUTDIR
+      pdflatex results.tex
+      cd $CURRENTDIR
+    )
+
   else
     echo "Working directory dirty."
     echo "prune_pol:$1"
@@ -59,10 +68,6 @@ function run_opt {
 
 mkdir $BASEOUTDIR
 exec > $BASEOUTDIR/log.txt
-run_opt true true true true true true
-run_opt true true true true true false
-run_opt true true true true false false
-run_opt true true true false false false
-run_opt true true false false false false
-run_opt false false true false false false
-run_opt false false false false false false
+while read i; do
+  run_opt $i
+done < $1

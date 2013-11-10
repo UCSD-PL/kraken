@@ -53,7 +53,7 @@ do (
       | paste -sd ","
       `;
     if [[ "$status" = "124" ]];
-    then echo "Timeout,,$peak" >> ../$BENCHFULL.csv;
+    then echo "Timeout $TIMEOUT,,$peak" >> ../$BENCHFULL.csv;
     else
       if [[ "$status" = "0" ]];
       then

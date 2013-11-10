@@ -58,6 +58,7 @@ function run_opt {
 }
 
 mkdir $BASEOUTDIR
+exec > $BASEOUTDIR/log.txt
 run_opt true true true true true true
 run_opt true true true true true false
 run_opt true true true true false false

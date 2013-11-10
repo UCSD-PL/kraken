@@ -48,7 +48,7 @@ function run_opt {
 
     (
       CURRENTDIR=`pwd`
-      sed -e "s;%CSV%;$BENCHNAME.csv;" $BENCHMARKS/template.tex > $OUTDIR/results.tex;
+      sed -e "s;%CSV%;$OUTDIR/results.csv;" $BENCHMARKS/template.tex > $OUTDIR/results.tex;
       cd $OUTDIR
       pdflatex results.tex
       cd $CURRENTDIR

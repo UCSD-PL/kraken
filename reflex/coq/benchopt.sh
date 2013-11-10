@@ -1,7 +1,5 @@
 #!/bin/bash
 
-T=`date +"%y-%m-%d-%H:%M:%S"`
-
 # checks if branch has something pending
 function parse_git_dirty() {
   git diff --quiet --ignore-submodules HEAD 2>/dev/null; [ $? -eq 1 ] && echo "*"
@@ -17,29 +15,53 @@ function parse_git_hash() {
   git rev-parse --short HEAD 2> /dev/null | sed "s/\(.*\)/@\1/"
 }
 
+T=`date +"%y-%m-%d-%H:%M:%S"`
+BENCHMARKS=benchmarks
+GIT_BRANCH=$(parse_git_branch)$(parse_git_hash)
+BASEOUTDIR=$BENCHMARKS/bench-opt-$GIT_BRANCH-$T
+TIMEOUT=1h
+
 function run_opt {
-  GIT_BRANCH=$(parse_git_branch)$(parse_git_hash)
-  rm -f Opt.v
-  echo "Definition prune_pol := $1." > Opt.v
-  echo "Definition prune_ni := $2." >> Opt.v
-  echo "Definition rewrite_symb := $3." >> Opt.v
-  echo "Definition ni_branch_prune := $4." >> Opt.v
-  echo "Definition abstract_pf := $5." >> Opt.v
-  echo "Definition abstract_pf_deep := $6." >> Opt.v
-  OUT=bench-$GIT_BRANCH-$T-$7
-  CONFIG=benchmarks/Opt-$OUT.v
-  cp Opt.v $CONFIG
-  make bench BENCHOUT=$OUT
+  git checkout Opt.v
+  git diff-index --quiet HEAD
+  if [ $? = 0 ];
+  then
+    rm -f Opt.v
+    echo "Definition prune_pol := $1." > Opt.v
+    echo "Definition prune_ni := $2." >> Opt.v
+    echo "Definition rewrite_symb := $3." >> Opt.v
+    echo "Definition ni_branch_prune := $4." >> Opt.v
+    echo "Definition abstract_pf := $5." >> Opt.v
+    echo "Definition abstract_pf_deep := $6." >> Opt.v
+    OUTDIR=$BASEOUTDIR/${1:0:1}-${2:0:1}-${3:0:1}-${4:0:1}-${5:0:1}-${6:0:1}
+    echo $OUTDIR
+    mkdir $OUTDIR
+    CONFIG=$OUTDIR/config.txt
+    cat Opt.v > $CONFIG
+    echo "Branch: $GIT_BRANCH" >> $CONFIG
+    echo "Timeout: $TIMEOUT" >> $CONFIG
+    SYSTEMSPEC=$BASEOUTDIR/sysspec.txt
+    grep "model name" /proc/cpuinfo > $SYSTEMSPEC
+    grep MemTotal /proc/meminfo >> $SYSTEMSPEC
+    cat /proc/version >> $SYSTEMSPEC
+    make bench BENCHOUT=$OUTDIR TIMEOUT=$TIMEOUT
+  else
+    echo "Working directory dirty."
+    echo "prune_pol:$1"
+    echo "prune_ni:$2"
+    echo "rewrite_symb:$3"
+    echo "ni_branch_prune:$4"
+    echo "abstract_pf:$5"
+    echo "abstract_pf_deep:$6"
+  fi
+  git checkout Opt.v
 }
 
-git checkout Opt.v
-git diff-index --quiet HEAD
-if [ $? = 0 ]; then
-  run_opt true true true true true true 6
-  run_opt true true true true true false 5
-  run_opt true true true true false false 4
-  run_opt true true true false false false 3
-  run_opt true true false false false false 2
-  run_opt false false false false false false 1
-fi
-git checkout Opt.v
+mkdir $BASEOUTDIR
+run_opt true true true true true true
+run_opt true true true true true false
+run_opt true true true true false false
+run_opt true true true false false false
+run_opt true true false false false false
+run_opt false false true false false false
+run_opt false false false false false false

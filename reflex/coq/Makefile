@@ -17,10 +17,10 @@ BENCHDIR  := benchmarks
 BENCHFULL := $(BENCHDIR)/$(BENCHNAME)
 
 bench: all
-	./bench.sh $(COQC) $(YNOT) bench $(BENCHOUT)
+	./bench.sh $(COQC) $(YNOT) bench $(BENCHOUT) $(TIMEOUT)
 
 ubench: all
-	./bench.sh $(COQC) $(YNOT) ubench $(BENCHOUT)
+	./bench.sh $(COQC) $(YNOT) ubench $(BENCHOUT) $(TIMEOUT)
 
 build:
 	$(MAKE) depend

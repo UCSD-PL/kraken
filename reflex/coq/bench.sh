@@ -1,16 +1,17 @@
 #!/bin/bash
 
-if [ $# -ne 4 ]
-then echo "Usage: bench COQC YNOT PREFIX"; exit 65
+if [ $# -ne 5 ]
+then echo "Usage: bench COQC YNOT PREFIX OUTPUTDIR TIMEOUT"; exit 65
 fi
 
 COQC=$1
 YNOT=$2
 PREFIX=$3
 BENCHINCLUDES="-R $YNOT Ynot -I . -I .."
-BENCHNAME=$4
-BENCHDIR=benchmarks
+BENCHNAME=results
+BENCHDIR=$4
 BENCHFULL=$BENCHDIR/$BENCHNAME
+TIMEOUT=$5
 
 echo "Benchmark,Policy,Time (Ltac),Time (Qed)" >> $BENCHFULL.csv
 
@@ -29,7 +30,7 @@ do (
       | ../benchnames.py >> ../$BENCHFULL.csv;
     echo -n , >> ../$BENCHFULL.csv;
     tmp=`mktemp`;
-    timeout 5s $COQC $BENCHINCLUDES $b &> "$tmp" &
+    timeout $TIMEOUT $COQC $BENCHINCLUDES $b &> "$tmp" &
     timeoutpid=$!
     coqpid=`pidof coqtop.opt`;
     while [[ -z $coqpid ]]; do

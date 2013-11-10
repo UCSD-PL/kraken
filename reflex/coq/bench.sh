@@ -26,8 +26,7 @@ do (
     echo $policy;
     echo -n `basename $d`,    | sed -e "s/^$PREFIX-//" >> ../$BENCHFULL.csv;
     echo -n `basename $b .v`\
-      | sed -e "s/^Policy//"\
-      | ../benchnames.py >> ../$BENCHFULL.csv;
+      | sed -e "s/^Policy//"\ >> ../$BENCHFULL.csv;
     echo -n , >> ../$BENCHFULL.csv;
     tmp=`mktemp`;
     timeout $TIMEOUT $COQC $BENCHINCLUDES $b &> "$tmp" &

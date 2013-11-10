@@ -15,31 +15,56 @@ Definition KTrace := KTrace PAYD COMPT COMPS.
 Definition AMatch := AMatch PAYD COMPT COMPS COMPTDEC.
 Hint Unfold AMatch.
 
-(*after occurs immediately after before occurs.*)
-Inductive ImmAfter (after:KOAction) (before:KOAction)
+(*B occurs immediately after A occurs.*)
+Inductive ImmAfter (B:KOAction) (A:KOAction)
   : KTrace -> Prop :=
-| IA_nil : ImmAfter after before nil
-(*An action not matching before is added*)
-| IA_nB : forall before' tr, ImmAfter after before tr ->
-                             ~AMatch before before' ->
-                             ImmAfter after before (before'::tr)
+| IA_nil : ImmAfter B A nil
+| IA_single : forall x, ImmAfter B A (x::nil)
+| IA_B : forall b tr, ImmAfter B A tr ->
+                      AMatch B b ->
+                      ImmAfter B A (b::tr)
 (*An action matching before is added*)
-| IA_B : forall before' after' tr, ImmAfter after before tr ->
-                                   AMatch after after' ->
-                                   ImmAfter after before (after'::before'::tr).
+| IA_nA : forall x na tr, ImmAfter B A (na::tr) ->
+                         ~AMatch A na ->
+                         ImmAfter B A (x::na::tr).
 
-(*before occurs immediate before after occurs*)
-Inductive ImmBefore (before:KOAction) (after:KOAction)
+(*A immediate before B occurs*)
+Inductive ImmBefore (A:KOAction) (B:KOAction)
   : KTrace -> Prop :=
-| IB_nil : ImmBefore before after nil
-(*An action not matching after is added*)
-| IB_nA : forall after' tr, ImmBefore before after tr ->
-                            ~AMatch after after' ->
-                            ImmBefore before after (after'::tr)
-(*An action matching after is added*)
-| IB_A : forall after' before' tr, ImmBefore before after tr ->
-                                   AMatch before before' ->
-                                   ImmBefore before after (after'::before'::tr).
+| IB_nil : ImmBefore A B nil
+| IB_nA : forall nb tr, ImmBefore A B tr ->
+                        ~AMatch B nb ->
+                        ImmBefore A B (nb::tr)
+| IB_B : forall x a tr, ImmBefore A B (a::tr) ->
+                        AMatch A a ->
+                        ImmBefore A B (x::a::tr).
+
+Theorem immbefore_ok :
+  forall A B t tx ty b,
+    AMatch B b ->
+    t = tx ++ b::ty ->
+    ImmBefore A B t ->
+    exists tz, exists a,
+      AMatch A a /\ ty = a::tz.
+Proof.
+  intros A B t tx ty b HmatchB Ht Hib.
+  generalize dependent tx.
+  generalize dependent ty.
+  induction Hib; intros ty tx Ht.
+    pose (app_cons_not_nil tx ty b).
+    contradiction.
+
+    destruct tx.
+      simpl in Ht. inversion Ht.
+      subst b. contradiction.
+
+      inversion Ht. eauto.
+
+    destruct tx.
+      simpl in Ht. inversion Ht. eauto.
+
+      inversion Ht. eauto.
+Qed.
 
 Inductive Enables (past:KOAction) (future:KOAction)
   : KTrace -> Prop :=
@@ -48,11 +73,11 @@ Inductive Enables (past:KOAction) (future:KOAction)
                                 ~AMatch future act ->
                                 Enables past future (act::tr)
 | E_future : forall act tr, Enables past future tr ->
-                            (exists past', In past' (act::tr) /\
+                            (exists past', In past' tr /\
                                            AMatch past past') ->
                             Enables past future (act::tr).
 
-Definition Not_In (A:KOAction) (tr:KTrace) : Prop :=
+(*Definition Not_In (A:KOAction) (tr:KTrace) : Prop :=
   forall a, In a tr -> ~AMatch A a.
 
 Inductive Enables' (past:KOAction) (future:KOAction)
@@ -165,7 +190,7 @@ Proof.
             assumption.
 
             exists a; intuition.
-Qed.        
+Qed.        *)
 
 Inductive Disables (disabler:KOAction) (disablee:KOAction)
   : KTrace -> Prop :=

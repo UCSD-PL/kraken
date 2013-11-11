@@ -370,6 +370,76 @@ Proof.
   apply enables_no_match.
 Qed.
 
+Lemma enables_compose : forall A B T1 T2,
+  Enables PAYD COMPT COMPS COMPTDEC A B T1 ->
+  Enables _ _ _ COMPTDEC A B T2 ->
+  Enables _ _ _ COMPTDEC A B (T2 ++ T1).
+Proof.
+  intros A B T1 T2 Hen1 Hen2.
+  induction Hen2.
+    simpl. auto.
+
+    simpl. apply E_not_future; auto.
+
+    simpl. apply E_future; auto.
+    destruct H as [a H].
+    exists a. intuition.
+Qed.
+
+Lemma ensures_no_match : forall A B tr tr',
+  Ensures PAYD COMPT COMPS COMPTDEC A B tr ->
+  (forall a, List.In a tr' ->
+             ~ActionMatch.AMatch _ _ _ COMPTDEC A a) ->
+  Ensures _ _ _ COMPTDEC A B (tr' ++ tr).
+Proof.
+  unfold Ensures.
+  intros A B tr tr' Hen Hno_match.
+  rewrite List.rev_app_distr.
+  apply enables_compose; auto.
+  induction tr'.
+    constructor.
+
+    simpl. apply enables_compose.
+      apply E_not_future.
+        constructor.
+
+        apply Hno_match; simpl; auto.
+
+      apply IHtr'. intros a0 Hin0.
+      apply Hno_match; simpl; auto.
+Qed.
+
+Lemma no_ensurer_init : forall init input A B s,
+  InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
+  no_match init A ->
+  forall tr : Reflex.KTrace PAYD COMPT COMPS,
+   ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
+   Ensures PAYD COMPT COMPS COMPTDEC A B tr.
+Proof.
+  intros. rewrite <- List.app_nil_r.
+  apply ensures_no_match.
+    constructor.
+
+    eapply no_match_init; eauto.
+Qed.
+
+Lemma no_ensurer_hdlr : forall c m input A B s s',
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) A ->
+  not_recv_match (comp_type _ _ c) (tag _ m) A ->
+  not_select_match (comp_type _ _ c) A ->
+  (forall tr : Reflex.KTrace PAYD COMPT COMPS,
+   ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
+   Ensures PAYD COMPT COMPS COMPTDEC A B tr) ->
+  forall tr : Reflex.KTrace PAYD COMPT COMPS,
+   ktr PAYD COMPT COMPS KSTD s' = inhabits tr ->
+   Ensures PAYD COMPT COMPS COMPTDEC A B tr.
+Proof.
+  intros.
+  eapply no_match_hdlr; eauto.
+  apply ensures_no_match.
+Qed.
+
 Lemma immbefore_no_match : forall oact oact' tr tr',
   ImmBefore PAYD COMPT COMPS COMPTDEC oact oact' tr ->
   (forall a, List.In a tr' ->

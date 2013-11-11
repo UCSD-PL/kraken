@@ -1040,12 +1040,18 @@ Proof.
   auto.
 Qed.
 
+Ltac act_match :=
+  simpl in *; autounfold; simpl;
+  repeat destruct_comp_st_vars; intuition;
+  try congruence.
+
 Ltac releaser_match :=
   simpl;
   repeat
     match goal with
     | [ |- exists past : Reflex.KAction _ _ _, (?act = _ \/ ?disj_R ) /\ ?conj_R ] =>
-      solve [exists act; unfold msgMatch, msgMatch'; simpl; intuition; congruence]
+      solve [exists act; act_match
+             (*unfold msgMatch, msgMatch'; simpl; intuition; congruence*)]
             || apply cut_exists
     end.
 
@@ -1149,6 +1155,12 @@ Ltac match_releases :=
      so both branches are possible.
    *)
   end.
+
+Ltac match_ensures :=
+  unfold Ensures in *; simpl in *;
+  repeat rewrite <- List.app_assoc;
+  simpl; apply PolLangFacts.enables_compose; auto;
+  match_releases.
 
 Ltac use_IH_disables :=
   match goal with
@@ -1363,10 +1375,6 @@ Ltac match_disables disabler :=
            so both branches are possible.*)
   end.*)
 
-Ltac act_match :=
-  simpl in *; autounfold; simpl;
-  repeat destruct_comp_st_vars; intuition.
-
 Ltac match_immbefore :=
   match goal with
   | [ |- ImmBefore _ _ _ _ _ _ nil ]
@@ -1452,6 +1460,9 @@ Ltac crush :=
   | [ |- context [ Enables _ _ _ _ _ _ _ ] ]
     => crush_with_lem (@no_enablee_init) (@no_enablee_hdlr)
                       ltac:(idtac; match_releases)
+  | [ |- context [ Ensures _ _ _ _ _ _ _ ] ]
+    => crush_with_lem (@no_ensurer_init) (@no_ensurer_hdlr)
+                      ltac:(idtac; match_ensures)
   | [ |- context [ Disables _ _ _ _ ?disabler _ _ ] ]
     => crush_with_lem (@no_disablee_init) (@no_disablee_hdlr)
                       ltac:(idtac; match_disables disabler)

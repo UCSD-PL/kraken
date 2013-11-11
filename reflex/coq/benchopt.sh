@@ -46,13 +46,13 @@ function run_opt {
     cat /proc/version >> $SYSTEMSPEC
     make bench BENCHOUT=$OUTDIR TIMEOUT=$TIMEOUT
 
-    (
-      CURRENTDIR=`pwd`
-      sed -e "s;%CSV%;$OUTDIR/results.csv;" $BENCHMARKS/template.tex > $OUTDIR/results.tex;
-      cd $OUTDIR
-      pdflatex results.tex
-      cd $CURRENTDIR
-    )
+#    (
+#      CURRENTDIR=`pwd`
+#      sed -e "s;%CSV%;$OUTDIR/results.csv;" $BENCHMARKS/template.tex > $OUTDIR/results.tex;
+#      cd $OUTDIR
+#      pdflatex results.tex
+#      cd $CURRENTDIR
+#    )
 
   else
     echo "Working directory dirty."

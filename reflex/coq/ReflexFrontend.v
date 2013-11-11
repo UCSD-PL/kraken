@@ -1159,7 +1159,7 @@ Ltac match_releases :=
 Ltac match_ensures :=
   unfold Ensures in *; simpl in *;
   repeat rewrite <- List.app_assoc;
-  simpl; apply PolLangFacts.enables_compose; auto;
+  simpl; try apply PolLangFacts.enables_compose; auto;
   match_releases.
 
 Ltac use_IH_disables :=
@@ -1402,7 +1402,7 @@ Ltac match_immbefore :=
 Ltac match_immafter :=
   unfold ImmAfter in *; simpl in *;
   repeat rewrite <- List.app_assoc;
-  simpl; apply PolLangFacts.IB_compose; auto;
+  simpl; try apply PolLangFacts.IB_compose; auto;
   match_immbefore.
 (*
   match goal with

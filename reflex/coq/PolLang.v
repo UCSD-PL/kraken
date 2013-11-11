@@ -16,54 +16,77 @@ Definition AMatch := AMatch PAYD COMPT COMPS COMPTDEC.
 Hint Unfold AMatch.
 
 (*B occurs immediately after A occurs.*)
-Inductive ImmAfter (B:KOAction) (A:KOAction)
+(*Inductive ImmAfter (B:KOAction) (A:KOAction)
   : KTrace -> Prop :=
 | IA_nil : ImmAfter B A nil
 | IA_single : forall x, ImmAfter B A (x::nil)
 | IA_B : forall b tr, ImmAfter B A tr ->
                       AMatch B b ->
                       ImmAfter B A (b::tr)
-(*An action matching before is added*)
 | IA_nA : forall x na tr, ImmAfter B A (na::tr) ->
-                         ~AMatch A na ->
-                         ImmAfter B A (x::na::tr).
+                          ~AMatch A na ->
+                          ImmAfter B A (x::na::tr).*)
 
 (*A immediate before B occurs*)
 Inductive ImmBefore (A:KOAction) (B:KOAction)
   : KTrace -> Prop :=
 | IB_nil : ImmBefore A B nil
-| IB_nA : forall nb tr, ImmBefore A B tr ->
+| IB_nB : forall nb tr, ImmBefore A B tr ->
                         ~AMatch B nb ->
                         ImmBefore A B (nb::tr)
-| IB_B : forall x a tr, ImmBefore A B (a::tr) ->
+| IB_A : forall x a tr, ImmBefore A B (a::tr) ->
                         AMatch A a ->
                         ImmBefore A B (x::a::tr).
 
 Theorem immbefore_ok :
-  forall A B t tx ty b,
+  forall A B b T1 T2,
     AMatch B b ->
-    t = tx ++ b::ty ->
-    ImmBefore A B t ->
-    exists tz, exists a,
-      AMatch A a /\ ty = a::tz.
+    ImmBefore A B (T1 ++ b::T2) ->
+    exists a, exists T3,
+      AMatch A a /\ T2 = a::T3.
 Proof.
-  intros A B t tx ty b HmatchB Ht Hib.
-  generalize dependent tx.
-  generalize dependent ty.
-  induction Hib; intros ty tx Ht.
-    pose (app_cons_not_nil tx ty b).
+  intros A B b T1 T2 HmatchB Hib.
+  remember (T1 ++ b::T2) as T.
+  generalize dependent T1.
+  generalize dependent T2.
+  induction Hib; intros T2 T1 HT.
+    pose (app_cons_not_nil T1 T2 b).
     contradiction.
 
-    destruct tx.
-      simpl in Ht. inversion Ht.
+    destruct T1.
+      simpl in HT. inversion HT.
       subst b. contradiction.
 
-      inversion Ht. eauto.
+      inversion HT. eauto.
 
-    destruct tx.
-      simpl in Ht. inversion Ht. eauto.
+    destruct T1.
+      simpl in HT. inversion HT. eauto.
 
-      inversion Ht. eauto.
+      inversion HT. eauto.
+Qed.
+
+Definition ImmAfter B A tr := ImmBefore B A (rev tr).
+
+Lemma immafter_ok :
+  forall A B a T1 T2,
+  AMatch A a ->
+  ImmAfter B A (T1 ++ a::T2) ->
+  exists b, exists T3,
+    AMatch B b /\ T1 = T3 ++ b::nil.
+Proof.
+  unfold ImmAfter.
+  intros A B a T1 T2 HmatchA Hib.
+  rewrite rev_app_distr in Hib.
+  simpl in Hib. rewrite <- app_assoc in Hib.
+  eapply immbefore_ok in Hib; eauto.
+  destruct Hib as [b H]. destruct H as [T3 H].
+  exists b. exists (rev T3).
+  destruct H.
+  split.
+    auto.
+
+    rewrite <- rev_involutive with (l:=T1).
+    rewrite H0. auto.
 Qed.
 
 Inductive Enables (past:KOAction) (future:KOAction)

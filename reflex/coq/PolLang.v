@@ -306,4 +306,58 @@ Proof.
     inversion Hdis; auto.
 Qed.
 
+Definition decide_amatch A a : {AMatch A a} + {~ AMatch A a} :=
+  decide_act _ _ _ COMPTDEC A a.
+
+Lemma disables_snoc : forall A B T na,
+  ~ AMatch A na ->
+  Disables A B T ->
+  Disables A B (T ++ na :: nil).
+Proof.
+  intros A B T na Hnmatch D.
+  induction T.
+    apply D_disablee. apply D_nil. inversion 1.
+    simpl.
+    destruct (decide_amatch B a) as [Hmatch|Hmatch].
+      apply D_disablee.
+        apply IHT. now inversion D.
+        intros act' Hin Hmatch'. apply in_app_or in Hin. intuition.
+          inversion D. contradiction. now apply (H3 act').
+        inversion H.
+          subst. auto. auto.
+      apply D_not_disablee; [|assumption]. apply IHT. now inversion D.
+Qed.
+
+Lemma disables_no_disablee_in_suffix : forall A B prefix suffix,
+  Disables A B prefix ->
+  (forall elt, In elt suffix -> ~ AMatch B elt) ->
+  Disables A B (suffix ++ prefix).
+Proof.
+  intros A B prefix suffix D H.
+  induction suffix.
+    assumption.
+    simpl. apply D_not_disablee.
+      apply IHsuffix; auto. intros elt Hin. apply H. now right.
+      apply H. now left.
+Qed.
+
+Lemma disables_rev : forall A B T,
+  Disables A B T ->
+  Disables B A (rev T).
+Proof.
+  intros A B T D.
+  induction T.
+  apply D_nil. simpl.
+  inversion D; subst; simpl in *.
+
+    apply disables_snoc. assumption. apply IHT. now inversion D.
+
+    destruct (decide_amatch B a).
+
+      rename a into b. apply disables_no_disablee_in_suffix.
+      apply D_disablee. constructor. inversion 1.
+      intros elt Hin. apply H2. now apply in_rev.
+      apply disables_snoc. easy. auto.
+Qed.
+
 End PolLang.

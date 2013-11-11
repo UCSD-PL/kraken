@@ -100,6 +100,67 @@ Inductive Enables (past:KOAction) (future:KOAction)
                                            AMatch past past') ->
                             Enables past future (act::tr).
 
+Lemma enables_ok :
+  forall A B b T1 T2,
+    AMatch B b ->
+    Enables A B (T1 ++ b :: T2) ->
+    exists a, exists T3, exists T4,
+      AMatch A a /\ T2 = T3 ++ a :: T4.
+Proof.
+  intros A B b T1 T2 Hmatch Hen.
+  remember (T1 ++ b :: T2) as T.
+  generalize dependent T1.
+  generalize dependent T2.
+  induction Hen; intros T2 T1 HT.
+    pose (app_cons_not_nil T1 T2 b).
+    contradiction.
+
+    destruct T1.
+      simpl in HT. inversion HT.
+      subst b. contradiction.
+
+      inversion HT. eauto.
+
+    destruct T1.
+      simpl in HT. inversion HT.
+      subst tr.
+      destruct H as [a H].
+      destruct H as [Hin HmatchA].
+      apply List.in_split in Hin.
+      destruct Hin as [l1 rest].
+      destruct rest as [l2 H].
+      eauto.
+
+      inversion HT. eauto.
+Qed.
+
+Definition Ensures A B tr := Enables B A (rev tr).
+
+Lemma ensures_ok :
+  forall A B a T1 T2,
+    AMatch A a ->
+    Ensures A B (T1 ++ a :: T2) ->
+    exists b, exists T3, exists T4,
+      AMatch B b /\ T1 = T3 ++ b :: T4.
+Proof.
+  unfold Ensures.
+  intros A B a T1 T2 HmatchA Hen.
+  rewrite rev_app_distr in Hen.
+  simpl in Hen. rewrite <- app_assoc in Hen.
+  eapply enables_ok in Hen; eauto.
+  destruct Hen as [b H]. destruct H as [T3 H].
+  destruct H as [T4 H].
+  exists b. exists (rev T4).
+  exists (rev T3).
+  destruct H.
+  split.
+    auto.
+
+    rewrite <- rev_involutive with (l:=T1).
+    rewrite H0. rewrite List.rev_app_distr.
+    simpl. rewrite <- List.app_assoc. auto.
+Qed.
+
 (*Definition Not_In (A:KOAction) (tr:KTrace) : Prop :=
   forall a, In a tr -> ~AMatch A a.
 

@@ -380,7 +380,7 @@ Proof.
   induction tr'.
     auto.
 
-    apply IB_nA. apply IHtr'.
+    apply IB_nB. apply IHtr'.
       intros a0 Hina0.
       apply Hno_match. simpl. auto.
 
@@ -418,29 +418,90 @@ Proof.
   apply immbefore_no_match.
 Qed.
 
-Lemma immafter_no_match : forall oact oact' tr tr',
-  ImmAfter PAYD COMPT COMPS COMPTDEC oact oact' tr ->
-  (forall a, List.In a tr' ->
-             ~ActionMatch.AMatch _ _ _ COMPTDEC oact' a) ->
-  ImmAfter _ _ _ COMPTDEC oact oact' (tr' ++ tr).
+Lemma IB_compose : forall A B T1 T2,
+  ImmBefore PAYD COMPT COMPS COMPTDEC A B T1 ->
+  ImmBefore PAYD COMPT COMPS COMPTDEC A B T2 ->
+  ImmBefore PAYD COMPT COMPS COMPTDEC A B (T2 ++ T1).
 Proof.
-  intros oact oact' tr tr' Hen Hno_match.
-  induction tr'.
+  intros A B T1 T2 H1 H2.
+  induction H2.
+    simpl. auto.
+
+    simpl. apply IB_nB; auto.
+
+    simpl in *. apply IB_A; auto.
+Qed.
+
+(*Inductive ImmAfterStrong B A :
+  KTrace PAYD COMPT COMPS -> Prop :=
+| IAS_nil : ImmAfterStrong B A nil
+| IAS_cons : forall a tr,
+               ImmAfter _ _ _ COMPTDEC B A (a::tr) ->
+               ~ActionMatch.AMatch _ _ _ COMPTDEC A a ->
+               ImmAfterStrong B A (a::tr).
+
+Lemma ia_strong : forall A B tr,
+  ImmAfterStrong B A tr ->
+  ImmAfter _ _ _ COMPTDEC B A tr.
+Proof.
+  intros A B tr Hias.
+  destruct Hias.
+    constructor.
     auto.
+Qed.
+*)
+Lemma immafter_no_match : forall B A tr tr',
+  ImmAfter PAYD COMPT COMPS COMPTDEC B A tr ->
+  (forall a, List.In a tr' ->
+             ~ActionMatch.AMatch _ _ _ COMPTDEC A a) ->
+  ImmAfter _ _ _ COMPTDEC B A (tr' ++ tr).
+Proof.
+  unfold ImmAfter.
+  intros B A tr tr' Hia Hno_match.
+  rewrite List.rev_app_distr.
+  apply IB_compose; auto.
+  induction tr'.
+    simpl. constructor.
 
-    apply IA_nB. apply IHtr'.
-      intros a0 Hina0.
-      apply Hno_match. simpl. auto.
+    simpl. apply IB_compose.
+      apply IB_nB.
+        constructor.
 
+        apply Hno_match. simpl. auto.
+
+      apply IHtr'. intros a0 Hina0.
       apply Hno_match. simpl. auto.
 Qed.
 
-Lemma no_before_IA_init : forall init input oact oact' s,
+(*Lemma immafter_no_match : forall B A tr tr',
+  ImmAfterStrong B A tr ->
+  (forall a, List.In a tr' ->
+             ~ActionMatch.AMatch _ _ _ COMPTDEC A a) ->
+  ImmAfterStrong B A (tr' ++ tr).
+Proof.
+  intros B A tr tr' Hias Hno_match.
+  induction tr'.
+    auto.
+
+    simpl. apply IAS_cons.
+      cut (ImmAfterStrong B A (tr' ++ tr)).
+        intro Hias'. destruct Hias'.
+          constructor.
+
+          apply IA_nA; eauto.
+          
+        apply IHtr'. intros a0 Hina0.
+        apply Hno_match. simpl. auto.
+
+        apply Hno_match. simpl. auto.
+Qed.*)
+
+Lemma no_before_IA_init : forall init input B A s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match init oact' ->
+  no_match init A ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
-   ImmAfter PAYD COMPT COMPS COMPTDEC oact oact' tr.
+   ImmAfter _ _ _ COMPTDEC B A tr.
 Proof.
   intros. rewrite <- List.app_nil_r.
   apply immafter_no_match.
@@ -449,17 +510,17 @@ Proof.
     eapply no_match_init; eauto.
 Qed.
 
-Lemma no_before_IA_hdlr : forall c m input oact oact' s s',
+Lemma no_before_IA_hdlr : forall c m input B A s s',
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact' ->
-  not_recv_match (comp_type _ _ c) (tag _ m) oact' ->
-  not_select_match (comp_type _ _ c) oact' ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) A ->
+  not_recv_match (comp_type _ _ c) (tag _ m) A ->
+  not_select_match (comp_type _ _ c) A ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
-   ImmAfter PAYD COMPT COMPS COMPTDEC oact oact' tr) ->
+   ImmAfter _ _ _ COMPTDEC B A tr) ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s' = inhabits tr ->
-   ImmAfter PAYD COMPT COMPS COMPTDEC oact oact' tr.
+   ImmAfter _ _ _ COMPTDEC B A tr.
 Proof.
   intros.
   eapply no_match_hdlr; eauto.

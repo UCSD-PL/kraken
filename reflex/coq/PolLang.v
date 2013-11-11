@@ -225,5 +225,5 @@ Inductive Disables (disabler:KOAction) (disablee:KOAction)
                               (forall act', In act' tr ->
                                             ~AMatch disabler act') ->
                               Disables disabler disablee (act::tr).
-
+    
 End PolLang.

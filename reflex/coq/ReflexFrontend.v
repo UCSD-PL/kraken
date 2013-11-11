@@ -1383,7 +1383,7 @@ Ltac match_immbefore :=
     pose proof (decide_act pdv compt comps comptdec oact_a act) as H;
     destruct H as [A|A]; simpl in A; repeat autounfold in A;
     [ tauto || (apply IB_A; [ match_immbefore | act_match ])
-    | tauto || (apply IB_nA; [ match_immbefore | assumption ])
+    | tauto || (apply IB_nB; [ match_immbefore | assumption ])
     ]
   (* In some cases, one branch is impossible, so tauto solves it
      /!\ contradiction is not powerful enough to handle ~(True /\ True)
@@ -1392,13 +1392,18 @@ Ltac match_immbefore :=
   end.
 
 Ltac match_immafter :=
+  unfold ImmAfter in *; simpl in *;
+  repeat rewrite <- List.app_assoc;
+  simpl; apply PolLangFacts.IB_compose; auto;
+  match_immbefore.
+(*
   match goal with
   | [ |- ImmAfter _ _ _ _ _ _ nil ]
       => constructor
   | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
       IH : forall tr', Reflex.ktr _ _ _ _ ?s = inhabits tr' ->
-                       ImmAfter _ _ _ _ ?oact_a ?oact_b tr'
-                       |- ImmAfter _ _ _ _ ?oact_a ?oact_b ?tr ]
+                       ImmAfterStrong _ _ _ _ ?oact_a ?oact_b tr'
+                       |- ImmAfter _ _ _ _ ?oact_a ?oact_b (_::?tr) ]
       => auto
   | [ |- ImmAfter ?pdv ?compt ?comps ?comptdec _ ?oact_b (_::?act::_) ]
       => let H := fresh "H" in
@@ -1406,18 +1411,27 @@ Ltac match_immafter :=
          pose proof (decide_act pdv compt comps comptdec oact_b act) as H;
          destruct H as [A|A]; simpl in A; repeat autounfold in A;
          [ tauto ||
-           (apply IA_B; [ match_immafter | act_match ] )
+           (apply IA_B; [ try match_immafter | act_match ] )
          | tauto ||
-           (apply IA_nB; [ match_immafter | act_match ] ) ]
+           (apply IA_nA; [ try match_immafter | act_match ] ) ]
          (*In some cases, one branch is impossible, so contradiction
            solves the goal immediately.
            In other cases, there are variables in the message payloads,
            so both branches are possible.*)
-  | [ |- ImmAfter _ _ _ _ _ _ (?act::_) ]
+(*  | [ |- ImmAfter _ _ _ _ _ _ (?act::_) ]
       (*If theres only one concrete action at the head of the trace,
         it better not a before action because there's nothing after.*)
-      => apply IA_nB; [ match_immafter | act_match ]
+      => apply IA_nB; [ try match_immafter | act_match ]*)
   end.
+
+Ltac match_immafter_strong :=
+  match goal with
+  | [ |- ImmAfterStrong _ _ _ _ _ _ nil ]
+      => constructor
+  | [ |- ImmAfterStrong _ _ _ _ _ _ (?na::_) ]
+      => apply IAS_cons;
+         [ try match_immafter | act_match ]
+  end.*)
 
 Ltac crush_with_lem lem_init lem_hdlr match_policy :=
   let prune_init := solve [ eapply lem_init; prune_finish ] in
@@ -1430,13 +1444,17 @@ Ltac crush :=
   intros;
   match goal with
   | [ |- context [ ImmBefore _ _ _ _ _ _ _ ] ]
-    => crush_with_lem (@no_after_IB_init) (@no_after_IB_hdlr) ltac:(idtac; match_immbefore)
+    => crush_with_lem (@no_after_IB_init) (@no_after_IB_hdlr)
+                      ltac:(idtac; match_immbefore)
   | [ |- context [ ImmAfter _ _ _ _ _ _ _ ] ]
-    => crush_with_lem (@no_before_IA_init) (@no_before_IA_hdlr) ltac:(idtac; match_immafter)
+    => crush_with_lem (@no_before_IA_init) (@no_before_IA_hdlr)
+                      ltac:(idtac; match_immafter)
   | [ |- context [ Enables _ _ _ _ _ _ _ ] ]
-    => crush_with_lem (@no_enablee_init) (@no_enablee_hdlr) ltac:(idtac; match_releases)
+    => crush_with_lem (@no_enablee_init) (@no_enablee_hdlr)
+                      ltac:(idtac; match_releases)
   | [ |- context [ Disables _ _ _ _ ?disabler _ _ ] ]
-    => crush_with_lem (@no_disablee_init) (@no_disablee_hdlr) ltac:(idtac; match_disables disabler)
+    => crush_with_lem (@no_disablee_init) (@no_disablee_hdlr)
+                      ltac:(idtac; match_disables disabler)
   end.
 
 End MkLanguage.

@@ -181,7 +181,7 @@ Proof.
   pose proof (HNot_In a) as H.
   apply H.
   simpl; right; assumption.
-Qed.  
+Qed.
 
 Theorem enables_equiv : forall A B tr,
   Enables A B tr <-> Enables' A B tr.
@@ -217,13 +217,13 @@ Proof.
 
         replace (act::tr'++a::tr0) with ((act::tr')++a::tr0) by auto;
         apply E_A; auto.
-    
+
     (*Enables' -> Enables*)
     intro E'.
     destruct E'.
       induction tr.
         apply E_nil.
-        
+
         apply E_not_future.
         apply IHtr; eapply not_in_cons; eauto.
 
@@ -237,7 +237,7 @@ Proof.
           simpl.
           apply E_future.
             apply E_nil.
-            
+
             exists a; simpl; auto.
 
           simpl in *.
@@ -248,7 +248,7 @@ Proof.
             apply E_future.
               apply E_not_future.
                 assumption.
- 
+
                 unfold Not_In in H'.
                 pose proof (H' a0).
                 intuition.
@@ -260,7 +260,7 @@ Proof.
               apply E_future.
                 apply E_not_future.
                   assumption.
- 
+
                   unfold Not_In in H'.
                   pose proof (H' a0).
                   intuition.
@@ -286,5 +286,24 @@ Inductive Disables (disabler:KOAction) (disablee:KOAction)
                               (forall act', In act' tr ->
                                             ~AMatch disabler act') ->
                               Disables disabler disablee (act::tr).
-    
+
+Lemma disables_ok :
+  forall A B a b T1 T2,
+    AMatch A a ->
+    Disables A B (T1 ++ a :: T2) ->
+    AMatch B b ->
+    ~ In b T1.
+Proof.
+  intros A B a b T1 T2 HmatchA Hdis HmatchB Hin.
+  induction T1.
+  inversion Hin.
+  simpl in *. intuition.
+    subst. inversion Hdis; subst.
+    contradiction.
+    elim (H2 a).
+      apply in_or_app. right. now constructor.
+      assumption.
+    inversion Hdis; auto.
+Qed.
+
 End PolLang.

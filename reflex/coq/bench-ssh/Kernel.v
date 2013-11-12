@@ -95,10 +95,10 @@ Proof. decide equality. Defined.
 Definition COMPS (t : COMPT) : compd :=
   match t with
   | System => mk_compd
-                "System" "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys" []
+                "System" "/home/ucsd/kraken/reflex/coq/bench-ssh/test/ssh/kmsg-ssh/sshd_sys" []
                 (mk_vdesc [str_d])
   | Slave  => mk_compd
-                "Slave"  "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/ssh"      []
+                "Slave"  "/home/ucsd/kraken/reflex/coq/bench-ssh/test/ssh/kmsg-ssh/sshd"      []
                 (mk_vdesc [])
   end.
 

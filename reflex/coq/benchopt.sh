@@ -19,7 +19,7 @@ T=`date +"%y-%m-%d-%H:%M:%S"`
 BENCHMARKS=benchmarks
 GIT_BRANCH=$(parse_git_branch)$(parse_git_hash)
 BASEOUTDIR=$BENCHMARKS/bench-opt-$GIT_BRANCH-$T
-TIMEOUT=8h
+TIMEOUT=7h
 
 function run_opt {
   git checkout Opt.v

@@ -341,7 +341,7 @@ Proof.
       apply H. now left.
 Qed.
 
-Lemma disables_rev : forall A B T,
+Lemma disables_rev' : forall A B T,
   Disables A B T ->
   Disables B A (rev T).
 Proof.
@@ -358,6 +358,14 @@ Proof.
       apply D_disablee. constructor. inversion 1.
       intros elt Hin. apply H2. now apply in_rev.
       apply disables_snoc. easy. auto.
+Qed.
+
+Lemma disables_rev : forall A B T,
+  Disables A B T <-> Disables B A (rev T).
+Proof.
+  split.
+  apply disables_rev'.
+  rewrite <- (rev_involutive T) at 2. apply disables_rev'.
 Qed.
 
 End PolLang.

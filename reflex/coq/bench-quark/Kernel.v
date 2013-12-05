@@ -134,6 +134,9 @@ Definition hdlr_tab_dom {t envd} :=
 Definition cur_tab_dom {t envd ct} :=
   cconf (envd:=envd) (t:=t) ct Tab 1%fin (StVar _ _ _ KSTD _ _ _ v_curtab).
 
+Definition cur_tab_id {t envd ct} :=
+  cconf (envd:=envd) (t:=t) ct Tab 0%fin (StVar _ _ _ KSTD _ _ _ v_curtab).
+
 Definition dom_op {envd term} d e :=
   unop_str envd term (Desc _ str_d) (dom d) e.
 
@@ -164,8 +167,9 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
                     (seq (stupd _ _ v_curtab (envvar (mk_vcdesc [Comp _ Tab]) 0%fin))
                     (seq (send (stvar v_userinput) AddrFocus
                                (mvar TabSwitch 0%fin, tt))
+                    (seq (send (stvar v_output) RenderCompleted (cur_tab_id, tt))
                          (send (stvar v_curtab) RenderRequest
-                               (slit nil, tt))))
+                               (slit nil, tt)))))
                     nop
       ]]
   | UserInput, Navigate =>
@@ -190,7 +194,10 @@ Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
       [[ mk_vcdesc [] :
          ite (eq ccomp (stvar v_curtab))
              (
-               send (stvar v_output) RenderCompleted (mvar RenderCompleted 0%fin, tt)
+               (seq (send (stvar v_userinput) AddrFocus
+                               (cur_tab_id, tt))
+                    (send (stvar v_output) RenderCompleted
+                          (cur_tab_id, tt)))
              )
              (
                nop

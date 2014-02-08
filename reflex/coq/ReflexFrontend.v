@@ -4,6 +4,7 @@ Require Import Reflex.
 Require Import ReflexBase.
 Require Import ReflexDenoted.
 Require Import ReflexFin.
+Require Import ReflexVec.
 Require Import ReflexHVec.
 Require Import ReflexIO.
 Require Import ReflexFacts.
@@ -16,6 +17,35 @@ Require Import ActionMatch.
 Require Import PolLang.
 Require Import PolLangFacts.
 Require Import Opt.
+
+Fixpoint mk_vdesc' l : vdesc' (List.length l) :=
+  match l with
+  | nil     => tt
+  | x :: xs => (x, mk_vdesc' xs)
+  end.
+
+Definition mk_vdesc l : vdesc := existT _ (List.length l) (mk_vdesc' l).
+
+Fixpoint mk_vcdesc' {COMPT} l : vcdesc' COMPT (List.length l) :=
+  match l with
+  | nil     => tt
+  | x :: xs => (x, mk_vcdesc' xs)
+  end.
+
+Definition mk_vcdesc {COMPT} l : vcdesc COMPT := existT _ (List.length l) (mk_vcdesc' l).
+
+Fixpoint mk_vvdesc (l : list (string * list desc)) : vvdesc (List.length l) :=
+  match l with
+  | nil          => tt
+  | (_, x) :: xs => (mk_vdesc x, mk_vvdesc xs)
+  end.
+
+Definition mk_compd name cmd args conf :=
+  {| compd_name := str_of_string name
+   ; compd_cmd  := str_of_string cmd
+   ; compd_args := List.map str_of_string args
+   ; compd_conf := conf
+   |}.
 
 Module Type SystemFeaturesInterface.
   Parameter NB_MSG   : nat.
@@ -37,6 +67,9 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
   Definition complkup {term envd}:= CompLkup PAYD COMPT COMPS KSTD term envd.
+
+  Notation "c1 ;; c2" := (seq c1 c2) (at level 84, right associativity).
+  Notation "'if' e 'then' c1 'else' c2" := (ite e c1 c2) (at level 10).
 
   Definition stvar {cc envd m} v :=
     Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (StVar _ _ _ _ _ _ _ v).
@@ -123,6 +156,66 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition cconf
   {envd} {t : fin NB_MSG} ct ct' i ce :=
   (Term COMPT COMPS _ _ (CConf PAYD COMPT COMPS KSTD ct t envd ct' i ce)).
+
+  Fixpoint prog_type ct mtag (n m : nat) (H : m <= n) (envd : svec (cdesc COMPT) n) : Type :=
+  match m as _m return
+    _m <= n -> _
+  with
+  | O => fun _ => sigT (fun prog_envd : vcdesc COMPT => hdlr_prog PAYD COMPT COMPS KSTD ct mtag prog_envd)
+  | S m' => fun H =>
+    expr COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD ct mtag)
+         (existT _ n envd)
+         (svec_ith envd
+           (fin_of_nat_ok n (n - S m')
+             (Minus.lt_minus n (S m') H (Lt.lt_0_Sn m')))) ->
+    prog_type ct mtag n m' (Le.le_Sn_le _ _ H) envd
+  end H.
+
+  Definition apply_args ct mtag (n m : nat) (H : m <= n)
+    (envd : svec (cdesc COMPT) n)
+    (p : prog_type ct mtag n m H envd) :
+    sigT (fun prog_envd : vcdesc COMPT =>
+      hdlr_prog PAYD COMPT COMPS KSTD ct mtag prog_envd).
+  induction m.
+    exact p.
+    exact (IHm (Le.le_Sn_le _ _ H)
+      (p (envvar (existT _ n envd)
+        (fin_of_nat_ok n (n - S m)
+          (Minus.lt_minus n (S m) H (Lt.lt_0_Sn m)))))).
+  Qed.
+
+  Notation "[[[ v1 , .. , vn ;;; t1 , .. , tn ;;; p ]]]" :=
+    (let envd := mk_vcdesc (cons t1 .. (cons tn nil) .. ) in
+      apply_args _ _ (projT1 envd) (projT1 envd) (Le.le_refl _)
+        (projT2 envd) (fun v1 => .. (fun vn => existT _ envd p) .. ))
+    (at level 9, v1 closed binder, vn closed binder).
+
+  Record hdlr := mk_hdlr
+    { CT   : COMPT;
+      MTAG : fin NB_MSG;
+      prog : sigT (fun prog_envd : vcdesc COMPT =>
+        hdlr_prog PAYD COMPT COMPS KSTD CT MTAG prog_envd)
+    }.
+
+  Fixpoint mk_hdlrs (l : list hdlr) : handlers PAYD COMPT COMPS KSTD.
+    refine(
+      match l with
+      | nil => fun _ _ => existT _ (mk_vcdesc nil) nop
+      | h :: l' =>
+        fun t ct =>
+          match fin_eq_dec (MTAG h) t, COMPTDEC (CT h) ct with
+          | left H1, left H2 => _
+          | _, _              => mk_hdlrs l' t ct
+          end
+      end).
+    rewrite <- H1. rewrite <- H2. exact (prog h).
+  Defined.
+
+Notation " 'When' ct 'sends' mt 'do' p" :=
+  (mk_hdlr ct mt p) (at level 10).
+
+Notation "'HANDLERS' : h1 ; .. ; hn" :=
+  (mk_hdlrs (cons h1 .. (cons hn nil) .. )) (at level 11).
 
 (*Unfortunately, I need to put tactics here because one of them
   must refer to ite in a match.*)
@@ -1480,35 +1573,6 @@ Module MkMain (Import S : SpecInterface).
   Definition main :=
     @main _ PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS.
 End MkMain.
-
-Fixpoint mk_vdesc' l : vdesc' (List.length l) :=
-  match l with
-  | nil     => tt
-  | x :: xs => (x, mk_vdesc' xs)
-  end.
-
-Definition mk_vdesc l : vdesc := existT _ (List.length l) (mk_vdesc' l).
-
-Fixpoint mk_vcdesc' {COMPT} l : vcdesc' COMPT (List.length l) :=
-  match l with
-  | nil     => tt
-  | x :: xs => (x, mk_vcdesc' xs)
-  end.
-
-Definition mk_vcdesc {COMPT} l : vcdesc COMPT := existT _ (List.length l) (mk_vcdesc' l).
-
-Fixpoint mk_vvdesc (l : list (string * list desc)) : vvdesc (List.length l) :=
-  match l with
-  | nil          => tt
-  | (_, x) :: xs => (mk_vdesc x, mk_vvdesc xs)
-  end.
-
-Definition mk_compd name cmd args conf :=
-  {| compd_name := str_of_string name
-   ; compd_cmd  := str_of_string cmd
-   ; compd_args := List.map str_of_string args
-   ; compd_conf := conf
-   |}.
 
 Notation " [ ] " := nil.
 Notation " [ x ] " := (cons x nil).

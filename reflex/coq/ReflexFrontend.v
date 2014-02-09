@@ -53,7 +53,6 @@ Module Type SystemFeaturesInterface.
   Parameter COMPT    : Set.
   Parameter COMPTDEC : forall (x y : COMPT), decide (x = y).
   Parameter COMPS    : COMPT -> compd.
-  Parameter IENVD    : vcdesc COMPT.
   Parameter KSTD     : vcdesc COMPT.
 End SystemFeaturesInterface.
 
@@ -63,7 +62,11 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition nop {envd term} := Nop PAYD COMPT COMPS KSTD envd term.
   Definition ite {envd term} := Ite PAYD COMPT COMPS KSTD envd term.
   Definition send {envd term ct} := Reflex.Send PAYD COMPT COMPS KSTD envd term ct.
-  Definition spawn := Spawn PAYD COMPT COMPS KSTD.
+  Definition spawn {term envd j} t cfg (v_env:sigT (fun i : fin (projT1 envd) => j = i)) :=
+    Spawn PAYD COMPT COMPS KSTD term envd t cfg (projT1 v_env).
+  Notation "v_env <- 'exec' ( t , cfg )" :=
+    (spawn t cfg (fst v_env) (Logic.eq_ind _ _ (Logic.eq_refl _) (projT1 (fst v_env )) (projT2 (fst v_env ))))
+    (at level 201).
   Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
   Definition stupd := StUpd PAYD COMPT COMPS KSTD.
   Definition complkup {term envd}:= CompLkup PAYD COMPT COMPS KSTD term envd.
@@ -84,8 +87,8 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (NLit _ _ v)).
   Definition ccomp {cc envd m} :=
     Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (CComp _ _ _ _ _ _ _).
-  Definition i_slit v := Term COMPT COMPS (base_term _) IENVD (SLit _ _ v).
-  Definition i_nlit v := Term COMPT COMPS (base_term _) IENVD (NLit _ _ v).
+  Definition i_slit {envd} v := Term COMPT COMPS (base_term _) envd (SLit _ _ v).
+  Definition i_nlit {envd} v := Term COMPT COMPS (base_term _) envd (NLit _ _ v).
   Definition mk_comp_pat := Build_comp_pat COMPT COMPS.
 
 (*
@@ -98,7 +101,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
       | Logic.eq_refl => comp_conf COMPT COMPS (projT1 x)
       end.
 
-  Definition i_env_ith s i :=
+(*  Definition i_env_ith s i :=
     shvec_ith (n := projT1 IENVD) (sdenote_cdesc COMPT COMPS) (projT2 IENVD)
               (init_env PAYD COMPT COMPS KSTD IENVD s) i.
   Notation "s ## i" := (i_env_ith s i) (at level 0) : ienv.
@@ -114,7 +117,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     shvec_ith (n := projT1 KSTD) (sdenote_cdesc COMPT COMPS) (projT2 KSTD)
               (kst PAYD COMPT COMPS KSTD s) i.
   Notation "s ## i" := (kst_ith s i) (at level 0) : kst.
-  Delimit Scope kst with kst.
+  Delimit Scope kst with kst.*)
 
   Definition eq {term d envd} e1 e2 :=
     BinOp COMPT COMPS term envd
@@ -157,19 +160,50 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   {envd} {t : fin NB_MSG} ct ct' i ce :=
   (Term COMPT COMPS _ _ (CConf PAYD COMPT COMPS KSTD ct t envd ct' i ce)).
 
+  Fixpoint iprog_type (n m : nat) (H : m <= n) (envd : svec (cdesc COMPT) n) : Type :=
+  match m as _m return
+    _m <= n -> _
+  with
+  | O => fun _ => init_prog PAYD COMPT COMPS KSTD (existT _ n envd)
+  | S m' => fun H =>
+    (sigT (fun i : fin n => (fin_of_nat_ok n (n - S m')
+             (Minus.lt_minus n (S m') H (Lt.lt_0_Sn m'))) = i) *
+    expr COMPT COMPS (base_term COMPT)
+         (existT _ n envd)
+         (svec_ith envd
+           (fin_of_nat_ok n (n - S m')
+             (Minus.lt_minus n (S m') H (Lt.lt_0_Sn m'))))) ->
+    iprog_type n m' (Le.le_Sn_le _ _ H) envd
+  end H.
+
   Fixpoint prog_type ct mtag (n m : nat) (H : m <= n) (envd : svec (cdesc COMPT) n) : Type :=
   match m as _m return
     _m <= n -> _
   with
   | O => fun _ => sigT (fun prog_envd : vcdesc COMPT => hdlr_prog PAYD COMPT COMPS KSTD ct mtag prog_envd)
   | S m' => fun H =>
+    (sigT (fun i : fin n => (fin_of_nat_ok n (n - S m')
+             (Minus.lt_minus n (S m') H (Lt.lt_0_Sn m'))) = i) *
     expr COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD ct mtag)
          (existT _ n envd)
          (svec_ith envd
            (fin_of_nat_ok n (n - S m')
-             (Minus.lt_minus n (S m') H (Lt.lt_0_Sn m')))) ->
+             (Minus.lt_minus n (S m') H (Lt.lt_0_Sn m'))))) ->
     prog_type ct mtag n m' (Le.le_Sn_le _ _ H) envd
   end H.
+
+  Definition apply_iargs (n m : nat) (H : m <= n)
+    (envd : svec (cdesc COMPT) n)
+    (p : iprog_type n m H envd) :
+    init_prog PAYD COMPT COMPS KSTD (existT _ n envd).
+  induction m.
+    exact p.
+    set (i:=(fin_of_nat_ok n (n - S m)
+          (Minus.lt_minus n (S m) H (Lt.lt_0_Sn m)))).
+    exact (IHm (Le.le_Sn_le _ _ H)
+      (p (existT _ i (Logic.eq_refl _), (i_envvar (existT _ n envd)
+        i)))).
+  Qed.
 
   Definition apply_args ct mtag (n m : nat) (H : m <= n)
     (envd : svec (cdesc COMPT) n)
@@ -178,11 +212,22 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
       hdlr_prog PAYD COMPT COMPS KSTD ct mtag prog_envd).
   induction m.
     exact p.
+    set (i:=(fin_of_nat_ok n (n - S m)
+          (Minus.lt_minus n (S m) H (Lt.lt_0_Sn m)))).
     exact (IHm (Le.le_Sn_le _ _ H)
-      (p (envvar (existT _ n envd)
-        (fin_of_nat_ok n (n - S m)
-          (Minus.lt_minus n (S m) H (Lt.lt_0_Sn m)))))).
+      (p (existT _ i (Logic.eq_refl _), (envvar (existT _ n envd)
+        i)))).
   Qed.
+
+  Notation "! x !" := (fst x) (at level 75).
+
+  Notation "# x #" := (snd x) (at level 75).
+
+  Notation "'Init' [[[ v1 , .. , vn ;;; t1 , .. , tn ;;; p ]]]" :=
+    (let envd := mk_vcdesc (cons t1 .. (cons tn nil) .. ) in
+      apply_iargs (projT1 envd) (projT1 envd) (Le.le_refl _)
+        (projT2 envd) (fun v1 => .. (fun vn => p) .. ))
+    (at level 9, v1 closed binder, vn closed binder).
 
   Notation "[[[ v1 , .. , vn ;;; t1 , .. , tn ;;; p ]]]" :=
     (let envd := mk_vcdesc (cons t1 .. (cons tn nil) .. ) in
@@ -214,7 +259,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
 Notation " 'When' ct 'sends' mt 'do' p" :=
   (mk_hdlr ct mt p) (at level 10).
 
-Notation "'HANDLERS' : h1 ; .. ; hn" :=
+Notation "'Handlers' : h1 ; .. ; hn" :=
   (mk_hdlrs (cons h1 .. (cons hn nil) .. )) (at level 11).
 
 (*Unfortunately, I need to put tactics here because one of them
@@ -1565,13 +1610,13 @@ End MkLanguage.
 
 Module Type SpecInterface.
   Include SystemFeaturesInterface.
-  Parameter INIT : init_prog PAYD COMPT COMPS KSTD IENVD.
+  Parameter INIT : sigT (fun envd : vcdesc COMPT => init_prog PAYD COMPT COMPS KSTD envd).
   Parameter HANDLERS : handlers PAYD COMPT COMPS KSTD.
 End SpecInterface.
 
 Module MkMain (Import S : SpecInterface).
   Definition main :=
-    @main _ PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS.
+    @main _ PAYD COMPT COMPTDEC COMPS KSTD (projT1 INIT) (projT2 INIT) HANDLERS.
 End MkMain.
 
 Notation " [ ] " := nil.

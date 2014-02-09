@@ -34,6 +34,7 @@ gtk.gdk.threads_init()
 
 rrender=True
 damage_working=True
+stop_damage=False
 
 def signal_handler(signal, frame):
     #shm.remove_memory(tab.shm_obj.shmid)
@@ -413,14 +414,21 @@ class Tab:
             self.view.emit("button_press_event", e)
             gtk.timeout_add(5, self.delayed_mouse_release, coors[0], coors[1])
         elif mtype == message.RenderRequest : 
+            #print "RenderRequest is received:"
             # this is a render msg triggered by tab switching.
             # so we have to render the entire screen again.
-            #gtk.timeout_add(50, self.delayed_render)
+            #fullrefresh = True
+            global stop_damage
+            stop_damage = True
+            self.delayed_render()
+            self.delayed_render()
+            stop_damage = False
             #self.delayed_render()
-            if self.renderred:
-                gtk.timeout_add(50, self.delayed_render)
-            else :
-                self.message_handler.send([message.RenderCompleted, str(self.shm_obj.shmid)])
+            #fullrefresh = False
+            #if self.renderred:
+            #    gtk.timeout_add(50, self.delayed_render)
+            #else :
+            #    self.message_handler.send([message.RenderCompleted, str(self.shm_obj.shmid)])
 
         #elif m.type == msg.mtypes.K2T_SET_COOKIE:
         #tlog("<< K2T_SET_COOKIE msg is received:" + m.cookie)
@@ -454,6 +462,9 @@ class Tab:
         return False
 
     def damage(self, widget, event):
+        global stop_damage
+        if stop_damage : return
+        
         if self.area == None :
             tlog("damage is not supposed to be called before expose()")
         area = self.area
@@ -461,12 +472,15 @@ class Tab:
 
         global damage_working
         global rrender
-        if rrender == True and damage_working == True:
+        if rrender == True and damage_working == True :
             self.render(area.x, area.y, area.width, area.height)
 
     # this area should be an array.
 
     def expose(self, widget, event):
+        global stop_damage
+        if stop_damage : return
+
         if self.area <> None :
             tlog("expose() : area is not null : not yet processed by damage()")
 

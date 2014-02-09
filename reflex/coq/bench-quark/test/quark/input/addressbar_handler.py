@@ -4,6 +4,7 @@ import threading
 import debugmode
 import message
 import subprocess
+import re
 
 _tab_switch_map = {"OP":0, "OQ":1, "OR":2, "OS":3, "[15~":4, "[17~":5, "[18~":6, "[19~":7, "[20~":8, "[21~":9,}
 _new_tab_map = {"[24~":0}
@@ -102,13 +103,19 @@ class AddressBarHandler(threading.Thread) :
                     elif event.event_type == self.NEWTAB_EVENT :
                         debugmode.printmsg("NEWTAB_EVENT")
                         self.echo_on()
-                        domain = raw_input("Enter the trusted domain for a new tab(e.g.,a.com):")
+                        while True :
+                            print "Enter the trusted domain for a new tab(e.g.,a.com):"
+                            domain = raw_input("")
+                            # if the domain is not a top-level domain, take the top domain out of it.
+                            m = re.search("\w+\.\w+$",domain)
+                            if m == None : continue
+                            domain = m.group()
+                            break
                         self.echo_off()
-                        
                         self.message_handler.send([message.TabCreate, ("%d.%s" % (len(self.addrs),str(domain))), str(domain)])
                         print "done well"
                     elif event.event_type == self.TAB_SWITCH_EVENT :
-                        debugmode.printmsg("TAB_SWITCH_EVENT")
+                        debugmode.printmsg("TAB_SWITCH_EVENT" + self.addrs[int(event.event_value)][0])
                         self.message_handler.send([message.TabSwitch, self.addrs[int(event.event_value)][0]])
                     elif event.event_type == self.CHAR_EVENT : 
                         debugmode.printmsg("CHAR_EVENT")

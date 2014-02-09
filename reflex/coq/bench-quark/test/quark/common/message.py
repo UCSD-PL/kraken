@@ -100,7 +100,10 @@ class MessageHandler(object) :
 
     def recv_str(self):
         n = self.recv_num()
-        s = self.KCHAN.recv(n)
+        if n > 0 :
+            s = self.KCHAN.recv(n)
+        else :
+            s = ""
         return s
 
     def recv_fd(self):
@@ -149,6 +152,7 @@ class MessageHandler(object) :
             5 : lambda : [AddrAdd, self.recv_str(),self.recv_str()],
             6 : lambda : [RenderCompleted, self.recv_str()],
             7 : lambda : [RenderRequest, self.recv_str()],
+            #7 : lambda : [RenderRequest, " "],
             8 : lambda : [URLRequest, self.recv_str()],
             9 : lambda : [URLResponse, self.recv_fd()],
             10 : lambda : [SocketRequest, self.recv_str()],

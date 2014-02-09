@@ -19,26 +19,26 @@ Module SystemFeatures <: SystemFeaturesInterface.
 Definition NB_MSG : nat := 16.
 
 Definition PAYD : vvdesc NB_MSG := mk_vvdesc
-  [ 
+  [
   (*  Input -> Kernel *)
    (*(id,domain)*)
   ("TabCreate", [str_d; str_d])
    (*(id)*)
   ;("TabSwitch", [str_d])
   (*  Input -> Kernel -> (focused) Tab *)
-  ;("Navigate", [str_d]) 
-  ;("KeyPress", [str_d]) 
-  ;("MouseClick", [str_d]) 
+  ;("Navigate", [str_d])
+  ;("KeyPress", [str_d])
+  ;("MouseClick", [str_d])
   (*  Kernel -> Input (id,domain) *)
-  ;("AddrAdd", [str_d; str_d]) 
+  ;("AddrAdd", [str_d; str_d])
   (*  Tab -> Kernel -> Screen *)
-  ;("RenderCompleted", [str_d]) 
+  ;("RenderCompleted", [str_d])
   (*  Kernel -> Tab *)
-  ;("RenderRequest", [str_d]) 
+  ;("RenderRequest", [str_d])
   (*  Tab -> Kernel *)
-  ;("URLRequest", [str_d]) 
+  ;("URLRequest", [str_d])
   (*  Kernel -> Tab *)
-  ;("URLResponse", [fd_d]) 
+  ;("URLResponse", [fd_d])
   (*  Tab -> Kernel *)
   ;("SocketRequest", [str_d])
   (*  Kernel -> Tab (Sending out a socket to a CreateSocket.py process) *)
@@ -48,7 +48,7 @@ Definition PAYD : vvdesc NB_MSG := mk_vvdesc
   (*  Kernel -> Cookie  *)
   ;("TabProcessRegister", [fd_d])
   (*  Kernel -> Input (id) *)
-  ;("AddrFocus", [str_d]) 
+  ;("AddrFocus", [str_d])
   ;("DomainSet", [str_d])
   ].
 
@@ -82,7 +82,7 @@ Definition wget := "../test/quark/common/pywget.py".
 
 Definition COMPS (t : COMPT) : compd :=
   match t with
-  | UserInput => mk_compd "UserInput" (comp_dir ++ "input/run.sh") 
+  | UserInput => mk_compd "UserInput" (comp_dir ++ "input/run.sh")
                           [] (mk_vdesc [])
   | Output    => mk_compd "Output"    (comp_dir ++ "output/output.sh")
                           [] (mk_vdesc [])
@@ -138,6 +138,53 @@ Definition dom_op {envd term} d e :=
   unop_str envd term (Desc _ str_d) (dom d) e.
 
 Open Scope hdlr.
+
+(*
+HANDLERS:
+  When UserInput Receives TabCreate(id, domain):
+    c : Component Tab;
+    lookup Tab(id, _)
+      { t =>
+        nop;
+      }
+      {
+        spawn Tab(id, domain);
+        send c DomainSet(id);
+        v_curtab <- id;
+        send v_userinput AddrAdd(id, domain);
+      }
+  When UserInput Receives TabSwitch(id):
+    lookup Tab(id, _)
+      { t =>
+        v_curtab <- t;
+        send v_curtab RenderRequest([])
+      }
+      {
+        nop;
+      }
+  When UserInput Receives Navigate(url):
+    if cur_tab_dom = domain url
+    then {
+      send v_curtab Navigate(url);
+    } else {
+      nop;
+    }
+  When UserInput Receives KeyPress(key):
+    send v_curtab KeyPress(key);
+  When UserInput Receives MouseClick(position):
+    send v_curtab MouseClick(position);
+  When Tab Receives RenderCompleted(id):
+    if ccomp = v_curtab
+    then {
+      send v_output RenderCompleted(id);
+    } else {
+      nop;
+    }
+  When Tab Receives URLRequest(url):
+    d : FileDescriptor;
+    TODO
+*)
+
 Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=
   fun t ct =>
   match ct as _ct, t as _t return

@@ -1,0 +1,38 @@
+Reflex SSH: A Secure SSH Server Verified in Reflex.
+
+We built a verified replacement SSH server based on OpenSSH. It is
+completely impervious to certain classes of attack.
+
+== Directory Explanation ==
+
+./Kernel.v : Reflex SSH implementation written in Reflex
+
+./ml/kernel :compiled executable Reflex SSH comand spawned by inetd
+when a client is connected to port 21.
+
+./test/ssh : components spawend/managed by Reflex SSH to support key
+exchange and create pseudo terminals for authenticated users. These
+components are created based on OpenSSH.
+
+
+== Usage Instruction ==
+
+If you didn't change the current setting of this virtual machine
+you're using, Reflex SSH is running on this machine. Except that
+connection teardown is not implemented in Reflex SSH, you can use it
+like a normal SSH server using a regular ssh client as follows : 
+
+1. open a new terminal emulator (since you cannot disconnect once your
+ssh client is connected).
+
+2. ssh ucsd@localhost (nter)
+
+3. type password "quark"
+
+4. please type the enter key once
+
+5. the ssh connection was served by Reflex SSH and you can use ssh
+like a normal SSH server.
+
+The implementation of the components used by the Reflex SSH server is
+not complete:

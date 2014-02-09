@@ -3,8 +3,28 @@ Reflex Browser: A Secure Web Browser with A Kernel Verified in Reflex.
 Build a verified replacement kernel for Google Chromium to ensure that
 it is completely impervious to certain classes of attack.
 
+== Directory Explanation ==
 
-== Instruction ==
+./run.sh : shell script to run Reflex Browser.
+
+./Kernel.v : Reflex Browser implementation written in Reflex.
+
+./ml/kernel : compiled executable Reflex Browser which manages other
+browser components at the center to guarantee security.
+
+./test/quark/tab/* : HTML Renderer implementation written in
+Python (tab component)
+
+./test/quark/input/* : address bar component to take care of keyboard
+typing and mouse clicks.
+
+./test/quark/output/* : screen component to actually show the
+renderered webpage sent from tab components
+
+./test/quark/cookie/* : cookie component to store and retrieve cookies
+for tabs.
+
+== Usage Instruction ==
 
 Enter "./run.sh" to execute Reflex Browser. You can type one of the
 function keys in the address bar window (a black terminal screen) to

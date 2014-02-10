@@ -1,5 +1,13 @@
 Require Import ReflexFin.
 
+(* Contains a definition of homogenous vectors (containing elements of
+the same type) of length n. Also contains functions for operating on
+these vectors and various lemmas about them.*)
+
+(* Defines vectors where elements are from a Set and where elements
+are from a Type.*)
+
+(* Vectors of length n containing elements from a Set.*)
 Section SVector.
 
 Variable T : Set.
@@ -51,6 +59,7 @@ Implicit Arguments svec_ith [T n].
 Implicit Arguments svec_shift [T n].
 Implicit Arguments svec_erase [desc n].
 
+(* Vectors of length n containing elements from a Type.*)
 Section Vector.
 
 Variable T : Type.

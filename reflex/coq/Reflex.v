@@ -23,6 +23,12 @@ Open Scope hprop_scope.
 Open Scope stsepi_scope.
 Open Scope list_scope.
 
+(* Contains definitions for the implementation DSL and an
+interpreter for this DSL. Also contains the definition of BehAbs, the
+behavioral abstraction of all programs run using the interpreter and a
+proof that the interpreter satisfies the behavioral abstraction for
+all programs.*)
+
 (* Some num/fin/nat stuff *)
 
 Definition num_of_fin {bound : nat} (n : fin bound) := num_of_nat (nat_of_fin n).

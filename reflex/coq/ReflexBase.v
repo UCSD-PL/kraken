@@ -7,8 +7,14 @@ Require Import Orders.
 Require Import String.
 Require Import Arith.Compare.
 
+(* Contains definitions of primitive data-types used in Reflex (16-bit
+natural numbers, strings, file descriptors). Also contains functions
+for creating instances of these data types and a few simple lemmas
+about them.*)
+
 Notation decide P := ({ P } + { ~ P }).
 
+(*16-bit natural numbers*)
 (* follow ascii design, little endian *)
 Inductive num : Set :=
 | Num : ascii -> ascii -> num.
@@ -75,6 +81,7 @@ Defined.
 Notation FALSE := (Num "000" "000").
 Notation TRUE  := (Num "001" "000").
 
+(*string datatype for Reflex*)
 Definition str : Set :=
   list ascii.
 
@@ -87,6 +94,7 @@ Fixpoint str_of_string (s : string) : str :=
 Definition str_eq (s1 s2 : str) : decide (s1 = s2) :=
   list_eq_dec ascii_dec s1 s2.
 
+(*file descriptor datatype for Reflex*)
 Definition fd : Set :=
   num.
 

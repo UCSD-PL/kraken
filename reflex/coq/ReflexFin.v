@@ -2,6 +2,10 @@ Require Import Arith.
 
 Require Import ReflexBase.
 
+(* Contains a definition (fin) of natural numbers less than n. Also
+contains functions for converting to and from nat and functions for
+operating on fins.*)
+
 (* isomorphic to nats less than n *)
 Fixpoint fin (n : nat) : Set :=
   match n with
@@ -21,6 +25,7 @@ Fixpoint nat_of_fin (bound : nat) (n : fin bound) :=
 
 Implicit Arguments nat_of_fin [bound].
 
+(* Converts nat to fin or gives a proof if this is not possible.*)
 Fixpoint opt_fin (bound : nat) (n : nat)
   : {f : fin bound & nat_of_fin f = n } + { n >= bound } :=
   let ret b n := { f : fin b & nat_of_fin f = n } + { n >= b } in

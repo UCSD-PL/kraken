@@ -1,0 +1,45 @@
+This document gives a brief overview of the source code for Reflex.
+
+ReflexBase.v: Contains definitions of primitive data-types used in
+Reflex (16-bit natural numbers, strings, file descriptors). Also
+contains functions for creating instances of these data types and a
+few simple lemmas about them.
+
+ReflexFin.v: Contains a definition (fin) of natural numbers less than
+n. Also contains functions for converting to and from nat and
+functions for operating on fins.
+
+ReflexDenoted.v: Contains type class definitions for denotations of
+type descriptors.
+
+ReflexVec.v: Contains a definition of homogenous vectors (containing
+elements of the same type) of length n. Also contains functions for
+operating on these vectors and various lemmas about them.
+
+ReflexHVec.v: Contains a definition of heterogenous vectors
+(containing elements of potentially different types) of length n. Also
+contains functions for operating on these vectors and various lemmas
+about them.
+
+ReflexIO.v: Contains primitives for interacting with the outside
+world. Their behavior (in terms of observable actions produced and
+facts about open file descriptors) is specified by axioms. Contains a
+few lemmas for reasoning about open file descriptors.
+
+Reflex.v: Contains definitions for the implementation DSL and an
+interpreter for this DSL. Also contains the definition of BehAbs, the
+behavioral abstraction of all programs run using the interpreter and a
+proof that the interpreter satisfies the behavioral abstraction for
+all programs.
+
+ReflexFrontend.v: 
+
+ActionMatch.v: Defines action patterns and gives the semantics for
+matching action patterns with concrete actions.
+
+PolLang.v: Defines the primitives (Enables, Ensures, ImmBefore,
+ImmAfter, Disables) for the trace-based policy language.
+
+NIExists.v: Contains the definition of non-interference and sufficient
+conditions for achieving non-interference (along with a proof of their
+sufficiency.

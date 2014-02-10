@@ -15,8 +15,14 @@ Require Import ReflexFin.
 Require Import ReflexHVec.
 Require Import ReflexVec.
 
+(* Contains primitives for interacting with the outside
+world. Their behavior (in terms of observable actions produced and
+facts about open file descriptors) is specified by axioms. Contains a
+few lemmas for reasoning about open file descriptors.*)
+
 Ltac sep' := sep fail idtac.
 
+(* Defines the observable interactions with the outside world.*)
 Inductive Action : Set :=
 | Exec   : str -> list str -> fd -> Action
 | Call   : str -> list str -> fd -> Action
@@ -27,12 +33,17 @@ Inductive Action : Set :=
 | SendFD : fd -> fd -> Action (* SendFD f f' : use f to send f' *)
 .
 
+(* Represents the sequence of observable interactions with the outside
+world.*)
 Definition Trace : Set := list Action.
 
+(* Used to ensure that traces are unforgeable.*)
 Axiom traced : Trace -> hprop.
 
+(* Represents that a file descriptor is open.*)
 Axiom open : fd -> hprop.
 
+(* Type descriptors for num, str, and fd.*)
 Inductive desc : Set := num_d | str_d | fd_d.
 
 Definition desc_eqdec : forall x y : desc, decide (x = y).
@@ -51,6 +62,7 @@ Definition UIP_refl_desc :
   forall (d : desc) (e : d = d), e = Logic.eq_refl d :=
   DecidableEqDepDesc.UIP_refl.
 
+(* Denotations of each of the type descriptors.*)
 Fixpoint sdenote_desc (d : desc) : Set :=
   match d with
   | num_d => num
@@ -63,6 +75,7 @@ Instance SDenoted_desc : SDenoted desc :=
 { sdenote := sdenote_desc
 }.
 
+(* Projects any newly opened file descriptors from an action.*)
 Definition action_fds (a : Action) : list fd :=
   match a with
   | Exec _ _ f => f::nil
@@ -74,6 +87,7 @@ Definition action_fds (a : Action) : list fd :=
   | SendFD _ _ => nil
   end.
 
+(* Projects all open file descriptors from a trace.*)
 Definition trace_fds (tr : Trace) : list fd :=
   flat_map action_fds tr.
 
@@ -81,217 +95,18 @@ Definition devnull := Num "000" "000".
 
 Axiom devnull_open : emp ==> open devnull.
 
+(* Primitive for spawning a new component.*)
 Axiom exec :
   forall (prog : str) (args : list str) (tr : [Trace]),
     STsep (tr ~~ traced tr)
           (fun f : fd => (tr ~~ open f *
             traced (Exec prog args f :: tr))).
-(*
-Definition vdesc' n : Set := svec desc n.
 
-Definition sdenote_vdesc' n (pt : vdesc' n) : Set :=
-  shvec sdenote_desc pt.
-
-Instance SDenoted_vdesc' {n} : SDenoted (vdesc' n) :=
-{ sdenote := sdenote_vdesc' n
-}.
-
-(* Thank you Ynot for breaking sigT notation... *)
-Definition vdesc := (sigT (fun (n : nat) => vdesc' n)).
-
-Definition sdenote_vdesc (v : vdesc) : Set :=
-  sdenote_vdesc' (projT1 v) (projT2 v).
-
-Instance SDenoted_vdesc : SDenoted vdesc :=
-{ sdenote := sdenote_vdesc
-}.
-
-Definition vvdesc n := vec vdesc n.
-
-Section WITH_PAYLOAD_DESC_VEC.
-
-Context {NB_MSG : nat}.
-Variable VVD : vvdesc NB_MSG.
-
-Record compd :=
-{ compd_name : str
-; compd_cmd  : str
-; compd_args : list str
-; compd_conf : vdesc
-}.
-
-Variable COMPT : Set.
-
-Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
-
-Variable COMPS : COMPT -> compd.
-
-Definition comp_conf_desc compt := compd_conf (COMPS compt).
-
-Record comp : Set :=
-{ comp_type : COMPT
-; comp_fd   : fd
-; comp_conf : s[[ comp_conf_desc comp_type ]]
-}.
-
-Inductive cdesc :=
-| Desc : desc -> cdesc
-| Comp : COMPT -> cdesc
-.
-
-Definition sdenote_cdesc cd :=
-  match cd with
-  | Desc d => sdenote_desc d
-  | Comp t => sigT (fun c : comp => comp_type c = t)
-  end.
-
-Instance SDenoted_cdesc : SDenoted cdesc :=
-{ sdenote := sdenote_cdesc
-}.
-
-Definition vcdesc' n : Set := svec cdesc n.
-
-Definition sdenote_vcdesc' n (pt : vcdesc' n) : Set :=
-  shvec sdenote_cdesc pt.
-
-Instance SDenoted_vcdesc' {n} : SDenoted (vcdesc' n) :=
-{ sdenote := sdenote_vcdesc' n
-}.
-
-Definition vcdesc := (sigT (fun (n : nat) => vcdesc' n)).
-
-Definition sdenote_vcdesc (v : vcdesc) : Set :=
-  sdenote_vcdesc' (projT1 v) (projT2 v).
-
-Instance SDenoted_vcdesc : SDenoted vcdesc :=
-{ sdenote := sdenote_vcdesc
-}.
-
-Fixpoint vdesc_to_vcdesc' {n : nat} : vdesc' n -> vcdesc' n :=
-  match n with
-  | O => fun _ => tt
-  | S n' => fun v =>
-    match v with (d, v') => (Desc d, vdesc_to_vcdesc' v') end
-  end.
-
-Fixpoint vdesc_to_vcdesc (v : vdesc) : vcdesc :=
-  match v with existT n v' => existT _ n (vdesc_to_vcdesc' v') end.
-
-Definition lkup_tag (tag : fin NB_MSG) : vdesc :=
-  vec_ith VVD tag.
-
-Record msg : Set :=
-  { tag : fin NB_MSG
-  ; pay : s[[ lkup_tag tag ]]
-  }.
-
-Record bogus_msg : Set :=
-  { btag : num
-  ; bbad : nat_of_num btag >= NB_MSG
-  }.
-
-Definition maybe_msg := (msg + bogus_msg)%type.
-
-Inductive KAction : Set :=
-| KExec   : str -> list str -> fd -> KAction
-| KCall   : str -> list str -> fd -> KAction
-| KSelect : list comp -> comp -> KAction
-| KSend   : comp -> msg -> KAction
-| KRecv   : comp -> msg -> KAction
-| KBogus  : comp -> bogus_msg -> KAction
-.
-
-Definition KTrace : Set :=
-  list KAction.
-
-Definition proj_fds : list comp -> list fd :=
-  map (fun comp => comp_fd comp).
-
-Definition trace_recv (f : fd) (d : desc) : s[[ d ]] -> Trace :=
-  match d with
-  | num_d => fun n : num => RecvNum f n
-  | str_d => fun s : str => RecvStr f s
-  | fd_d  => fun g : fd  => RecvFD  f g :: nil
-  end.
-
-Definition trace_send (f : fd) (d : desc) : s[[ d ]] -> Trace :=
-  match d with
-  | num_d => fun n : num => SendNum f n
-  | str_d => fun s : str => SendStr f s
-  | fd_d  => fun g : fd  => SendFD  f g :: nil
-  end.
-
-Section WITH_TRACE_FUN.
-
-Variable trace_fun : fd -> forall (d : desc), s[[ Desc d ]] -> list Action.
-
-Fixpoint trace_payload' (f : fd) (n : nat) :
-  forall (pd : vdesc' n) (p : s[[ pd ]]), Trace :=
-  match n with
-  | O => fun _ _ => nil
-  | S n' => fun pd =>
-    let (d, pd') as _pd return forall (p : sdenote_vdesc' (S n') _pd), _ := pd in
-    fun p => trace_payload' f n' pd' (snd p) ++ trace_fun f d (fst p)
-  end.
-
-Definition trace_payload (pd : vdesc) (f : fd) :=
-  trace_payload' f (projT1 pd) (projT2 pd).
-
-Definition trace_opt_payload (opd : option vdesc) (f : fd)
-  : s[! opd !] -> Trace :=
-  match opd as _opd return s[! _opd !] -> Trace with
-  | None => fun p => match p with end
-  | Some spt => fun p => trace_payload spt f p
-  end.
-
-End WITH_TRACE_FUN.
-
-Definition trace_payload_recv' := trace_payload' trace_recv.
-
-Definition trace_payload_send' := trace_payload' trace_send.
-
-Definition trace_payload_recv := trace_payload trace_recv.
-
-Definition trace_payload_send := trace_payload trace_send.
-
-Definition trace_opt_payload_recv := trace_opt_payload trace_recv.
-
-Definition trace_opt_payload_send := trace_opt_payload trace_send.
-
-Definition trace_recv_msg (f : fd) (m : msg) : Trace :=
-  let t := tag m in
-  trace_payload_recv (lkup_tag t) f (pay m) ++ RecvNum f (num_of_fin t).
-
-Definition trace_recv_bogus_msg (f : fd) (m : bogus_msg) : Trace :=
-  RecvNum f (btag m).
-
-Definition trace_recv_maybe_msg (f : fd) (m : maybe_msg) : Trace :=
-  match m with
-  | inl m => trace_recv_msg f m
-  | inr bm => trace_recv_bogus_msg f bm
-  end.
-
-Definition trace_send_msg (f : fd) (m : msg) : Trace :=
-  let t := tag m in
-  trace_payload_send (lkup_tag t) f (pay m) ++ SendNum f (num_of_fin t).
-
-Definition expand_kaction (ka : KAction) : Trace :=
-  match ka with
-  | KExec cmd args f => Exec cmd args f :: nil
-  | KCall cmd args pipe => Call cmd args pipe :: nil
-  | KSelect cs c => Select (proj_fds cs) (comp_fd c) :: nil
-  | KSend c m => trace_send_msg (comp_fd c) m
-  | KRecv c m => trace_recv_msg (comp_fd c) m
-  | KBogus c bm => trace_recv_bogus_msg (comp_fd c) bm
-  end.
-
-Fixpoint expand_ktrace (kt : KTrace) : Trace :=
-  match kt with
-  | nil => nil
-  | ka :: kas => expand_kaction ka ++ expand_ktrace kas
-  end.
-*)
-
+(* Primitive for spawning a new process. Currently has the same type
+as exec, but exec should be used for new components while call should
+be used for spawning arbitrary new processes. Used as a way of
+extending the set of primitives (e.g. could be used to add a wget
+primitive)*)
 Axiom call :
   forall (prog : str) (args : list str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
@@ -304,6 +119,7 @@ Fixpoint in_fd (f : fd) (l : list fd) {struct l} : Set :=
   | x :: r => if fd_eq x f then True else in_fd f r
   end.
 
+(* Primitive for performing Unix-style select on a list of fds.*)
 (* TODO add non-empty precondition *)
 (* TODO add open w/ recv perms precondition *)
 Axiom select :
@@ -312,44 +128,53 @@ Axiom select :
         (fun r : sigT (fun f : fd => in_fd f fs) =>
            tr ~~ traced (Select fs (projT1 r) :: tr) * [In (projT1 r) fs]).
 
+(* Primitive for reading a str from a fd.*)
 Axiom recv :
   forall (f : fd) (n : num) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
         (fun s : str => tr ~~ traced (Recv f s :: tr) * open f *
           [nat_of_num n = List.length s]).
 
+(* Primitive for sending a str over an fd.*)
 Axiom send :
   forall (f : fd) (s : str) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
         (fun _ : unit => tr ~~ traced (Send f s :: tr) * open f).
 
+(* Primitive for reading an fd from an fd.*)
 Axiom recv_fd :
   forall (f : fd) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
         (fun f' : fd => tr ~~ traced (RecvFD f f' :: tr) * open f * open f').
 
+(* Primitive for sending an fd over an fd.*)
 Axiom send_fd :
   forall (f : fd) (f' : fd) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
         (fun _ : unit => tr ~~ traced (SendFD f f' :: tr) * open f).
 
+(* Gives the trace appended when a num is read from an fd.*)
 (* we use big endian to follow network order *)
 Definition RecvNum (f : fd) (n : num) : Trace :=
   match n with
   | Num l h => Recv f (h :: l :: nil) :: nil
   end.
 
+(* Gives the trace appended when a num is sent to an fd.*)
 Definition SendNum (f : fd) (n : num) : Trace :=
   match n with
   | Num l h => Send f (h :: l :: nil) :: nil
   end.
 
+(* Gives the trace appended when a str is received from an fd.*)
 Definition RecvStr (f : fd) (s : str) : Trace :=
   Recv f s :: RecvNum f (num_of_nat (List.length s)).
 
+(* Gives the trace appended when a str is sent to an fd.*)
 Definition SendStr (f : fd) (s : str) : Trace :=
   Send f s :: SendNum f (num_of_nat (List.length s)).
 
+(* Reads a num from an fd, building on recv primitive.*)
 Definition recv_num:
   forall (f : fd) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
@@ -367,6 +192,7 @@ Proof.
   sep'; discriminate.
 Qed.
 
+(* Sends a num to an fd, building on send primitive.*)
 Definition send_num:
   forall (f : fd) (n : num) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
@@ -382,6 +208,7 @@ Proof.
   sep'.
 Qed.
 
+(* Reads a str from an fd, building on recv primitive.*)
 Definition recv_str:
   forall (f : fd) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
@@ -398,6 +225,7 @@ Proof.
   sep'.
 Qed.
 
+(* Sends a str to an fd, building on recv primitive.*)
 Definition send_str:
   forall (f : fd) (s : str) (tr : [Trace]),
   STsep (tr ~~ traced tr * open f)
@@ -415,12 +243,14 @@ Qed.
 (* prevent sep tactic from unfolding *)
 Global Opaque RecvNum SendNum RecvStr SendStr.
 
+(* All fds in the input list are open.*)
 Fixpoint all_open (fds : list fd) : hprop :=
   match fds with
   | nil => emp
   | f :: fs => open f * all_open fs
   end.
 
+(* All fds except for the given fd are open.*)
 Fixpoint all_open_drop (fds : list fd) (drop : fd) : hprop :=
   match fds with
   | nil => emp

@@ -1,3 +1,5 @@
+(* Type class definitions for denotations of type descriptors.*)
+
 Class SDenoted (T : Set) : Type :=
 { sdenote : T -> Set
 }.

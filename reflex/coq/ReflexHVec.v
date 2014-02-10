@@ -3,9 +3,20 @@ Require Import ReflexDenoted.
 Require Import ReflexFin.
 Require Import ReflexVec.
 
+(* Contains a definition of heterogenous vectors (containing elements
+of potentially different types) of length n. The types of the vectors
+are given by a vector of type descriptors. Also contains functions for
+operating on these vectors and various lemmas about them.*)
+
+(* Defines vectors where type descriptors are from a Set and where
+type descriptors are from a Type.*)
+
+(* Vectors with type descriptors from a Set.*)
 Section SHeterogeneousVector.
 
+(* The type descriptors.*)
 Variable desc : Set.
+(* The denotation of the type descriptors.*)
 Variable sdenote_desc : desc -> Set.
 
 Instance SDenoted_desc : SDenoted desc :=
@@ -21,6 +32,7 @@ Fixpoint shvec (n : nat) : svec desc n -> Set :=
     end
   end%type.
 
+(* ith element of the vector. *)
 Fixpoint shvec_ith (n : nat) :
   forall (v_d : svec desc n), shvec n v_d -> forall (i : fin n), s[[ svec_ith v_d i ]] :=
   match n with
@@ -35,6 +47,7 @@ Fixpoint shvec_ith (n : nat) :
     end
   end.
 
+(* Adds an element to the end of the vector.*)
 Fixpoint shvec_shift (n : nat) (d : desc) (e : s[[d]]) :
   forall (v_d : svec desc n), shvec n v_d -> shvec (S n) (svec_shift d v_d) :=
   match n
@@ -47,6 +60,7 @@ Fixpoint shvec_shift (n : nat) (d : desc) (e : s[[d]]) :
     end
   end.
 
+(* Removes the last element of the vector.*)
 Fixpoint shvec_unshift (n : nat) (d : desc) :
   forall (v_d : svec desc n), shvec (S n) (svec_shift d v_d) -> shvec n v_d :=
   match n as _n return
@@ -101,6 +115,7 @@ Proof.
   exact (shvec_in_dec _ _ vv').
 Qed.
 
+(* Replaces the ith element with the given element.*)
 Fixpoint shvec_replace_ith (n : nat) : forall (v_d : svec desc n),
   shvec n v_d -> forall (i : fin n), s[[ svec_ith v_d i ]] -> shvec n v_d :=
   match n with
@@ -115,6 +130,8 @@ Fixpoint shvec_replace_ith (n : nat) : forall (v_d : svec desc n),
     end
   end.
 
+(* Property that two vectors are equal after filtering out the
+elements given by lblr.*)
 Fixpoint shvec_eq (n:nat):
   forall (vd:svec desc n) (v1:shvec n vd) (v2:shvec n vd)
     (lblr:fin n -> bool), Prop :=
@@ -179,6 +196,8 @@ End SHeterogeneousVector.
 Definition extend_denote desc (sdenote_desc : desc -> Set) : (desc+unit) -> Set :=
   (fun d => match d with inl d => sdenote_desc d | inr _ => unit end).
 
+(* Returns a vector such that all elements in the original vector for
+which lblr returns false become tt.*)
 Fixpoint shvec_erase desc sdenote_desc (n : nat) :
   forall (lblr : fin n -> bool) (vd : svec desc n),
     shvec desc sdenote_desc n vd ->
@@ -221,6 +240,8 @@ Implicit Arguments shvec_eq [desc n].
 
 Implicit Arguments shvec_erase [desc n].
 
+(* Returns true iff the input vector matches the pattern vector
+according to the given element matching function.*)
 Fixpoint shvec_match {desc:Set} {n:nat} (vd:svec desc n)
   (sdenote_desc:desc->Set) (sdenote_desc':desc->Set)
   (elt_match:forall (d:desc), sdenote_desc d -> sdenote_desc' d -> bool)
@@ -247,6 +268,8 @@ Fixpoint shvec_match {desc:Set} {n:nat} (vd:svec desc n)
     end v v'
   end vd v v'.
 
+(* Holds iff the input vector matches the pattern vector
+according to the given element matching function.*)
 Fixpoint shvec_match_prop {desc:Set} {n:nat} (vd:svec desc n)
   (sdenote_desc:desc->Set) (sdenote_desc':desc->Set)
   (elt_match:forall (d:desc), sdenote_desc d -> sdenote_desc' d -> Prop)
@@ -318,6 +341,7 @@ Qed.
 
 Implicit Arguments shvec_ith_in [desc n].
 
+(* Vectors with type descriptors from a Type.*)
 Section HeterogeneousVector.
 
 Variable desc : Type.

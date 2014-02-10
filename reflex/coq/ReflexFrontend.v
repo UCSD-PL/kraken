@@ -62,14 +62,17 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition nop {envd term} := Nop PAYD COMPT COMPS KSTD envd term.
   Definition ite {envd term} := Ite PAYD COMPT COMPS KSTD envd term.
   Definition send {envd term ct} := Reflex.Send PAYD COMPT COMPS KSTD envd term ct.
-  Definition spawn {term envd j} t cfg (v_env:sigT (fun i : fin (projT1 envd) => j = i)) :=
-    Spawn PAYD COMPT COMPS KSTD term envd t cfg (projT1 v_env).
-  Notation "v_env <- 'exec' ( t , cfg )" :=
-    (spawn t cfg (fst v_env) (Logic.eq_ind _ _ (Logic.eq_refl _) (projT1 (fst v_env )) (projT2 (fst v_env ))))
-    (at level 201).
+(*  Notation "'sendmsg' c t cfg" :=
+    (send (snd c) t cfg) (at level 10).*)
+  Definition spawn {term envd j} t cfg (v_env:sig (fun i : fin (projT1 envd) => j = i)) :=
+    Spawn PAYD COMPT COMPS KSTD term envd t cfg j (*(proj1_sig v_env)*).
+  Notation "v_env <- 'exec' ( t , cfg ) " :=
+    (spawn t cfg (fst v_env) (Logic.eq_refl _))(*(Logic.eq_ind _ _ (Logic.eq_refl _) (proj1_sig (fst v_env )) (proj2_sig (fst v_env ))))*)
+    (at level 10).
   Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
-  Definition stupd := StUpd PAYD COMPT COMPS KSTD.
-  Definition complkup {term envd}:= CompLkup PAYD COMPT COMPS KSTD term envd.
+  Definition stupd {term envd} := StUpd PAYD COMPT COMPS KSTD term envd.
+  Notation "v_st <- e" :=
+    (stupd v_st e) (at level 10).
 
   Notation "c1 ;; c2" := (seq c1 c2) (at level 84, right associativity).
   Notation "'if' e 'then' c1 'else' c2" := (ite e c1 c2) (at level 10).
@@ -90,6 +93,17 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition i_slit {envd} v := Term COMPT COMPS (base_term _) envd (SLit _ _ v).
   Definition i_nlit {envd} v := Term COMPT COMPS (base_term _) envd (NLit _ _ v).
   Definition mk_comp_pat := Build_comp_pat COMPT COMPS.
+
+  Definition complkup {term envd}:= CompLkup PAYD COMPT COMPS KSTD term envd.
+  Definition complkup_arg {term envd} cp
+    (p:fin (S (projT1 envd)) -> cmd PAYD COMPT COMPS KSTD term
+         (existT (svec (cdesc COMPT)) (S (projT1 envd))
+            (svec_shift (Comp COMPT (comp_pat_type COMPT COMPS term envd cp))
+              (projT2 envd)))) := p (max_fin (projT1 envd)).
+(*  Notation "'lookup' t cfg { x => c1 } { c2 }" :=
+    (let cp := (mk_comp_pat _ _ t cfg) in 
+    (complkup cp (complkup_arg cp (fun x => c1)) c2))
+    (at level 10, x binder).*)
 
 (*
   Definition comp_fd {envd ct} ce (*{ct : COMPT} (x : sigT (fun c => comp_type COMPT COMPS c = ct))*)
@@ -166,7 +180,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   with
   | O => fun _ => init_prog PAYD COMPT COMPS KSTD (existT _ n envd)
   | S m' => fun H =>
-    (sigT (fun i : fin n => (fin_of_nat_ok n (n - S m')
+    (sig (fun i : fin n => (fin_of_nat_ok n (n - S m')
              (Minus.lt_minus n (S m') H (Lt.lt_0_Sn m'))) = i) *
     expr COMPT COMPS (base_term COMPT)
          (existT _ n envd)
@@ -182,7 +196,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   with
   | O => fun _ => sigT (fun prog_envd : vcdesc COMPT => hdlr_prog PAYD COMPT COMPS KSTD ct mtag prog_envd)
   | S m' => fun H =>
-    (sigT (fun i : fin n => (fin_of_nat_ok n (n - S m')
+    (sig (fun i : fin n => (fin_of_nat_ok n (n - S m')
              (Minus.lt_minus n (S m') H (Lt.lt_0_Sn m'))) = i) *
     expr COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD ct mtag)
          (existT _ n envd)
@@ -201,7 +215,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     set (i:=(fin_of_nat_ok n (n - S m)
           (Minus.lt_minus n (S m) H (Lt.lt_0_Sn m)))).
     exact (IHm (Le.le_Sn_le _ _ H)
-      (p (existT _ i (Logic.eq_refl _), (i_envvar (existT _ n envd)
+      (p (exist _ i (Logic.eq_refl _), (i_envvar (existT _ n envd)
         i)))).
   Qed.
 
@@ -215,7 +229,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     set (i:=(fin_of_nat_ok n (n - S m)
           (Minus.lt_minus n (S m) H (Lt.lt_0_Sn m)))).
     exact (IHm (Le.le_Sn_le _ _ H)
-      (p (existT _ i (Logic.eq_refl _), (envvar (existT _ n envd)
+      (p (exist _ i (Logic.eq_refl _), (envvar (existT _ n envd)
         i)))).
   Qed.
 

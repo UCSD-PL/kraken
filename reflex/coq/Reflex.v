@@ -991,9 +991,12 @@ Inductive cmd : vcdesc -> Type :=
 | Call : forall (envd : vcdesc), expr envd (Desc str_d) -> list (expr envd (Desc str_d)) ->
     forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Desc fd_d -> cmd envd
 | StUpd : forall envd i, expr envd (svec_ith (projT2 KSTD) i) -> cmd envd
-| CompLkup : forall (envd : vcdesc) cp,
+| CompLkup : forall (envd : vcdesc) cp (i : fin (projT1 envd)),
+  svec_ith (projT2 envd) i = Comp (comp_pat_type envd cp) ->
+  cmd envd -> cmd envd -> cmd envd
+(*| CompLkup : forall (envd : vcdesc) cp,
   cmd (existT _ (S (projT1 envd)) (svec_shift (Comp (comp_pat_type envd cp)) (projT2 envd))) ->
-  cmd envd -> cmd envd
+  cmd envd -> cmd envd*)
 .
 
 Record init_state (envd : vcdesc) :=
@@ -1102,7 +1105,7 @@ Fixpoint run_cmd_it {envd : vcdesc} {term} (cmd : cmd term envd) : InputTreeType
                            (run_cmd_it c2)
   | Ite _ _ c1 c2 => Comb (run_cmd_it c1)
                              (run_cmd_it c2)
-  | CompLkup _ _ c1 c2 => Comb (run_cmd_it c1)
+  | CompLkup _ _ _ _ c1 c2 => Comb (run_cmd_it c1)
                                (run_cmd_it c2)
   | _ => Unit
   end.
@@ -1176,24 +1179,18 @@ Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd bas
      ; init_kst   := shvec_replace_ith _ _ (init_kst _ s) i v
      |}
 
-  | CompLkup envd cp c1 c2 => fun s i =>
+  | CompLkup envd cp i EQ c1 c2 => fun s i =>
     let ocdp := find_comp (eval_base_comp_pat _ (init_env _ s) cp) (init_comps _ s) in
     match ocdp with
     | Some cdp =>
-      let c := projT1 cdp in
-      let d := Comp (comp_pat_type _ _ cp) in
-      let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
-      let s' := Build_init_state new_envd (init_comps _ s) (init_ktr _ s)
-                                 (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
-                                              (existT _ c (projT2 cdp)) (projT2 envd) (init_env _ s))
-                                 (init_kst _ s) in
-      let s'' := init_state_run_cmd new_envd s' c1 (fst i) in
-      {| init_comps := init_comps _ s''
-       ; init_ktr   := init_ktr _ s''
-       ; init_env   := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) (init_env _ s'')
-       ; init_kst   := init_kst _ s''
-       |}
-    | None   =>  init_state_run_cmd envd s c2 (snd i)
+      let s' :=
+        {| init_comps := init_comps _ s
+         ; init_ktr := init_ktr _ s
+         ; init_env := shvec_replace_cast EQ (init_env _ s) cdp
+         ; init_kst := init_kst _ s
+         |} in
+      init_state_run_cmd envd s' c1 (fst i)
+    | None => init_state_run_cmd envd s c2 (snd i)
     end
 
   end s input.
@@ -1275,31 +1272,21 @@ Fixpoint hdlr_state_run_cmd (envd : vcdesc) (s : hdlr_state envd) (cmd : cmd (hd
      ; hdlr_env := env
      |}
 
-  | CompLkup envd cp c1 c2 => fun s i =>
+  | CompLkup envd cp i EQ c1 c2 => fun s i =>
     let (s', env) := s in
     let ocdp := find_comp (eval_hdlr_comp_pat (kst s') _ env cp) (kcs s') in
     match ocdp with
     | Some cdp =>
-      let c := projT1 cdp in
-      let d := Comp (comp_pat_type _ _ cp) in
-      let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
-      let s' := Build_hdlr_state new_envd {| kcs := kcs s'
-                                           ; ktr := ktr s'
-                                           ; kst := kst s'
-                                           |}
-                                (@shvec_shift cdesc sdenote_cdesc (projT1 envd) d
-                                              (existT _ c (projT2 cdp)) (projT2 envd) env) in
-      let s'' := hdlr_state_run_cmd new_envd s' c1 (fst i) in
-(*      let ks'' := hdlr_kst _ s'' in
-      let new_env := hdlr_env _ s'' in*)
-      {| hdlr_kst := hdlr_kst _ s''
-(*           {| kcs := kcs ks''
-            ; ktr := ktr ks''
-            ; kst := kst ks''
-            |}*)
-       ; hdlr_env := shvec_unshift cdesc sdenote_cdesc (projT1 envd) d (projT2 envd) (hdlr_env _ s'')
-       |}
-    | None   =>  hdlr_state_run_cmd envd s c2 (snd i)
+      let s'' :=
+        {| hdlr_kst :=
+          {| kcs := kcs s'
+           ; ktr := ktr s'
+           ; kst := kst s'
+           |}
+         ; hdlr_env := shvec_replace_cast EQ env cdp
+         |} in
+      hdlr_state_run_cmd envd s'' c1 (fst i)
+    | None => hdlr_state_run_cmd envd s c2 (snd i)
     end
   end s input.
 
@@ -1309,7 +1296,7 @@ Fixpoint default_input {envd term} (c : cmd term envd) : s[[run_cmd_it c]] :=
   | Call _ _ _ _ _ => devnull
   | Seq _ c1 c2 => (default_input c1, default_input c2)
   | Ite _ _ c1 c2 => (default_input c1, default_input c2)
-  | CompLkup _ _ c1 c2 => (default_input c1, default_input c2)
+  | CompLkup _ _ _ _ c1 c2 => (default_input c1, default_input c2)
   | _ => tt
   end.
 
@@ -2446,7 +2433,7 @@ Proof.
     | StUpd _ i ve => fun s =>
       let case := "StUpd _ i ve"%string in _
 
-    | CompLkup envd cp c1 c2 => fun s =>
+    | CompLkup envd cp i EQ c1 c2 => fun s =>
       let case := "CompLkup envd cp c1 c2"%string in _
 
     end s0
@@ -2542,6 +2529,24 @@ pose (ocdp := find_comp (eval_base_comp_pat _ e cp) cs).
 destruct ocdp as [ cdp | ]_eqn.
 (*Component found*)
 refine (
+ let s' :=
+        {| init_comps := init_comps _ s
+         ; init_ktr := init_ktr _ s
+         ; init_env := shvec_replace_cast EQ (init_env _ s) cdp
+         ; init_kst := init_kst _ s
+         |} in
+  s'' <- self envd c1 s';
+  {{ Return s''}}
+); sep unfoldr simplr_base.
+unfold vcdesc_fds_all_in. intro i'. unfold in_if_fd_cdesc.
+destruct (fin_eq_dec i i'). subst i.
+rewrite shvec_ith_replace_cast_ith. rewrite EQ.
+pose proof (find_comp_suc envd e cp cs cdp Heqo).
+sep unfoldr simplr_base.
+rewrite shvec_ith_replace_cast_other; auto.
+unfold vcdesc_fds_all_in, in_if_fd_cdesc in *.
+apply H0; auto.
+(*refine (
   let c := projT1 cdp in
   let d := Comp (comp_pat_type _ _ cp) in
   let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
@@ -2557,7 +2562,7 @@ refine (
              |}
   }}
 ); sep unfoldr simplr_base.
-unfold c; apply H; eapply find_comp_suc with (c:=cdp); eauto.
+unfold c; apply H; eapply find_comp_suc with (c:=cdp); eauto.*)
 
 (*Component not found*)
 refine (
@@ -2719,7 +2724,7 @@ Proof.
   | StUpd _ i ve => fun s =>
     let case := "StUpd _ i ve"%string in _
 
-  | CompLkup _ cp c1 c2 => fun s =>
+  | CompLkup _ cp i EQ c1 c2 => fun s =>
     let case := "CompLkup _ cp c1 c2"%string in _
 
   end s0
@@ -2829,6 +2834,26 @@ pose (ocdp := find_comp (eval_hdlr_comp_pat cc cm st envd env cp) cs).
 destruct ocdp as [ cdp | ]_eqn.
 (*Component found*)
 refine (
+  let s' :=
+    {| hdlr_kst :=
+      {| kcs := cs
+       ; ktr := tr
+       ; kst := st
+       |}
+     ; hdlr_env := shvec_replace_cast EQ env cdp
+     |} in
+  s'' <- self envd c1 s';
+  {{ Return s'' }}
+); sep unfoldr simplr_base.
+unfold vcdesc_fds_all_in. intro i'. unfold in_if_fd_cdesc.
+destruct (fin_eq_dec i i'). subst i.
+rewrite shvec_ith_replace_cast_ith. rewrite EQ.
+pose proof (find_comp_suc_hdlr cc cm envd env st cp cs cdp Heqo).
+sep unfoldr simplr_base.
+rewrite shvec_ith_replace_cast_other; auto.
+unfold vcdesc_fds_all_in, in_if_fd_cdesc in *.
+apply H1; auto.
+(*refine (
   let c := projT1 cdp in
   let d := Comp (comp_pat_type _ _ cp) in
   let new_envd := (existT _ (S (projT1 envd)) (svec_shift d (projT2 envd))) in
@@ -2850,7 +2875,7 @@ refine (
              |}
   }}
 ); sep unfoldr simplr_base.
-apply H0. unfold c0; eapply find_comp_suc_hdlr with (c:=cdp); eauto.
+apply H0. unfold c0; eapply find_comp_suc_hdlr with (c:=cdp); eauto.*)
 
 (*Component not found*)
 refine (

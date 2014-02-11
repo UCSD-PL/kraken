@@ -122,11 +122,20 @@ Module Spec <: SpecInterface.
 
 Include SystemFeatures.
 
+(*
+init_prog IENVD
+
+
+*)
+
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  seq (spawn _ IENVD Output    tt                   i_output    (Logic.eq_refl _)) (
-  seq (spawn _ IENVD UserInput tt                   i_userinput (Logic.eq_refl _)) (
-  seq (stupd _ IENVD v_output (i_envvar IENVD i_output)) (
-  (stupd _ IENVD v_userinput (i_envvar IENVD i_userinput))))).
+  seq
+    (spawn _ IENVD Output tt i_output (Logic.eq_refl _))
+ (seq
+    (spawn _ IENVD UserInput tt i_userinput (Logic.eq_refl _))
+ (seq
+    (stupd _ IENVD v_output (i_envvar IENVD i_output))
+ (  (stupd _ IENVD v_userinput (i_envvar IENVD i_userinput))))).
 
 Definition hdlr_tab_dom {t envd} :=
   cconf (envd:=envd) (t:=t) Tab Tab 1%fin (CComp PAYD COMPT COMPS KSTD Tab t envd).
@@ -140,6 +149,13 @@ Definition dom_op {envd term} d e :=
 Open Scope hdlr.
 
 (*
+(* INIT sucks a bit because we can't spawn to kernel variables *)
+INIT:
+  i_output    <- spawn Output;
+  i_userinput <- spawn UserInput;
+  v_output    <- i_output;
+  v_userinput <- i_userinput;
+
 HANDLERS:
   When UserInput Receives TabCreate(id, domain):
     c : Component Tab;

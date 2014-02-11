@@ -59,13 +59,13 @@ End SystemFeaturesInterface.
 
 Module MkLanguage (Import SF : SystemFeaturesInterface).
   Instance SDenoted_cdesc : SDenoted (cdesc COMPT) := SDenoted_cdesc COMPT COMPS.
-  Definition seq {envd term} := Seq PAYD COMPT COMPS KSTD envd term.
-  Definition nop {envd term} := Nop PAYD COMPT COMPS KSTD envd term.
-  Definition ite {envd term} := Ite PAYD COMPT COMPS KSTD envd term.
-  Definition send {envd term ct} := Reflex.Send PAYD COMPT COMPS KSTD envd term ct.
-  Definition spawn := Spawn PAYD COMPT COMPS KSTD.
-  Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
-  Definition stupd := StUpd PAYD COMPT COMPS KSTD.
+  Definition seq {term envd} := Seq PAYD COMPT COMPS KSTD term envd.
+  Definition nop {term envd} := Nop PAYD COMPT COMPS KSTD term envd.
+  Definition ite {term envd} := Ite PAYD COMPT COMPS KSTD term envd.
+  Definition send {term envd ct} := Reflex.Send PAYD COMPT COMPS KSTD term envd ct.
+  Definition spawn {term envd} := Spawn PAYD COMPT COMPS KSTD term envd.
+  Definition call {term envd} := Reflex.Call PAYD COMPT COMPS KSTD term envd.
+  Definition stupd {term envd} := StUpd PAYD COMPT COMPS KSTD term envd.
   Definition complkup {term envd}:= CompLkup PAYD COMPT COMPS KSTD term envd.
 
   Notation "c1 ;; c2" := (seq c1 c2) (at level 84, right associativity).
@@ -214,7 +214,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
 Notation " 'When' ct 'sends' mt 'do' p" :=
   (mk_hdlr ct mt p) (at level 10).
 
-Notation "'HANDLERS' : h1 ; .. ; hn" :=
+Notation "'Handlers' : h1 ; .. ; hn" :=
   (mk_hdlrs (cons h1 .. (cons hn nil) .. )) (at level 11).
 
 (*Unfortunately, I need to put tactics here because one of them

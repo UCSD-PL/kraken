@@ -52,8 +52,8 @@ Module Spec <: SpecInterface.
 Include SystemFeatures.
 
 Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=
-  seq (spawn _ IENVD Echo1 tt None (Logic.eq_refl _))
-  (seq (spawn _ IENVD Echo2 tt (Some None) (Logic.eq_refl _))
+  seq (envd := IENVD) (spawn Echo1 tt None (Logic.eq_refl _))
+  (seq (spawn Echo2 tt (Some None) (Logic.eq_refl _))
   nop).
 
 Open Scope hdlr.

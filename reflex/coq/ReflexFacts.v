@@ -17,7 +17,7 @@ Proof.
       unfold Reflex.match_comp. inversion Hfind. rewrite <- H0.
       simpl. rewrite Heqo. auto.
 
-      simpl. tauto. 
+      simpl. tauto.
 Qed.
 
 Lemma find_comp_fail :
@@ -174,7 +174,7 @@ Lemma complkup_rew_init :
                                                            conc_pat_type COMPT COMPS
                                                                          (eval_base_comp_pat COMPT COMPS envd
                                                                                              (init_env _ _ _ _ envd s)
-                                                                                             cp)) c (projT2 cdp)) 
+                                                                                             cp)) c (projT2 cdp))
                                                      (projT2 envd)
                                                      (init_env _ _ _ _ envd s))
                              (init_kst _ _ _ _ envd s) in
@@ -183,7 +183,7 @@ Lemma complkup_rew_init :
           init_comps := init_comps _ _ _ _ new_envd s'';
           init_ktr := init_ktr _ _ _ _ new_envd s'';
           init_env := ReflexHVec.shvec_unshift (cdesc COMPT)
-                        (sdenote_cdesc COMPT COMPS) 
+                        (sdenote_cdesc COMPT COMPS)
                         (projT1 envd) d (projT2 envd)
                         (init_env _ _ _ _ new_envd s'');
           init_kst := init_kst _ _ _ _ new_envd s'' |}
@@ -225,13 +225,13 @@ Lemma complkup_rew_hdlr :
                               conc_pat_type COMPT COMPS
                                 (eval_hdlr_comp_pat PAYD COMPT COMPS KSTD cc
                                    m (kst PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0)) envd0
-                                   (hdlr_env _ _ _ _ _ s0) cp)) c (projT2 cdp)) 
+                                   (hdlr_env _ _ _ _ _ s0) cp)) c (projT2 cdp))
                           (projT2 envd0) (hdlr_env _ _ _ _ _ s0) ) in
           let s'' := hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m new_envd s'0 cmd1 (fst i) in
           {|
           hdlr_kst := hdlr_kst PAYD COMPT COMPS KSTD new_envd s'';
           hdlr_env := ReflexHVec.shvec_unshift (cdesc COMPT)
-                        (sdenote_cdesc COMPT COMPS) 
+                        (sdenote_cdesc COMPT COMPS)
                         (projT1 envd0) d (projT2 envd0)
                         (hdlr_env PAYD COMPT COMPS KSTD new_envd s'') |}
       | None => hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0 cmd2 (snd i)
@@ -325,15 +325,15 @@ Fixpoint no_spawn {NB_MSG} {PAYD:vvdesc NB_MSG} {COMPT:Set}
          {COMPS KSTD envd term}
          ct (c:cmd PAYD COMPT COMPS KSTD term envd) :=
   match c with
-  | Reflex.Spawn _ ct' _ _ _ =>
+  | Reflex.Spawn ct' _ _ _ =>
     if COMPTDEC ct ct'
     then False
     else True
-  | Reflex.Seq _ c1 c2 =>
+  | Reflex.Seq c1 c2 =>
     no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
-  | Reflex.Ite _ _ c1 c2 =>
+  | Reflex.Ite _ c1 c2 =>
     no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
-  | Reflex.CompLkup _ _ c1 c2 =>
+  | Reflex.CompLkup _ c1 c2 =>
     no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
   | _ => True
   end.
@@ -396,13 +396,13 @@ Fixpoint no_stupd {NB_MSG} {PAYD:vvdesc NB_MSG} {COMPT:Set}
          {COMPS KSTD envd term}
          (c:cmd PAYD COMPT COMPS KSTD term envd) :=
   match c with
-  | Reflex.Seq _ c1 c2 =>
+  | Reflex.Seq c1 c2 =>
     no_stupd c1 /\ no_stupd c2
-  | Reflex.Ite _ _ c1 c2 =>
+  | Reflex.Ite _ c1 c2 =>
     no_stupd c1 /\ no_stupd c2
-  | Reflex.CompLkup _ _ c1 c2 =>
+  | Reflex.CompLkup _ c1 c2 =>
     no_stupd c1 /\ no_stupd c2
-  | Reflex.StUpd _ _ _ => False
+  | Reflex.StUpd _ _ => False
   | _ => True
   end.
 

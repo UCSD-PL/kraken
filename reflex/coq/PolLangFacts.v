@@ -22,13 +22,13 @@ Variable HANDLERS : handlers PAYD COMPT COMPS KSTD.
 Fixpoint no_match {envd term} (c:cmd PAYD COMPT COMPS KSTD term envd)
          (oact:KOAction PAYD COMPT COMPS) :=
   match c with
-  | Reflex.Seq _ c1 c2 =>
+  | Reflex.Seq c1 c2 =>
     no_match c1 oact /\
     no_match c2 oact
-  | Reflex.Ite _ _ c1 c2 =>
+  | Reflex.Ite _ c1 c2 =>
     no_match c1 oact /\
     no_match c2 oact
-  | Reflex.Send _ ct _ t _ =>
+  | Reflex.Send ct _ t _ =>
     match oact with
     | KOSend (Some (Build_conc_pat ct' _)) (Some (Build_opt_msg t' _)) =>
       if COMPTDEC ct ct'
@@ -47,7 +47,7 @@ Fixpoint no_match {envd term} (c:cmd PAYD COMPT COMPS KSTD term envd)
     | KOSend None None => False
     | _ => True
     end
-  | Reflex.Spawn _ ct _ _ _ =>
+  | Reflex.Spawn ct _ _ _ =>
     match oact with
     | KOExec _ _ (Some (Build_conc_pat ct' _)) =>
       if COMPTDEC ct ct'
@@ -56,16 +56,16 @@ Fixpoint no_match {envd term} (c:cmd PAYD COMPT COMPS KSTD term envd)
     | KOExec _ _ None => False
     | _ => True
     end
-  | Reflex.Call _ _ _ _ _ =>
+  | Reflex.Call _ _ _ _ =>
     match oact with
     | KOCall _ _ _ => False
     | _ => True
     end
-  | Reflex.StUpd _ _ _ => True
-  | Reflex.CompLkup _ _ c1 c2 =>
+  | Reflex.StUpd _ _ => True
+  | Reflex.CompLkup _ c1 c2 =>
     no_match c1 oact /\
     no_match c2 oact
-  | Reflex.Nop _ => True
+  | Reflex.Nop => True
   end.
 
 Lemma no_match_initial_init_state : forall oact,

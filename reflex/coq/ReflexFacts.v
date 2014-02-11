@@ -150,8 +150,23 @@ Proof.
 Qed.
 
 Lemma complkup_rew_init :
-  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC envd cp cmd1 cmd2 s i,
-  init_state_run_cmd _ _ COMPTDEC _ _ envd s (CompLkup PAYD COMPT COMPS KSTD _ _ cp cmd1 cmd2) i =
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC envd cp v EQ cmd1 cmd2 s i,
+  init_state_run_cmd _ _ COMPTDEC _ _ envd s (CompLkup PAYD COMPT COMPS KSTD _ _ cp v EQ cmd1 cmd2) i =
+    match find_comp COMPT COMPTDEC COMPS
+          (eval_base_comp_pat COMPT COMPS envd
+             (init_env _ _ _ _ envd s) cp)
+          (init_comps _ _ _ _ envd s) with
+    | Some cdp =>
+      let s' :=
+        {| init_comps := init_comps _ _ _ _ envd s
+         ; init_ktr := init_ktr _ _ _ _ envd s
+         ; init_env := shvec_replace_cast _ _ EQ (init_env _ _ _ _ envd s) cdp
+         ; init_kst := init_kst _ _ _ _ envd s
+         |} in
+      init_state_run_cmd _ _ COMPTDEC _ _ envd s' cmd1 (fst i)
+    | None => init_state_run_cmd _ _ COMPTDEC _ _ envd s cmd2 (snd i)
+      end.
+(*
       match find_comp COMPT COMPTDEC COMPS
           (eval_base_comp_pat COMPT COMPS envd
              (init_env _ _ _ _ envd s) cp)
@@ -188,17 +203,33 @@ Lemma complkup_rew_init :
                         (init_env _ _ _ _ new_envd s'');
           init_kst := init_kst _ _ _ _ new_envd s'' |}
       | None => init_state_run_cmd _ _ COMPTDEC _ _ envd s cmd2 (snd i)
-      end.
+      end.*)
 Proof.
   auto.
 Qed.
 
 Lemma complkup_rew_hdlr :
-  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC cc m envd0 cp cmd1 cmd2 s0 i,
+  forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPS KSTD COMPTDEC cc m envd0 cp v EQ cmd1 cmd2 s0 i,
   hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0
                      (CompLkup PAYD COMPT COMPS KSTD _
-                               envd0 cp cmd1 cmd2) i =
-      match find_comp COMPT COMPTDEC COMPS
+                               envd0 cp v EQ cmd1 cmd2) i =
+    match find_comp COMPT COMPTDEC COMPS
+          (eval_hdlr_comp_pat PAYD COMPT COMPS KSTD cc m
+             (kst PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0)) envd0 (hdlr_env _ _ _ _ _ s0) cp)
+          (kcs PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0)) with
+    | Some cdp =>
+      let s'' :=
+        {| hdlr_kst :=
+          {| kcs := kcs _ _ _ _ (hdlr_kst _ _ _ _ _ s0)
+           ; ktr := ktr _ _ _ _ (hdlr_kst _ _ _ _ _ s0)
+           ; kst := kst _ _ _ _ (hdlr_kst _ _ _ _ _ s0)
+           |}
+         ; hdlr_env := shvec_replace_cast _ _ EQ (hdlr_env _ _ _ _ _ s0) cdp
+         |} in
+      hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s'' cmd1 (fst i)
+    | None => hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0 cmd2 (snd i)
+    end.
+(*      match find_comp COMPT COMPTDEC COMPS
           (eval_hdlr_comp_pat PAYD COMPT COMPS KSTD cc m
              (kst PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0)) envd0 (hdlr_env _ _ _ _ _ s0) cp)
           (kcs PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s0)) with
@@ -235,7 +266,7 @@ Lemma complkup_rew_hdlr :
                         (projT1 envd0) d (projT2 envd0)
                         (hdlr_env PAYD COMPT COMPS KSTD new_envd s'') |}
       | None => hdlr_state_run_cmd _ _ COMPTDEC _ _ cc m envd0 s0 cmd2 (snd i)
-      end.
+      end.*)
 Proof.
   simpl. destruct s0. auto.
 Qed.
@@ -333,7 +364,7 @@ Fixpoint no_spawn {NB_MSG} {PAYD:vvdesc NB_MSG} {COMPT:Set}
     no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
   | Reflex.Ite _ _ c1 c2 =>
     no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
-  | Reflex.CompLkup _ _ c1 c2 =>
+  | Reflex.CompLkup _ _ _ _ c1 c2 =>
     no_spawn COMPTDEC ct c1 /\ no_spawn COMPTDEC ct c2
   | _ => True
   end.
@@ -400,7 +431,7 @@ Fixpoint no_stupd {NB_MSG} {PAYD:vvdesc NB_MSG} {COMPT:Set}
     no_stupd c1 /\ no_stupd c2
   | Reflex.Ite _ _ c1 c2 =>
     no_stupd c1 /\ no_stupd c2
-  | Reflex.CompLkup _ _ c1 c2 =>
+  | Reflex.CompLkup _ _ _ _ c1 c2 =>
     no_stupd c1 /\ no_stupd c2
   | Reflex.StUpd _ _ _ => False
   | _ => True
@@ -450,5 +481,4 @@ Proof.
     |- context [ match ?e with | Some _ => _ | None => _ end ]
       => destruct e
     end; eauto.
-      simpl in *. erewrite IHcmd1; eauto.
 Qed.

@@ -62,7 +62,7 @@ Fixpoint no_match {envd term} (c:cmd PAYD COMPT COMPS KSTD term envd)
     | _ => True
     end
   | Reflex.StUpd _ _ _ => True
-  | Reflex.CompLkup _ _ c1 c2 =>
+  | Reflex.CompLkup _ _ _ _ c1 c2 =>
     no_match c1 oact /\
     no_match c2 oact
   | Reflex.Nop _ => True
@@ -141,12 +141,14 @@ Proof.
     subst act. destruct oact; auto.
 
     destruct Hno_en as [Hno_en1 Hno_en2].
+    destruct input as [i1 i2].
     match goal with
     | [ _ : context [ match ?e with | Some _ => _ | None => _ end ] |- _ ]
         => destruct e
     end.
     simpl in *.
-      eapply IHinit1; eauto; simpl; auto.
+      destruct i0. simpl in *.
+      eapply (IHinit1 i1); eauto; simpl; auto.
       eapply IHinit2; eauto.
 Qed.
 

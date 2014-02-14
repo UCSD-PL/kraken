@@ -47,6 +47,12 @@ Definition mk_compd name cmd args conf :=
    ; compd_conf := conf
    |}.
 
+Inductive expr_desc :=
+  stvar_d | envvar_d | nlit_d | slit_d.
+
+Inductive i_expr_desc :=
+  i_envvar_d | i_nlit_d | i_slit_d.
+
 Module Type SystemFeaturesInterface.
   Parameter NB_MSG   : nat.
   Parameter PAYD     : vvdesc NB_MSG.
@@ -62,8 +68,8 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition nop {envd term} := Nop PAYD COMPT COMPS KSTD envd term.
   Definition ite {envd term} := Ite PAYD COMPT COMPS KSTD envd term.
   Definition send {envd term ct} := Reflex.Send PAYD COMPT COMPS KSTD envd term ct.
-(*  Notation "'sendmsg' c t cfg" :=
-    (send (snd c) t cfg) (at level 10).*)
+  Notation "'sendmsg' c t cfg" :=
+    (send (snd c) t cfg) (at level 10).
   Definition spawn {term envd j} t cfg (v_env:sig (fun i : fin (projT1 envd) => j = i)) :=
     Spawn PAYD COMPT COMPS KSTD term envd t cfg j (*(proj1_sig v_env)*).
   Notation "v_env <- 'exec' ( t , cfg ) " :=
@@ -71,8 +77,9 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     (at level 10).
   Definition call := Reflex.Call PAYD COMPT COMPS KSTD.
   Definition stupd {term envd} := StUpd PAYD COMPT COMPS KSTD term envd.
+
   Notation "v_st <- e" :=
-    (stupd v_st e) (at level 10).
+    (stupd (fst v_st) (snd e)) (at level 9).
 
   Notation "c1 ;; c2" := (seq c1 c2) (at level 84, right associativity).
   Notation "'if' e 'then' c1 'else' c2" := (ite e c1 c2) (at level 10).
@@ -94,16 +101,82 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition i_nlit {envd} v := Term COMPT COMPS (base_term _) envd (NLit _ _ v).
   Definition mk_comp_pat := Build_comp_pat COMPT COMPS.
 
-  Definition complkup {term envd}:= CompLkup PAYD COMPT COMPS KSTD term envd.
+  Notation "0" := (pair (nlit (num_of_nat 0)) (nlit (num_of_nat 0))) : hdlr_scope.
+  Notation "' s '" := (pair (slit (str_of_string s)) (slit (str_of_string s))) : hdlr_scope.
+  Notation "0" := (pair (i_nlit (num_of_nat 0)) (i_nlit (num_of_nat 0))) : init_scope.
+  Notation "' s '" := (pair (i_slit (str_of_string s)) (i_slit (str_of_string s))) : init_scope.
+
+(*  Definition i_expr_desc_denote n (e:i_expr_desc) :=
+    match e with
+    | i_envvar_d => fin n
+    | i_nlit_d => nat
+    | i_slit_d => string
+    end.
+
+  Definition i_expr_desc_cdesc envd (e:i_expr_desc) :
+    i_expr_desc_denote (projT1 envd) e -> cdesc COMPT :=
+    match e as _e return
+      i_expr_desc_denote (projT1 envd) _e -> cdesc COMPT
+    with
+    | i_envvar_d => fun v => svec_ith (projT2 envd) v
+    | i_nlit_d => fun _ => Desc _ num_d
+    | i_slit_d => fun _ => Desc _ str_d
+    end.
+
+  Definition i_lvalue envd e :
+    forall (v:i_expr_desc_denote (projT1 envd) e),
+      expr COMPT COMPS (base_term COMPT) envd (i_expr_desc_cdesc envd e v) :=
+    match e as _e return
+      forall (v:i_expr_desc_denote (projT1 envd) _e),
+        expr COMPT COMPS (base_term COMPT) envd (i_expr_desc_cdesc envd _e v)
+    with
+    | i_envvar_d => fun v => i_envvar envd v
+    | i_nlit_d => fun v => i_nlit (num_of_nat v)
+    | i_slit_d => fun v => i_slit (str_of_string v)
+    end.
+
+  Definition expr_desc_denote n (e:expr_desc) :=
+    match e with
+    | stvar_d => fin (projT1 KSTD)
+    | envvar_d => fin n
+    | nlit_d => nat
+    | slit_d => string
+    end.
+
+  Definition expr_desc_cdesc envd (e:expr_desc) :
+    expr_desc_denote (projT1 envd) e -> cdesc COMPT :=
+    match e as _e return
+      expr_desc_denote (projT1 envd) _e -> cdesc COMPT
+    with
+    | stvar_d => fun v => svec_ith (projT2 KSTD) v
+    | envvar_d => fun v => svec_ith (projT2 envd) v
+    | nlit_d => fun _ => Desc _ num_d
+    | slit_d => fun _ => Desc _ str_d
+    end.
+
+  Definition lvalue {ct mtag} envd e :
+    forall (v:expr_desc_denote (projT1 envd) e),
+      expr COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD ct mtag) envd (expr_desc_cdesc envd e v) :=
+    match e as _e return
+      forall (v:expr_desc_denote (projT1 envd) _e),
+        expr COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD ct mtag) envd (expr_desc_cdesc envd _e v)
+    with
+    | stvar_d => fun v => stvar v
+    | envvar_d => fun v => envvar envd v
+    | nlit_d => fun v => nlit (num_of_nat v)
+    | slit_d => fun v => slit (str_of_string v)
+    end.*)
+
+  Definition complkup {term envd j} cp (v_env:sig (fun i : fin (projT1 envd) => j = i)):=
+    CompLkup PAYD COMPT COMPS KSTD term envd cp j.
   Definition complkup_arg {term envd} cp
     (p:fin (S (projT1 envd)) -> cmd PAYD COMPT COMPS KSTD term
          (existT (svec (cdesc COMPT)) (S (projT1 envd))
             (svec_shift (Comp COMPT (comp_pat_type COMPT COMPS term envd cp))
               (projT2 envd)))) := p (max_fin (projT1 envd)).
-(*  Notation "'lookup' t cfg { x => c1 } { c2 }" :=
-    (let cp := (mk_comp_pat _ _ t cfg) in 
-    (complkup cp (complkup_arg cp (fun x => c1)) c2))
-    (at level 10, x binder).*)
+  Notation "v_env <- 'lookup' t cfg { c1 } { c2 }" :=
+    (complkup (mk_comp_pat _ _ t cfg) (fst v_env) (Logic.eq_refl _) c1 c2)
+    (at level 10).
 
 (*
   Definition comp_fd {envd ct} ce (*{ct : COMPT} (x : sigT (fun c => comp_type COMPT COMPS c = ct))*)
@@ -215,7 +288,7 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     set (i:=(fin_of_nat_ok n (n - S m)
           (Minus.lt_minus n (S m) H (Lt.lt_0_Sn m)))).
     exact (IHm (Le.le_Sn_le _ _ H)
-      (p (exist _ i (Logic.eq_refl _), (i_envvar (existT _ n envd)
+      (p (pair (exist _ i (Logic.eq_refl _)) (i_envvar (existT _ n envd)
         i)))).
   Qed.
 
@@ -229,13 +302,9 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
     set (i:=(fin_of_nat_ok n (n - S m)
           (Minus.lt_minus n (S m) H (Lt.lt_0_Sn m)))).
     exact (IHm (Le.le_Sn_le _ _ H)
-      (p (exist _ i (Logic.eq_refl _), (envvar (existT _ n envd)
+      (p (pair (exist _ i (Logic.eq_refl _)) (envvar (existT _ n envd)
         i)))).
   Qed.
-
-  Notation "! x !" := (fst x) (at level 75).
-
-  Notation "# x #" := (snd x) (at level 75).
 
   Notation "'Init' [[[ v1 , .. , vn ;;; t1 , .. , tn ;;; p ]]]" :=
     (let envd := mk_vcdesc (cons t1 .. (cons tn nil) .. ) in
@@ -1665,3 +1734,7 @@ Notation "17" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (So
 Notation "18" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))))))) : fin_scope.
 Notation "19" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None))))))))))))))))))) : fin_scope.
 Notation "20" := (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some (Some None)))))))))))))))))))) : fin_scope.
+
+(*Notation "( x ; .. ; y )" :=
+  (pair (snd x) ( .. (pair (snd y) tt) .. ))
+  (right associativity, at level 50).*)

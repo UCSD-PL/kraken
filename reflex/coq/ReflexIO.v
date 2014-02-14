@@ -49,7 +49,7 @@ Inductive desc : Set := num_d | str_d | fd_d.
 Definition desc_eqdec : forall x y : desc, decide (x = y).
 Proof.
   decide equality.
-Qed.
+Defined.
 
 Module DecidableTypeDesc <: DecidableType.
   Definition U := desc.

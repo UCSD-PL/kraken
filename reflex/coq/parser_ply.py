@@ -51,6 +51,7 @@ tokens = [
   'RBRACE',
   'LBRACKET',
   'RBRACKET',
+  'DOT',
 ] + list(reserved.values())
 
 def t_ID(t):
@@ -78,6 +79,7 @@ t_LBRACE = r'\['
 t_RBRACE = r'\]'
 t_LBRACKET = r'\{'
 t_RBRACKET = r'\}'
+t_DOT = r'\.'
 
 # A string containing ignored characters (spaces and tabs)
 t_ignore  = ' \t\n'
@@ -121,8 +123,8 @@ def p_comps(p):
     p[0] = [p[1]]
 
 def p_comp(p):
-  'comp : ID STRING LPAREN stringlist RPAREN LPAREN typelist RPAREN'
-  p[0] = {'tag' : p[1], 'cmd' : p[2], 'args' : p[4], 'types' : p[7]}
+  'comp : ID STRING LPAREN stringlist RPAREN LPAREN idtypelist RPAREN'
+  p[0] = {'tag' : p[1], 'cmd' : p[2], 'args' : p[4], 'idtypes' : p[7]}
 
 def p_msgs(p):
   '''msgs : msg msgs
@@ -180,15 +182,15 @@ def p_props(p):
     p[0] = [p[1]]
 
 def p_hdlr(p):
-  '''hdlr : WHEN ID LPAREN idlist RPAREN \
+  '''hdlr : WHEN ID COLON ID \
             SENDS ID LPAREN idlist RPAREN \
             RESPOND COLON cmd
   '''
-  p[0] = {'ctag' : p[2], 'cfg' : p[4], 'mtag' : p[7],
-          'pl' : p[9], 'cmd'  : p[13]}
+  p[0] = {'cc' : p[2], 'ctag' : p[4], 'mtag' : p[6],
+          'pl' : p[8], 'cmd'  : p[12]}
 
 def p_cmd(p):
-  '''cmd : NOP
+  '''cmd : nop
          | assign
          | seq
          | send
@@ -198,6 +200,10 @@ def p_cmd(p):
          | lookup
   '''
   p[0] = p[1]
+
+def p_nop(p):
+  'nop : NOP'
+  p[0] = {'type' : 'nop'}
 
 def p_assign(p):
   'assign : ID ASSIGN expr'
@@ -292,6 +298,7 @@ def p_exprlist(p):
 def p_expr(p):
   '''expr : expr OP expr
           | OP expr
+          | fieldexpr
           | idexpr
           | numexpr
           | stringexpr
@@ -308,6 +315,10 @@ def p_expr(p):
     p[0]['op'] = p[1]
   else:
     p[0] = p[1]
+
+def p_fieldexpr(p):
+  'fieldexpr : expr DOT ID'
+  p[0] = {'type' : 'field', 'expr' : p[1], 'field' : p[3]}
 
 def p_idexpr(p):
   'idexpr : ID'
@@ -381,6 +392,22 @@ def p_stringlist(p):
   else:
     p[0] = []
 
+def p_idtypelist(p):
+  '''idtypelist : idtype COMMA idtypelist
+                | idtype
+                |
+  '''
+  if len(p) == 4:
+    p[0] = [p[1]] + p[3]
+  elif len(p) == 2:
+    p[0] = [p[1]]
+  else:
+    p[0] = []
+
+def p_idtype(p):
+  'idtype : ID COLON TYPE_D'
+  p[0] = {'id' : p[1], 'type': p[3]}
+
 def p_typelist(p):
   '''typelist : TYPE_D COMMA typelist
               | TYPE_D
@@ -452,7 +479,7 @@ def process_comps(comps):
   for c in comps:
     out.write("  | " + c['tag'] + "=> mk_compd\n")
     out.write("    \"" + c['tag'] + "\" " + c['cmd'] + " [" + "; ".join(c['args']) + "]\n")
-    out.write("    (mk_vdesc " + arg_types_str(c['types']) + ")\n")
+    out.write("    (mk_vdesc " + arg_types_str(map(lambda t: t['type'], c['idtypes'])) + ")\n")
   out.write("end.\n\n")
 
 def process_msgs(msgs):
@@ -483,6 +510,7 @@ def get_envd_lookup(cmd, cont):
 # envd is a map from id to type
 def get_envd_nolkup(cmd):
   return {
+     'nop' : lambda x ,y: {},
      'assign' : lambda x ,y: {},
      'seq'    : get_envd_seq,
      'send'   : lambda x, y: {},
@@ -499,42 +527,34 @@ def get_vard_fin(vard):
 
 # Assigns each cmd in the cmd tree an envd, using the
 # input envd as the top level envd
-def add_envd(cmd, envd):
-  if cmd['type'] == 'assign':
-    cmd['envd'] = envd
-  elif cmd['type'] == 'seq':
-    cmd['envd'] = envd
-    add_envd(cmd['cmd1'], envd)
-    add_envd(cmd['cmd2'], envd)
-  elif cmd['type'] == 'send':
-    cmd['envd'] = envd
-  elif cmd['type'] == 'spawn':
-    cmd['envd'] = envd
-  elif cmd['type'] == 'call':
-    cmd['envd'] = envd
+def add_ctxt(cmd, envd, kstd, other):
+  cmd['ctxt'] = {'envd' : envd, 'kstd' : kstd}
+  cmd['ctxt'].update(other)
+  if cmd['type'] == 'seq':
+    add_ctxt(cmd['cmd1'], envd, kstd, other)
+    add_ctxt(cmd['cmd2'], envd, kstd, other)
   elif cmd['type'] == 'ite':
-    cmd['envd'] = envd
-    add_envd(cmd['cmd1'], envd)
-    add_envd(cmd['cmd2'], envd)
+    add_ctxt(cmd['cmd1'], envd, kstd, other)
+    add_ctxt(cmd['cmd2'], envd, kstd, other)
   elif cmd['type'] == 'lookup':
     new_envd = envd.copy()
     new_envd[cmd['var']] = {'type' : 'Comp _ ' + cmd['ctag'],
                             'fin' : (max(envd.values(), key=lambda x: x['fin'])+1)}
-    add_envd(cmd['cmd1'], new_envd)
-    add_envd(cmd['cmd2'], envd)
+    add_ctxt(cmd['cmd1'], new_envd, kstd, other)
+    add_ctxt(cmd['cmd2'], envd, kstd, other)
 
 def get_type_list(vard):
   types_list = map(lambda x: x['type'],
     sorted(vard.values(), key=lambda x: x['fin']))
   return '[' + ';'.join(types_list) + ']'
 
-def process_init_envd(init):
+def process_init_envd(init, kstd):
   out.write("Definition IENVD : vcdesc COMPT := mk_vcdesc\n")
   out.write("  [\n")
   envd = get_vard_fin(get_envd_nolkup(init))
-  add_envd(init, envd)
+  add_ctxt(init, envd, kstd, {})
   types_list = map(lambda x: x['type'],
-    sorted(init['envd'].values(), key=lambda x: x['fin']))
+    sorted(init['ctxt']['envd'].values(), key=lambda x: x['fin']))
   out.write("   " + ";\n   ".join(types_list))
   out.write("\n  ].\n\n")
   gen_fin_notation(envd)
@@ -550,6 +570,7 @@ def process_kstd(state):
   out.write("\n  ].\n\n")
   gen_fin_notation(state_with_fin)
   out.write("\n")
+  return state_with_fin
 
 def end_sys_features():
   out.write("End SystemFeatures.\n\n")
@@ -560,92 +581,118 @@ def end_sys_features():
   out.write("Include SystemFeatures.\n\n")
 
 def get_op(op):
-  {'==' : 'eq', '+' : 'add'}.get(op, 'OP not found ' + op)
+  return {'==' : 'eq', '+' : 'add'}.get(op, 'OP not found ' + op)
 
 def get_envd_str(envd):
   return 'mk_vcdesc ' + get_type_list(envd)
 
+def get_envvar(ctxt, var, pref):
+  return pref + 'envvar ' + '(' + get_envd_str(ctxt['envd']) + \
+         ') ' + str(ctxt['envd'][var]['fin']) + \
+         '%fin'
+
+# TODO : current component, component configuration, user defined expressions
 # envd is a map from id to type
-def get_expr(expr, envd, pref):
+def get_expr(expr, ctxt, pref):
   if expr['type'] == 'binop':
     return get_op(expr['op']) + \
-           ' (' + get_iexpr(expr['expr1'], envd) + \
-           ') (' + get_iexpr(expr['expr2'], envd) + ')'
+           ' (' + get_expr(expr['expr1'], ctxt, pref) + \
+           ') (' + get_expr(expr['expr2'], ctxt, pref) + ')'
   elif expr['type'] == 'unop':
     return get_op(expr['op']) + \
-           ' (' + get_iexpr(expr['expr'], envd) + ')'
+           ' (' + get_expr(expr['expr'], ctxt, pref) + ')'
+  elif expr['type'] == 'field':
+    return 'cconf _ _ ' + expr['field'] + \
+           get_expr(expr['expr'], ctxt, pref)
+#    if expr['id'] == ctxt['cc']:
+#      return 'cconf _ _ field ccomp'
+#    elif expr['id'] in ctxt['envd']:
+#      return 'cconf _ _ field (' + \
+#             get_envvar(ctxt, expr['id'], pref) + ')'
+#    elif expr['id'] in ctxt['kstd']:
+#      return 'cconf _ _ field (stvar ' + expr['id'] + ')'
   elif expr['type'] == 'id':
-    if expr['val'] in envd:
-      return pref + 'envvar ' + '(' + get_envd_str(envd) + \
-             ') ' + str(envd[expr['val']]['fin']) + \
-             '%fin'
-    else:
+    if 'cc' in ctxt and expr['val'] == ctxt['cc']:
+      return 'ccomp'
+    elif expr['val'] in ctxt['envd']:
+      return get_envvar(ctxt, expr['val'], pref)
+    elif 'mvars' in ctxt and expr['val'] in ctxt['mvars']:
+      return 'mvar ' + ctxt['mtag'] + ' ' + \
+             str(ctxt['mvars'].index(expr['val'])) + '%fin'
+    elif expr['val'] in ctxt['kstd']:
       return 'stvar ' + expr['val']
   elif expr['type'] == 'num':
-    return pref + 'nlit (num_of_nat ' + str(expr['val']) + ')'
+    return pref + 'nlit (num_of_nat ' + \
+           str(expr['val']) + ')'
   elif expr['type'] == 'string':
-    return pref + 'slit (str_of_string ' + str(expr['val']) + ')'
+    return pref + 'slit (str_of_string ' + \
+           str(expr['val']) + ')'
 
-def get_iexpr(expr, envd):
-  return get_expr(expr, envd, 'i_')
+def get_iexpr(expr, ctxt):
+  return get_expr(expr, ctxt, 'i_')
 
-def get_hexpr(expr, envd):
-  return get_expr(expr, envd, '')
+def get_hexpr(expr, ctxt):
+  return get_expr(expr, ctxt, '')
 
-def get_oexpr(expr, envd, expr_fun):
+def get_oexpr(expr, ctxt, expr_fun):
   if expr == '_':
     return 'None'
   else:
-    return 'Some ' + expr_fun(expr, envd)
+    return 'Some ' + expr_fun(expr, ctxt)
 
-def get_expr_vec(lexpr, expr_fun, envd):
-  return reduce(lambda acc, h: '(' + expr_fun(h, envd) + ', ' + acc + ')',
+def get_expr_vec(lexpr, expr_fun, ctxt):
+  return reduce(lambda acc, h: '(' + expr_fun(h, ctxt) + ', ' + acc + ')',
     lexpr[::-1], 'tt')
 
+def get_nop(cmd, cont, expr_fun):
+  return 'nop'
+
 def get_assign(cmd, cont, expr_fun):
-  return 'stupd _ (' + get_envd_str(cmd['envd']) + ') ' \
-         + cmd['var'] + ' (' + expr_fun(cmd['expr'], cmd['envd']) + ')'
+  return 'stupd _ (' + get_envd_str(cmd['ctxt']['envd']) + ') ' \
+         + cmd['var'] + ' (' + expr_fun(cmd['expr'], cmd['ctxt']) + ')'
 
 def get_seq(cmd, cont, expr_fun):
-  return '  seq (' + cont(cmd['cmd1']) + ') (\n' + cont(cmd['cmd2']) + ')'
+  return '  seq (' + cont(cmd['cmd1'], expr_fun) + ') (\n' \
+         + cont(cmd['cmd2'], expr_fun) + ')'
 
 def get_send(cmd, cont, expr_fun):
-  return 'send (' + expr_fun(cmd['expr'], cmd['envd']) + \
+  return 'send (' + expr_fun(cmd['expr'], cmd['ctxt']) + \
          ') ' + cmd['mtag'] + ' ' + \
-         get_expr_vec(cmd['pl'], expr_fun, cmd['envd'])
+         get_expr_vec(cmd['pl'], expr_fun, cmd['ctxt'])
 
 def get_spawn(cmd, cont, expr_fun):
-  return 'spawn _ (' + get_envd_str(cmd['envd']) + ') ' \
+  return 'spawn _ (' + get_envd_str(cmd['ctxt']['envd']) + ') ' \
           + cmd['ctag'] + ' ' + \
-         get_expr_vec(cmd['cfg'], expr_fun, cmd['envd']) + ' ' + \
-         str(cmd['envd'][cmd['var']]['fin']) + '%fin' + \
+         get_expr_vec(cmd['cfg'], expr_fun, cmd['ctxt']) + ' ' + \
+         str(cmd['ctxt']['envd'][cmd['var']]['fin']) + '%fin' + \
          ' (Logic.eq_refl _)'
 
 def get_call(cmd, cont, expr_fun):
-  return 'call _ (' + get_envd_str(cmd['envd']) + ') ' \
+  return 'call _ (' + get_envd_str(cmd['ctxt']['envd']) + ') ' \
          + cmd['cmd'] + '[' + \
-         ';'.join(map(lambda e: expr_fun(e, cmd['envd']), cmd['args'])) \
+         ';'.join(map(lambda e: expr_fun(e, cmd['ctxt']), cmd['args'])) \
          + '] ' + str(cmd['envd'][cmd['var']]['fin']) + '%fin' + \
          ' (Logic.eq_refl _)'
 
 def get_ite(cmd, cont, expr_fun):
-  return 'ite (' + expr_fun(cmd['cond'], cmd['envd']) + ')\n' + \
-          '    (\n' + '      ' + cont(cmd['cmd1']) + \
-          '    )(\n' + '      ' + cont(cmd['cmd2']) + \
+  return 'ite (' + expr_fun(cmd['cond'], cmd['ctxt']) + ')\n' + \
+          '    (\n' + '      ' + cont(cmd['cmd1'], expr_fun) + \
+          '    )(\n' + '      ' + cont(cmd['cmd2'], expr_fun) + \
           '    )'
 
 def get_lookup(cmd, cont, expr_fun):
-  return 'complkup (envd:=' + get_envd_str(cmd['envd']) + ') ' \
+  return 'complkup (envd:=' + get_envd_str(cmd['ctxt']['envd']) + ') ' \
          + '(mk_comp_pat _ _ ' + cmd['ctag'] + ' ' + \
          get_expr_vec(cmd['cfg'],
-           lambda e, envd: get_oexpr(e, envd, expr_fun),
-           cmd['envd']) + ')\n' + \
-         '    (\n' + '      ' + cont(cmd['cmd1']) + \
-         '    )(\n' + '      ' + cont(cmd['cmd2']) + \
+           lambda e, ctxt: get_oexpr(e, ctxt, expr_fun),
+           cmd['ctxt']) + ')\n' + \
+         '    (\n' + '      ' + cont(cmd['cmd1'], expr_fun) + \
+         '    )(\n' + '      ' + cont(cmd['cmd2'], expr_fun) + \
          '    )'
 
-def get_init_cmd(cmd):
+def get_cmd(cmd, expr_fun):
   return {
+    'nop'    : get_nop,
     'assign' : get_assign,
     'seq'    : get_seq,
     'send'   : get_send,
@@ -653,16 +700,39 @@ def get_init_cmd(cmd):
     'call'   : get_call,
     'ite'    : get_ite,
     'lookup' : get_lookup
-  }[cmd['type']](cmd, get_init_cmd, get_iexpr)
+  }[cmd['type']](cmd, get_cmd, expr_fun)
 
 def process_init(init):
   out.write("Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=\n")
-  out.write(get_init_cmd(init) + '.')
+  out.write(get_cmd(init, get_iexpr) + '.\n\n')
+
+def process_hdlr(hdlr, kstd):
+  envd = get_vard_fin(get_envd_nolkup(hdlr['cmd']))
+  add_ctxt(hdlr['cmd'], envd, kstd, {'cc':hdlr['cc'],'mtag':hdlr['mtag'],'mvars':hdlr['pl']})
+  out.write('|' + hdlr['ctag'] + ', ' + hdlr['mtag'] + ' =>')
+  out.write('[[ ' + get_envd_str(hdlr['cmd']['ctxt']['envd']) + ' :\n')
+  out.write('  ' + get_cmd(hdlr['cmd'], get_hexpr) + '\n')
+  out.write(']]\n')
+
+def process_hdlrs(hdlrs, kstd):
+  out.write("Open Scope hdlr.\n")
+  out.write("Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=\n")
+  out.write("  fun t ct =>\n")
+  out.write("    match ct as _ct, t as _t return\n")
+  out.write("      {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}\n")
+  out.write("    with\n")
+  for hdlr in hdlrs:
+    process_hdlr(hdlr, kstd)
+  out.write("| _, _ =>\n")
+  out.write("  [[ mk_vcdesc [] : nop ]]\n")
+  out.write("end.\n")
+  out.write("Close Scope hdlr.\n")
 
 write_prelude()
 process_msgs(result['msgs'])
 process_comps(result['comps'])
-process_init_envd(result['init'])
-process_kstd(result['state'])
+kstd = process_kstd(result['state'])
+process_init_envd(result['init'], kstd)
 end_sys_features()
 process_init(result['init'])
+process_hdlrs(result['hdlrs'], kstd)

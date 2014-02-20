@@ -1,10 +1,13 @@
 import ply.lex as lex
 import sys
+import re
+from sets import Set
 
 reserved = {
   'Components' : 'COMPONENTS',
   'Messages' : 'MESSAGES',
   'State' : 'STATE',
+  'Operations' : 'OPERATIONS',
   'Init' : 'INIT',
   'Handlers' : 'HANDLERS',
   'Properties' : 'PROPERTIES',
@@ -43,6 +46,7 @@ tokens = [
   'OP',
   'ASSIGN',
   'FUN',
+  'RARROW',
   'WILDCARD',
   'COLON',
   'SEMICOLON',
@@ -68,9 +72,10 @@ def t_NUM(t):
   return t
 
 t_STRING = r'\".*?\"'
-t_OP = r'\+|=='
+t_OP = r'\+\+|\+|=='
 t_ASSIGN = r'<-'
 t_FUN = r'=>'
+t_RARROW = r'->'
 t_WILDCARD = r'_'
 t_COLON = r':'
 t_SEMICOLON = r';'
@@ -106,12 +111,13 @@ def p_prog(p):
   '''prog : COMPONENTS COLON comps \
             MESSAGES COLON msgs \
             STATE COLON state \
+            OPERATIONS COLON operations \
             INIT COLON init \
             HANDLERS COLON hdlrs \
             PROPERTIES COLON props
   '''
-  p[0] = {'comps' : p[3], 'msgs' : p[6], 'state' : p[9],
-          'init' : p[12], 'hdlrs' : p[15], 'props' : p[18]}
+  p[0] = {'comps' : p[3], 'msgs' : p[6], 'state' : p[9], 'ops' : p[12],
+          'init' : p[15], 'hdlrs' : p[18], 'props' : p[21]}
 
 def p_comps(p):
   '''comps : comp comps
@@ -156,6 +162,34 @@ def p_stvar(p):
            | ID COLON ID
   '''
   p[0] = {p[1] : p[3]}
+
+def p_operations(p):
+  '''operations : operation operations
+                | operation
+                |
+  '''
+  if len(p) == 3:
+    p[0] = p[2]
+    if 'files' in p[0]:
+      p[0]['files'].add(p[1]['file'])
+      p[0]['ops'].update(p[1]['ops'])
+  elif len(p) == 2:
+    p[0] = {'files':Set([p[1]['file']]), 'ops':p[1]['op']}
+  else:
+    p[0] = {'files':Set([]), 'ops':{}}
+
+def p_operation(p):
+  'operation : ID DOT ID COLON funtype'
+  p[0] = {'file':p[1], 'op':{p[3]:p[5]}}
+
+def p_funtype(p):
+  '''funtype : TYPE_D RARROW funtype
+             | TYPE_D
+  '''
+  if len(p) == 4:
+    p[0] = [p[1]] + p[3]
+  else:
+    p[0] = [p[1]]
 
 def p_init(p):
   'init : cmd'
@@ -223,7 +257,7 @@ def p_spawn(p):
 
 def p_call(p):
   'call : ID ASSIGN CALL expr LPAREN exprlist RPAREN'
-  p[0] = {'type' : 'call', 'var' : p[1], 'cmd' : p[4], 'args' : p[6]}
+  p[0] = {'type' : 'call', 'var' : p[1], 'expr' : p[4], 'args' : p[6]}
 
 def p_ite(p):
   'ite : IF expr THEN cmd ELSE cmd'
@@ -296,29 +330,39 @@ def p_exprlist(p):
     p[0] = []
 
 def p_expr(p):
-  '''expr : expr OP expr
-          | OP expr
+  '''expr : LPAREN expr OP expr RPAREN
+          | LPAREN ID expr expr RPAREN
+          | LPAREN ID expr RPAREN
+          | LPAREN expr RPAREN
           | fieldexpr
           | idexpr
           | numexpr
           | stringexpr
   '''
   p[0] = {}
-  if len(p) == 4:
-    p[0]['type'] = 'binop'
-    p[0]['expr1'] = p[1]
-    p[0]['expr2'] = p[3]
-    p[0]['op'] = p[2]
+  if len(p) == 6:
+    if type(p[3]) is str and re.match(t_OP, p[3]):
+      p[0]['type'] = 'binop'
+      p[0]['expr1'] = p[2]
+      p[0]['expr2'] = p[4]
+      p[0]['op'] = p[3]
+    else:
+      p[0]['type'] = 'binop'
+      p[0]['expr1'] = p[3]
+      p[0]['expr2'] = p[4]
+      p[0]['op'] = p[2]
+  elif len(p) == 4:
+    p[0] = p[2]
   elif len(p) == 3:
     p[0]['type'] = 'unop'
-    p[0]['expr'] = p[2]
-    p[0]['op'] = p[1]
+    p[0]['expr'] = p[3]
+    p[0]['op'] = p[2]
   else:
     p[0] = p[1]
 
 def p_fieldexpr(p):
-  'fieldexpr : expr DOT ID'
-  p[0] = {'type' : 'field', 'expr' : p[1], 'field' : p[3]}
+  'fieldexpr : ID DOT ID'
+  p[0] = {'type' : 'field', 'id' : p[1], 'field' : p[3]}
 
 def p_idexpr(p):
   'idexpr : ID'
@@ -433,7 +477,7 @@ print result
 
 out = open(sys.argv[2], 'w')
 
-def write_prelude():
+def write_prelude(imports):
   out.write("Require Import String.\n")
   out.write("Require Import Reflex.\n")
   out.write("Require Import ReflexBase.\n")
@@ -443,8 +487,9 @@ def write_prelude():
   out.write("Require Import ReflexHVec.\n")
   out.write("Require Import ReflexIO.\n")
   out.write("Require Import ReflexVec.\n")
-  out.write("Require Import Misc.\n")
-  out.write("Require Import Ascii.\n\n")
+  out.write("Require Import Ascii.\n")
+  for i in imports:
+    out.write("Require Import " + i + ".\n")
   out.write("Open Scope string_scope.\n\n")
   out.write("Module SystemFeatures <: SystemFeaturesInterface.\n\n")
 
@@ -466,6 +511,8 @@ def gen_fin_notation(vard):
   for k, v in vard.items():
     out.write("Notation " + k + " := " + str(v['fin']) + "%fin (only parsing).\n")
 
+# Returns a map from component type to a map from
+# field to fin
 def process_comps(comps):
   out.write("Inductive COMPT' : Type :=\n")
   for c in comps:
@@ -476,15 +523,18 @@ def process_comps(comps):
   out.write("Proof. decide equality. Defined.\n\n")
   out.write("Definition COMPS (t : COMPT) : compd :=\n")
   out.write("  match t with\n")
+  res = {}
   for c in comps:
     out.write("  | " + c['tag'] + "=> mk_compd\n")
     out.write("    \"" + c['tag'] + "\" " + c['cmd'] + " [" + "; ".join(c['args']) + "]\n")
     out.write("    (mk_vdesc " + arg_types_str(map(lambda t: t['type'], c['idtypes'])) + ")\n")
+    res[c['tag']] = {t['id']:n for n, t in enumerate(c['idtypes'])}
   out.write("end.\n\n")
+  return res
 
 def process_msgs(msgs):
   out.write("Definition NB_MSG : nat := " + str(len(msgs)) + ".\n\n")
-  out.write("Definition PAYD := mk_vvdesc\n")
+  out.write("Definition PAYD : vvdesc NB_MSG := mk_vvdesc\n")
   out.write("[\n")
   out.write(";\n".join(map(lambda m: "(\"" + m['tag'] + "\"," + arg_types_str(m['types']) + ")", msgs)))
   out.write("\n].\n\n")
@@ -538,8 +588,12 @@ def add_ctxt(cmd, envd, kstd, other):
     add_ctxt(cmd['cmd2'], envd, kstd, other)
   elif cmd['type'] == 'lookup':
     new_envd = envd.copy()
+    if len(envd.values()) == 0:
+      new_fin = 0
+    else:
+      new_fin = max(envd.values(), key=lambda x: x['fin'])['fin']+1
     new_envd[cmd['var']] = {'type' : 'Comp _ ' + cmd['ctag'],
-                            'fin' : (max(envd.values(), key=lambda x: x['fin'])+1)}
+                            'fin' : new_fin}
     add_ctxt(cmd['cmd1'], new_envd, kstd, other)
     add_ctxt(cmd['cmd2'], envd, kstd, other)
 
@@ -548,11 +602,11 @@ def get_type_list(vard):
     sorted(vard.values(), key=lambda x: x['fin']))
   return '[' + ';'.join(types_list) + ']'
 
-def process_init_envd(init, kstd):
+def process_init_envd(init, kstd, comp_map, ops):
   out.write("Definition IENVD : vcdesc COMPT := mk_vcdesc\n")
   out.write("  [\n")
   envd = get_vard_fin(get_envd_nolkup(init))
-  add_ctxt(init, envd, kstd, {})
+  add_ctxt(init, envd, kstd, {'comps':comp_map, 'ops':ops})
   types_list = map(lambda x: x['type'],
     sorted(init['ctxt']['envd'].values(), key=lambda x: x['fin']))
   out.write("   " + ";\n   ".join(types_list))
@@ -580,37 +634,47 @@ def end_sys_features():
   out.write("Module Spec <: SpecInterface.\n\n")
   out.write("Include SystemFeatures.\n\n")
 
-def get_op(op):
-  return {'==' : 'eq', '+' : 'add'}.get(op, 'OP not found ' + op)
+def get_op(op, ops, arity):
+  builtin = {'==' : 'eq', '+' : 'add', '++' : 'cat'}
+  if op in builtin:
+    return builtin[op]
+  elif op in ops:
+    funtype = ops[op]
+    return {1:'unop', 2:'binop'}[arity] + \
+           '_' + funtype[len(funtype)-1] + ' _ _ ' + \
+           ' '.join(map(lambda d: '(' + get_cdesc(d) + ')',
+                        funtype[0:len(funtype)-1])) + \
+           ' ' + op
 
 def get_envd_str(envd):
   return 'mk_vcdesc ' + get_type_list(envd)
 
 def get_envvar(ctxt, var, pref):
-  return pref + 'envvar ' + '(' + get_envd_str(ctxt['envd']) + \
-         ') ' + str(ctxt['envd'][var]['fin']) + \
+  return pref + 'envvar envd ' + \
+         str(ctxt['envd'][var]['fin']) + \
          '%fin'
 
-# TODO : current component, component configuration, user defined expressions
-# envd is a map from id to type
+# ctxt contains things like envd, kstd, cc, etc.
 def get_expr(expr, ctxt, pref):
   if expr['type'] == 'binop':
-    return get_op(expr['op']) + \
+    return get_op(expr['op'], ctxt['ops'], 2) + \
            ' (' + get_expr(expr['expr1'], ctxt, pref) + \
            ') (' + get_expr(expr['expr2'], ctxt, pref) + ')'
   elif expr['type'] == 'unop':
-    return get_op(expr['op']) + \
+    return get_op(expr['op'], ctxt['ops'], 1) + \
            ' (' + get_expr(expr['expr'], ctxt, pref) + ')'
   elif expr['type'] == 'field':
-    return 'cconf _ _ ' + expr['field'] + \
-           get_expr(expr['expr'], ctxt, pref)
-#    if expr['id'] == ctxt['cc']:
-#      return 'cconf _ _ field ccomp'
-#    elif expr['id'] in ctxt['envd']:
-#      return 'cconf _ _ field (' + \
-#             get_envvar(ctxt, expr['id'], pref) + ')'
-#    elif expr['id'] in ctxt['kstd']:
-#      return 'cconf _ _ field (stvar ' + expr['id'] + ')'
+    if expr['id'] == ctxt['cc']:
+      ct = ctxt['ctag']
+      e = 'CComp _ _ _ _ _ _ _'
+    elif expr['id'] in ctxt['envd']:
+      ct = ctxt['envd'][expr['id']]['type']
+      e = get_envvar(ctxt, expr['id'], pref)
+    elif expr['id'] in ctxt['kstd']:
+      ct = ctxt['kstd'][expr['id']]['type']
+      e = 'StVar _ _ _ KSTD _ _ _ ' + expr['id']
+    return 'cconf _ ' + ct + ' ' + str(ctxt['comps'][ct][expr['field']]) + \
+           '%fin (' + e + ')'
   elif expr['type'] == 'id':
     if 'cc' in ctxt and expr['val'] == ctxt['cc']:
       return 'ccomp'
@@ -638,7 +702,7 @@ def get_oexpr(expr, ctxt, expr_fun):
   if expr == '_':
     return 'None'
   else:
-    return 'Some ' + expr_fun(expr, ctxt)
+    return 'Some (' + expr_fun(expr, ctxt) + ')'
 
 def get_expr_vec(lexpr, expr_fun, ctxt):
   return reduce(lambda acc, h: '(' + expr_fun(h, ctxt) + ', ' + acc + ')',
@@ -648,8 +712,8 @@ def get_nop(cmd, cont, expr_fun):
   return 'nop'
 
 def get_assign(cmd, cont, expr_fun):
-  return 'stupd _ (' + get_envd_str(cmd['ctxt']['envd']) + ') ' \
-         + cmd['var'] + ' (' + expr_fun(cmd['expr'], cmd['ctxt']) + ')'
+  return 'stupd _ envd ' + cmd['var'] + \
+         ' (' + expr_fun(cmd['expr'], cmd['ctxt']) + ')'
 
 def get_seq(cmd, cont, expr_fun):
   return '  seq (' + cont(cmd['cmd1'], expr_fun) + ') (\n' \
@@ -661,17 +725,15 @@ def get_send(cmd, cont, expr_fun):
          get_expr_vec(cmd['pl'], expr_fun, cmd['ctxt'])
 
 def get_spawn(cmd, cont, expr_fun):
-  return 'spawn _ (' + get_envd_str(cmd['ctxt']['envd']) + ') ' \
-          + cmd['ctag'] + ' ' + \
+  return 'spawn _ envd ' + cmd['ctag'] + ' ' + \
          get_expr_vec(cmd['cfg'], expr_fun, cmd['ctxt']) + ' ' + \
          str(cmd['ctxt']['envd'][cmd['var']]['fin']) + '%fin' + \
          ' (Logic.eq_refl _)'
 
 def get_call(cmd, cont, expr_fun):
-  return 'call _ (' + get_envd_str(cmd['ctxt']['envd']) + ') ' \
-         + cmd['cmd'] + '[' + \
+  return 'call _ envd (' + expr_fun(cmd['expr'], cmd['ctxt']) + ') [' + \
          ';'.join(map(lambda e: expr_fun(e, cmd['ctxt']), cmd['args'])) \
-         + '] ' + str(cmd['envd'][cmd['var']]['fin']) + '%fin' + \
+         + '] ' + str(cmd['ctxt']['envd'][cmd['var']]['fin']) + '%fin' + \
          ' (Logic.eq_refl _)'
 
 def get_ite(cmd, cont, expr_fun):
@@ -681,12 +743,13 @@ def get_ite(cmd, cont, expr_fun):
           '    )'
 
 def get_lookup(cmd, cont, expr_fun):
-  return 'complkup (envd:=' + get_envd_str(cmd['ctxt']['envd']) + ') ' \
+  return 'complkup (envd:=envd) ' \
          + '(mk_comp_pat _ _ ' + cmd['ctag'] + ' ' + \
          get_expr_vec(cmd['cfg'],
            lambda e, ctxt: get_oexpr(e, ctxt, expr_fun),
            cmd['ctxt']) + ')\n' + \
-         '    (\n' + '      ' + cont(cmd['cmd1'], expr_fun) + \
+         '    (let envd :=' + get_envd_str(cmd['cmd1']['ctxt']['envd']) + ' in\n' + \
+         '      ' + cont(cmd['cmd1'], expr_fun) + \
          '    )(\n' + '      ' + cont(cmd['cmd2'], expr_fun) + \
          '    )'
 
@@ -704,17 +767,21 @@ def get_cmd(cmd, expr_fun):
 
 def process_init(init):
   out.write("Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=\n")
+  out.write("let envd := IENVD in\n")
   out.write(get_cmd(init, get_iexpr) + '.\n\n')
 
-def process_hdlr(hdlr, kstd):
+def process_hdlr(hdlr, kstd, comp_map, ops):
   envd = get_vard_fin(get_envd_nolkup(hdlr['cmd']))
-  add_ctxt(hdlr['cmd'], envd, kstd, {'cc':hdlr['cc'],'mtag':hdlr['mtag'],'mvars':hdlr['pl']})
-  out.write('|' + hdlr['ctag'] + ', ' + hdlr['mtag'] + ' =>')
-  out.write('[[ ' + get_envd_str(hdlr['cmd']['ctxt']['envd']) + ' :\n')
+  add_ctxt(hdlr['cmd'], envd, kstd,
+           {'comps':comp_map, 'ops':ops, 'cc':hdlr['cc'],
+            'ctag':hdlr['ctag'], 'mtag':hdlr['mtag'],'mvars':hdlr['pl']})
+  out.write('|' + hdlr['ctag'] + ', ' + hdlr['mtag'] + ' =>\n')
+  out.write('let envd := ' + get_envd_str(hdlr['cmd']['ctxt']['envd']) + ' in\n')
+  out.write('[[ envd :\n')
   out.write('  ' + get_cmd(hdlr['cmd'], get_hexpr) + '\n')
   out.write(']]\n')
 
-def process_hdlrs(hdlrs, kstd):
+def process_hdlrs(hdlrs, kstd, comp_map, ops):
   out.write("Open Scope hdlr.\n")
   out.write("Definition HANDLERS : handlers PAYD COMPT COMPS KSTD :=\n")
   out.write("  fun t ct =>\n")
@@ -722,17 +789,22 @@ def process_hdlrs(hdlrs, kstd):
   out.write("      {prog_envd : vcdesc COMPT & hdlr_prog PAYD COMPT COMPS KSTD _ct _t prog_envd}\n")
   out.write("    with\n")
   for hdlr in hdlrs:
-    process_hdlr(hdlr, kstd)
+    process_hdlr(hdlr, kstd, comp_map, ops)
   out.write("| _, _ =>\n")
   out.write("  [[ mk_vcdesc [] : nop ]]\n")
   out.write("end.\n")
   out.write("Close Scope hdlr.\n")
 
-write_prelude()
+def finish_spec():
+  out.write("End Spec.\n\n")
+  out.write("Module Main := MkMain(Spec).\n")
+
+write_prelude(result['ops']['files'])
 process_msgs(result['msgs'])
-process_comps(result['comps'])
+comp_map = process_comps(result['comps'])
 kstd = process_kstd(result['state'])
-process_init_envd(result['init'], kstd)
+process_init_envd(result['init'], kstd, comp_map, result['ops']['ops'])
 end_sys_features()
 process_init(result['init'])
-process_hdlrs(result['hdlrs'], kstd)
+process_hdlrs(result['hdlrs'], kstd, comp_map, result['ops']['ops'])
+finish_spec()

@@ -1,0 +1,72 @@
+Components :
+  Engine     "engine.c"     () ()
+  Brakes     "brakes.c"     () ()
+  CruiseCtrl "cruisectrl.c" () ()
+  Doors      "doors.c"      () ()
+  Radio      "radio.c"      () ()
+  Airbag     "airbag.c"     () ()
+  Alarm      "alarm.c"      () ()
+
+Messages :
+  Crash()
+  Acceleration()
+  DoorsOpen()
+  UnlockDoors()
+  LockDoors()
+  VolumeUp()
+  VolumeDown()
+  InflateAirbag()
+  BrakesApplied()
+  CruiseOff()
+
+State :
+  crashed : num
+  E       : Engine
+  B       : Brakes
+  CC      : CruiseCtrl
+  D       : Doors
+  R       : Radio
+  AB      : Airbag
+  Alrm    : Alarm
+
+Init :
+  crashed <- 0;
+  Etemp <- spawn Engine();
+  E <- Etemp;
+  Btemp <- spawn Brakes();
+  B <- Btemp;
+  CCtemp <- spawn CruiseCtrl();
+  CC <- CCtemp;
+  Dtemp <- spawn Doors();
+  D <- Dtemp;
+  Rtemp <- spawn Radio();
+  R <- Rtemp;
+  ABtemp <- spawn Airbag();
+  AB <- ABtemp;
+  Alrmtemp <- spawn Alarm();
+  Alrm <- Alrmtemp
+
+Handlers :
+  When e:Engine sends Crash() respond:
+    send(AB, InflateAirbag());
+    send(D, UnlockDoors());
+    crashed <- 1
+
+  When e:Engine sends Acceleration() respond:
+    send(R, VolumeUp())
+
+  When d:Doors sends DoorsOpen() respond:
+    send(R, VolumeDown())
+
+  When a:Alarm sends LockDoors() respond:
+    if crashed == 0
+    then send(D, LockDoors())
+    else nop
+
+  When b:Brakes sends BrakesApplied() respond:
+    send(CC, CruiseOff())
+
+Properties :
+     forall u:
+     [Recv(Password, Auth(u))] Enables
+     [Send(Terminal, ReqTerm(u))]

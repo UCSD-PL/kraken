@@ -1,0 +1,80 @@
+Components :
+  System "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys" () ()
+  Slave  "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/ssh"      () ()
+
+Messages :
+  LoginReq(str)
+  LoginResT()
+  LoginResF()
+  PubkeyReq()
+  PubkeyRes(str)
+  KeysignReq(str)
+  KeysignRes(str)
+  CreatePtyerReq()
+  CreatePtyerRes(fd, fd)
+  SLoginReq(str, str)
+  SLoginResT(str)
+  SLoginResF()
+  SPubkeyReq()
+  SPubkeyRes(str)
+  SKeysignReq(str)
+  SKeysignRes(str)
+  SCreatePtyerReq(str)
+  SCreatePtyerRes(fd, fd)
+
+State :
+  Sys           : System
+  Slv           : Slave
+  authenticated : num
+  user          : str
+  attempts      : str
+
+Operations :
+  Misc.str_prefix : str -> str -> num
+
+Init :
+  Systemp <- spawn System();
+  Sys <- Systemp;
+  Slvtemp <- spawn Slave();
+  Slv <- Slvtemp;
+  attempts <- ""
+
+Handlers :
+  When slv:Slave sends LoginReq(u) respond:
+    if (str_prefix attempts "  ")
+    then send(Sys, SLoginReq(u, attempts));
+         attempts <- (attempts ++ " ")
+    else nop
+
+  When sys:System sends SLoginResT(u) respond:
+    user <- u;
+    authenticated <- 1;
+    send(Slv, LoginResT())
+
+  When sys:System sends SLoginResF() respond:
+    send(Slv, LoginResF())
+
+  When slv:Slave sends PubkeyReq() respond:
+    send(Sys, SPubkeyReq())
+
+  When sys:System sends SPubkeyRes(key) respond:
+    send(Slv, PubkeyRes(key))
+
+  When slv:Slave sends KeysignReq(key) respond:
+    send(Sys, SKeysignReq(key))
+
+  When sys:System sends SKeysignRes(key) respond:
+    send(Slv, KeysignRes(key))
+
+  When slv:Slave sends CreatePtyerReq() respond:
+    if (authenticated == 0)
+    then nop
+    else send(Sys, SCreatePtyerReq(user))
+
+  When sys:System sends SCreatePtyerRes(f1, f2) respond:
+    send(Slv, CreatePtyerRes(f1, f2))
+
+Properties :
+     forall u:
+     [Recv(Password, Auth(u))] Enables
+     [Send(Terminal, ReqTerm(u))]

@@ -18,7 +18,7 @@ build:
 depend: $(COQFILES)
 	$(COQDEP) $(INCLUDES) $^ > .depend
 
-kernel: Kernel.vo
+kernel: clean Kernel.vo
 
 extract:
 	cp ../Extract.v .
@@ -32,8 +32,11 @@ policies: clean kernel $(POLICIES:.v=.vo)
 	$(COQC) $(INCLUDES) $*.v
 #	-timeout --foreground 1h $(COQC) $(INCLUDES) $*.v
 
+Kernel.v:
+	python ../parser_ply.py Kernel.reflex Kernel.v > /dev/null
+
 clean:
-	rm -f *.vo *.glob
+	rm -f *.vo *.glob *.v
 	rm -rf ml
 	rm -f Extract.v
 

@@ -1,7 +1,17 @@
 import ply.lex as lex
+import ply.yacc as yacc
 import sys
 import re
 from sets import Set
+import logging
+
+logging.basicConfig(
+    level = logging.DEBUG,
+    filename = "parselog.txt",
+    filemode = "w",
+    format = "%(filename)10s:%(lineno)4d:%(message)s"
+)
+log = logging.getLogger()
 
 reserved = {
   'Components' : 'COMPONENTS',
@@ -29,9 +39,13 @@ reserved = {
   'Ensures' : 'ENSURES',
   'Disables' : 'DISABLES',
   'NoInterfere' : 'NOINTERFERE',
+  'HighComps' : 'HIGHCOMPS',
+  'HighVars' : 'HIGHVARS',
+  'HighCompList' : 'HIGHCOMPLIST',
   'Send' : 'KSEND',
   'Recv' : 'KRECV',
   'Spawn' : 'KSPAWN',
+  'Call' : 'KCALL',
   'num' : 'TYPE_D',
   'str' : 'TYPE_D',
   'fd' : 'TYPE_D',
@@ -95,17 +109,15 @@ def t_error(t):
     t.lexer.skip(1)
 
 # Build the lexer
-lexer = lex.lex()
+lexer = lex.lex(debug=True,debuglog=log,errorlog=log)
 
 spec = open(sys.argv[1]).read()
 
 # Give the lexer some input
-lexer.input(spec)
+#lexer.input(spec)
 
-for tok in lexer:
-  print tok
-
-import ply.yacc as yacc
+#for tok in lexer:
+#  print tok
 
 def p_prog(p):
   '''prog : COMPONENTS COLON comps \
@@ -205,10 +217,9 @@ def p_hdlrs(p):
     p[0] = [p[1]]
 
 def p_props(p):
-  '''props : traceprop props
-           | niprop props
-           | traceprop
-           | niprop
+  '''props : fullprop props
+           | fullprop
+           |
   '''
   if len(p) == 3:
     p[0] = [p[1]] + p[2]
@@ -272,9 +283,21 @@ def p_lookup(p):
           'cfg' : p[4], 'var' : p[7],
           'cmd1' : p[9], 'cmd2' : p[12]}
 
-def p_traceprop(p):
-  'traceprop : FORALL idlist COLON tprop'
-  p[0] = {'ids' : p[2], 'tprop' : p[4]}
+def p_fullprop(p):
+  '''fullprop : ID COLON FORALL idlist COLON prop
+              | ID COLON prop
+  '''
+  if len(p) == 7:
+    p[6]['ids'] = p[4]
+    p[0] = {'name':p[1], 'prop':p[6]}
+  else:
+    p[0] = {'name':p[1], 'prop':p[3]}
+
+def p_prop(p):
+  '''prop : tprop
+          | niprop
+  '''
+  p[0] = p[1]
 
 def p_tprop(p):
   '''tprop : LBRACE apat RBRACE IMMBEFORE LBRACE apat RBRACE
@@ -283,25 +306,42 @@ def p_tprop(p):
            | LBRACE apat RBRACE ENSURES LBRACE apat RBRACE
            | LBRACE apat RBRACE DISABLES LBRACE apat RBRACE
   '''
-  p[0] = {'type' : p[4], 'pat1' : p[2], 'pat2' : p[6]}
+  p[0] = {'type':'tprop', 'prim' : p[4], 'pat1' : p[2], 'pat2' : p[6]}
 
 def p_niprop(p):
-  'niprop : NOINTERFERE cpatlist idlist'
-  p[0] = {'cpats' : p[2], 'ids' : p[3]}
+  '''niprop : NOINTERFERE \
+              HIGHCOMPS COLON cpatlist \
+              HIGHVARS COLON idlist \
+              HIGHCOMPLIST COLON cpatlist
+  '''
+  p[0] = {'type':'niprop', 'cpats' : p[4], 'stids' : p[7],
+          'cspats' : p[10]}
 
 def p_apat(p):
-  '''apat : KSEND LPAREN ID COMMA ID LPAREN patlist RPAREN RPAREN
-          | KRECV LPAREN ID COMMA ID LPAREN patlist RPAREN RPAREN
-          | KSPAWN ID LPAREN patlist RPAREN
+  '''apat : KSEND LPAREN cpat COMMA msgpat RPAREN
+          | KRECV LPAREN cpat COMMA msgpat RPAREN
+          | KSPAWN cpat
+          | KCALL pat patlist pat
   '''
   p[0] = {'type' : p[1]}
   if p[0]['type'] == 'Send' or p[0]['type'] == 'Recv':
-    p[0]['ctag'] = p[3]
-    p[0]['mtag'] = p[5]
-    p[0]['mpat'] = p[7]
+    p[0]['cpat'] = p[3]
+    p[0]['mpat'] = p[5]
   elif p[0]['type'] == 'Spawn':
-    p[0]['ctag'] = p[2]
-    p[0]['cpat'] = p[4]
+    p[0]['cpat'] = p[2]
+  elif p[0]['type'] == 'Call':
+    p[0]['cmd'] = p[2]
+    p[0]['args'] = p[3]
+    p[0]['fd'] = p[4]
+
+def p_msgpat(p):
+  '''msgpat : ID LPAREN patlist RPAREN
+            | WILDCARD
+  '''
+  if len(p) == 5:
+    p[0] = {'id':p[1], 'pats':p[3]}
+  else:
+    p[0] = {'id':t_WILDCARD}
 
 def p_patexprlist(p):
   '''patexprlist : expr COMMA patexprlist
@@ -389,8 +429,13 @@ def p_cpatlist(p):
     p[0] = []
 
 def p_cpat(p):
-  'cpat : ID LPAREN patlist RPAREN'
-  p[0] = {'id' : p[1], 'pats' : p[3]}
+  '''cpat : ID LPAREN patlist RPAREN
+          | WILDCARD
+  '''
+  if len(p) == 5:
+    p[0] = {'id' : p[1], 'pats' : p[3]}
+  else:
+    p[0] = {'id' : t_WILDCARD}
 
 def p_patlist(p):
   '''patlist : pat COMMA patlist
@@ -405,12 +450,16 @@ def p_patlist(p):
     p[0] = []
 
 def p_pat(p):
-  '''pat : WILDCARD
+  '''pat : LPAREN pat OP pat RPAREN
+         | WILDCARD
          | NUM
          | STRING
          | ID
   '''
-  p[0] = p[1]
+  if len(p) == 6:
+    p[0] = {'op':p[3], 'pat1':p[2], 'pat2':p[4]}
+  else:
+    p[0] = p[1]
 
 def p_idlist(p):
   '''idlist : ID COMMA idlist
@@ -470,10 +519,10 @@ def p_error(p):
   print "Syntax error in input!"
 
 # Build the parser
-parser = yacc.yacc()
+parser = yacc.yacc(debug=True,debuglog=log,errorlog=log)
 
 result = parser.parse(spec)
-print result
+#print result
 
 out = open(sys.argv[2], 'w')
 
@@ -699,7 +748,7 @@ def get_hexpr(expr, ctxt):
   return get_expr(expr, ctxt, '')
 
 def get_oexpr(expr, ctxt, expr_fun):
-  if expr == '_':
+  if expr == t_WILDCARD:
     return 'None'
   else:
     return 'Some (' + expr_fun(expr, ctxt) + ')'
@@ -799,6 +848,130 @@ def finish_spec():
   out.write("End Spec.\n\n")
   out.write("Module Main := MkMain(Spec).\n")
 
+def get_pat(pat):
+  if type(pat) is dict:
+    return get_pat(pat['pat1']) + pat['op'] + get_pat(pat['pat2'])
+  else:
+    if re.match(r'\d+', pat):
+      return 'num_of_nat ' + pat
+    elif re.match(t_STRING, pat):
+      return 'str_of_string ' + pat
+    else:
+      return pat
+
+def get_opat(pat):
+  if pat == t_WILDCARD:
+    return 'None'
+  else:
+    return 'Some (' + get_pat(pat) + ')'
+
+def get_opat_vec(pats):
+  return reduce(lambda acc, h: '(' + get_opat(h) + ', ' + acc + ')',
+    pats[::-1], 'tt')
+
+def get_conc_pat(pat):
+  return 'Build_conc_pat COMPT COMPS ' + pat['id'] \
+         + ' ' + get_opat_vec(pat['pats'])
+
+def get_oconc_pat(pat):
+  if pat['id'] == t_WILDCARD:
+    return 'None'
+  else:
+    return 'Some (' + get_conc_pat(pat) + ')'
+
+def get_msg_pat(pat):
+  if pat['id'] == t_WILDCARD:
+    return 'None'
+  else:
+    return 'Some (Build_opt_msg PAYD ' + pat['id'] \
+           + ' ' + get_opat_vec(pat['pats']) + ')'
+
+def get_pat_str(pat):
+  if pat['type'] == 'Spawn':
+    return 'KOExec PAYD COMPT COMPS None None ' + \
+           '(' + get_oconc_pat(pat['cpat']) + ')'
+  elif pat['type'] == 'Recv' or pat['type'] == 'Send':
+    return 'KO' + pat['type'] + ' PAYD COMPT COMPS ' + \
+           '(' + get_oconc_pat(pat['cpat']) + ')' + \
+           '(' + get_msg_pat(pat['mpat']) + ')'
+  elif pat['type'] == 'Call':
+    return 'KOCall PAYD COMPT COMPS (' + \
+           '(' + get_opat(pat['cmd']) + ') ' + \
+           '(Some (' + '::'.join(map(get_opat, pat['args']) + ['nil']) + \
+           ')) (' + get_opat(pat['fd']) + '))'
+
+def get_clblr(cpats):
+  res = 'fun c : comp COMPT COMPS => match c with\n'
+  for cpat in cpats:
+    res += '| Build_comp ' + cpat['id'] + ' _ cfg =>\n'
+    res += '  let cfgd := comp_conf_desc COMPT COMPS ' + cpat['id'] + ' in\n'
+    res += '  @shvec_match _ (projT1 cfgd) (projT2 cfgd) sdenote_desc sdenote_desc_conc_pat elt_match\n'
+    res += '              cfg (' + get_opat_vec(cpat['pats']) + ')\n'
+  res += '| _ => false\n'
+  res += 'end'
+  return res
+
+#  return 'fun c => existsb (fun cp => Reflex.match_comp COMPT COMPTDEC COMPS cp c) ' + '\n(' + \
+ #        '::'.join(map(get_conc_pat, cpats) + ['nil']) + ')'
+
+def get_vlblr(stids):
+  return 'fun f => match f with ' + \
+         ' | '.join(map(lambda i: i + ' => true', stids)) + \
+         ' | _ => false end'
+
+def get_foralls(prop):
+  if 'ids' in prop:
+    return ' '.join(prop['ids'])
+  else:
+    return ''
+
+def process_niprop(prop, pout):
+  pout.write("Theorem ni : forall " + get_foralls(prop) + ',\n')
+  pout.write("let comp_lblr :=\n")
+  pout.write(get_clblr(prop['cpats']) + '\n')
+  pout.write("in\n")
+  pout.write("let vlblr :=\n")
+  pout.write(get_vlblr(prop['stids']) + '\n')
+  pout.write("in\n")
+  pout.write("let comp_list_lblr :=\n")
+  pout.write(get_clblr(prop['cspats']) + '\n')
+  pout.write("in\n")
+  pout.write("  NI PAYD COMPT COMPTDEC COMPS\n")
+  pout.write("  IENVD KSTD INIT HANDLERS comp_lblr vlblr comp_list_lblr.\n")
+#  pout.write("  (" + get_clblr(prop['cpats']) + ')\n')
+#  pout.write("  (" + get_vlblr(prop['stids']) + ')\n')
+#  pout.write("  (" + get_clblr(prop['cspats']) + ').\n')
+  pout.write("Proof.\n")
+  pout.write("  Time solve[ni].\n")
+  pout.write("Time Qed.")
+
+def process_tprop(prop, pout):
+  pout.write("Theorem t : forall st tr " + get_foralls(prop) + ',\n')
+  pout.write("  Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->\n")
+  pout.write("  ktr _ _ _ _ st = inhabits tr ->\n")
+  pout.write("  " + prop['prim'] + " PAYD COMPT COMPS COMPTDEC\n")
+  pout.write("    (" + get_pat_str(prop['pat1']) + ")\n")
+  pout.write("    (" + get_pat_str(prop['pat2']) + ")\n")
+  pout.write("    tr.\n")
+  pout.write("Proof.\n")
+  pout.write("  Time solve[crush].\n")
+  pout.write("Time Qed.")
+
+def process_props(props):
+  for prop in props:
+    pout = open("Policy" + prop['name'] + ".v", 'w')
+    pout.write("Require Import String.\n")
+    pout.write("Require Import Reflex ReflexBase.\n")
+    pout.write("Require Import PolLang ActionMatch.\n")
+    pout.write("Require Import Kernel.\n")
+    pout.write("Local Opaque str_of_string.\n")
+    pout.write("Import SystemFeatures Language Spec.\n")
+    if prop['prop']['type'] == 'tprop':
+      process_tprop(prop['prop'], pout)
+    else:
+      pout.write("Require Import NIExists ReflexHVec ReflexIO.\n")
+      process_niprop(prop['prop'], pout)
+
 write_prelude(result['ops']['files'])
 process_msgs(result['msgs'])
 comp_map = process_comps(result['comps'])
@@ -808,3 +981,4 @@ end_sys_features()
 process_init(result['init'])
 process_hdlrs(result['hdlrs'], kstd, comp_map, result['ops']['ops'])
 finish_spec()
+process_props(result['props'])

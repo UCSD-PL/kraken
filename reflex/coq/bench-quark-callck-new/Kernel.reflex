@@ -62,7 +62,7 @@ Handlers :
     { nop }
 
   When u:UserInput sends Navigate(url) respond:
-    if (dom "/" url) == CurTab.domain
+    if ((dom "/" url) == CurTab.domain)
     then send(CurTab, Navigate(url))
     else nop
 
@@ -73,7 +73,7 @@ Handlers :
     send(CurTab, MouseClick(coord))
 
   When t:Tab sends RenderCompleted(key) respond:
-    if t == CurTab
+    if (t == CurTab)
     then send(Out, RenderCompleted(key))
     else nop
 
@@ -82,12 +82,41 @@ Handlers :
     send(t, URLResponse(f))
 
   When t:Tab sends SocketRequest(url) respond:
-    if (dom ":" url) == t.domain
+    if ((dom ":" url) == t.domain)
     then f <- call "../test/quark/common/socket_creator.py"(url);
          send(t, SocketResponse(f))
     else nop
 
 Properties :
-     forall u:
-     [Recv(Password, Auth(u))] Enables
-     [Send(Terminal, ReqTerm(u))]
+  CProcUnique:
+    forall d:
+      [Spawn CProc(d)] Disables [Spawn CProc(d)]
+
+  CookieSameDomainEnables:
+    forall d, f:
+      [Send(Tab(_, d), CookieProcessRegister(f))]
+      Enables
+      [Send(CProc(d), TabProcessRegister(f))]
+
+  CookieSameDomainImmAfter:
+    forall f:
+      [Send(Tab(_, _), CookieProcessRegister(f))]
+      ImmAfter
+      [Call "create_ckchan.py" _ f]
+
+  CookieSameDomainEnsures:
+    forall d, f:
+      [Send(Tab(_, d), CookieProcessRegister(f))]
+      Ensures
+      [Send(CProc(d), TabProcessRegister(f))]
+
+  TabIdUnique:
+    forall id:
+      [Spawn Tab(id, _)] Disables [Spawn Tab(id, _)]
+
+  DomainNonInterference:
+    forall d:
+      NoInterfere
+        HighComps : Tab(_, d), CProc(d), UserInput()
+        HighVars : CurTab, Out, User
+        HighCompList : Tab(_, _), UserInput(), Output()

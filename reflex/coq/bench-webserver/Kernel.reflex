@@ -67,6 +67,32 @@ Handlers :
     { nop }
 
 Properties :
-     forall u:
-     [Recv(Password, Auth(u))] Enables
-     [Send(Terminal, ReqTerm(u))]
+  AccessCorrect:
+    forall u, a, r:
+      [Recv(AccessControl(), ACFileResT(u, a, r))]
+      Enables
+      [Send(Disk(), DFileReq(u, a, r))]
+
+  AccessCorrectDisk:
+    forall u, a, r, f:
+      [Recv(Disk(), DFileRes(u, a, r, f))]
+      Enables
+      [Send(Client(u, a), FileRes(r, f))]
+
+  AccessCorrectEnsures:
+    forall u, a, r:
+      [Recv(AccessControl(), ACFileResT(u, a, r))]
+      Ensures
+      [Send(Disk(), DFileReq(u, a, r))]
+
+  AuthCorrect:
+    forall u, a:
+      [Recv(AccessControl(), ACLoginResT(u, a))]
+      Enables
+      [Spawn Client(u, a)]
+
+  NoDupClients:
+    forall u, a:
+      [Spawn Client(u, a)]
+      Disables
+      [Spawn Client(u, a)]

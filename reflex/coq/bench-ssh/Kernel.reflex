@@ -75,6 +75,29 @@ Handlers :
     send(Slv, CreatePtyerRes(f1, f2))
 
 Properties :
-     forall u:
-     [Recv(Password, Auth(u))] Enables
-     [Send(Terminal, ReqTerm(u))]
+  LoginAtt0:
+    [Send(_, SLoginReq(_, ""))]
+    Disables
+    [Send(_, SLoginReq(_, ""))]
+
+  LoginAtt1:
+    [Send(_, SLoginReq(_, " "))]
+    Disables
+    [Send(_, SLoginReq(_, " "))]
+
+  LoginAtt2:
+    [Send(_, SLoginReq(_, "  "))]
+    Disables
+    [Send(_, SLoginReq(_, _))]
+
+  LoginAttEnables:
+    forall s:
+      [Send(_, SLoginReq(_, s))]
+      Enables
+      [Send(_, SLoginReq(_, (" " ++ s)))]
+
+  LoginEnablesPTY:
+    forall u:
+      [Recv(System(), SLoginResT(u))]
+      Enables
+      [Send(_, SCreatePtyerReq(u))]

@@ -80,6 +80,14 @@ Handlers :
     send(Slv, CreatePtyerRes(f1, f2))
 
 Properties :
-     forall u:
-     [Recv(Password, Auth(u))] Enables
-     [Send(Terminal, ReqTerm(u))]
+  CounterObeyed:
+    forall u:
+      [Recv(Counter(), CLoginResT(u))]
+      ImmBefore
+      [Send(_, SLoginReq(u))]
+
+  LoginEnablesPTY:
+    forall u:
+      [Recv(System(), SLoginResT(u))]
+      Enables
+      [Send(_, SCreatePtyerReq(u))]

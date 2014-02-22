@@ -106,7 +106,7 @@ Properties :
     forall f:
       [Send(Tab(_, _), CookieProcessRegister(f))]
       ImmAfter
-      [Call "create_ckchan.py" _ f]
+      [Call "create_ckchan.py" () f]
 
   CookieSameDomainEnsures:
     forall d, f:

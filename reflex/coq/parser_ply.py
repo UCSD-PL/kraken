@@ -321,7 +321,7 @@ def p_apat(p):
   '''apat : KSEND LPAREN cpat COMMA msgpat RPAREN
           | KRECV LPAREN cpat COMMA msgpat RPAREN
           | KSPAWN cpat
-          | KCALL pat patlist pat
+          | KCALL pat LPAREN patlist RPAREN pat
   '''
   p[0] = {'type' : p[1]}
   if p[0]['type'] == 'Send' or p[0]['type'] == 'Recv':
@@ -331,8 +331,8 @@ def p_apat(p):
     p[0]['cpat'] = p[2]
   elif p[0]['type'] == 'Call':
     p[0]['cmd'] = p[2]
-    p[0]['args'] = p[3]
-    p[0]['fd'] = p[4]
+    p[0]['args'] = p[4]
+    p[0]['fd'] = p[6]
 
 def p_msgpat(p):
   '''msgpat : ID LPAREN patlist RPAREN

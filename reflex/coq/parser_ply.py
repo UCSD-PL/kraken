@@ -850,7 +850,9 @@ def finish_spec():
 
 def get_pat(pat):
   if type(pat) is dict:
-    return get_pat(pat['pat1']) + pat['op'] + get_pat(pat['pat2'])
+    op = {'++':'List.app'}[pat['op']]
+    return op + ' (' + get_pat(pat['pat1']) + ') (' \
+           + get_pat(pat['pat2']) + ')'
   else:
     if re.match(r'\d+', pat):
       return 'num_of_nat ' + pat

@@ -895,10 +895,10 @@ def get_pat_str(pat):
            '(' + get_oconc_pat(pat['cpat']) + ')' + \
            '(' + get_msg_pat(pat['mpat']) + ')'
   elif pat['type'] == 'Call':
-    return 'KOCall PAYD COMPT COMPS (' + \
+    return 'KOCall PAYD COMPT COMPS ' + \
            '(' + get_opat(pat['cmd']) + ') ' + \
            '(Some (' + '::'.join(map(get_opat, pat['args']) + ['nil']) + \
-           ')) (' + get_opat(pat['fd']) + '))'
+           ')) (' + get_opat(pat['fd']) + ')'
 
 def get_clblr(cpats, num_cts):
   res = 'fun c : comp COMPT COMPS => match c with\n'

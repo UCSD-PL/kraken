@@ -900,14 +900,15 @@ def get_pat_str(pat):
            '(Some (' + '::'.join(map(get_opat, pat['args']) + ['nil']) + \
            ')) (' + get_opat(pat['fd']) + '))'
 
-def get_clblr(cpats):
+def get_clblr(cpats, num_cts):
   res = 'fun c : comp COMPT COMPS => match c with\n'
   for cpat in cpats:
     res += '| Build_comp ' + cpat['id'] + ' _ cfg =>\n'
     res += '  let cfgd := comp_conf_desc COMPT COMPS ' + cpat['id'] + ' in\n'
     res += '  @shvec_match _ (projT1 cfgd) (projT2 cfgd) sdenote_desc sdenote_desc_conc_pat elt_match\n'
     res += '              cfg (' + get_opat_vec(cpat['pats']) + ')\n'
-  res += '| _ => false\n'
+  if len(cpats) < num_cts:
+    res += '| _ => false\n'
   res += 'end'
   return res
 
@@ -919,22 +920,25 @@ def get_vlblr(stids):
          ' | '.join(map(lambda i: i + ' => true', stids)) + \
          ' | _ => false end'
 
-def get_foralls(prop):
+def get_foralls(prop, extra):
+  ids = extra
   if 'ids' in prop:
-    return ' '.join(prop['ids'])
-  else:
+    ids += prop['ids']
+  if len(ids) == 0:
     return ''
+  else:
+    return 'forall ' + ' '.join(ids) + ','
 
-def process_niprop(prop, pout):
-  pout.write("Theorem ni : forall " + get_foralls(prop) + ',\n')
+def process_niprop(prop, pout, num_cts):
+  pout.write("Theorem ni : " + get_foralls(prop, []) + '\n')
   pout.write("let comp_lblr :=\n")
-  pout.write(get_clblr(prop['cpats']) + '\n')
+  pout.write(get_clblr(prop['cpats'], num_cts) + '\n')
   pout.write("in\n")
   pout.write("let vlblr :=\n")
   pout.write(get_vlblr(prop['stids']) + '\n')
   pout.write("in\n")
   pout.write("let comp_list_lblr :=\n")
-  pout.write(get_clblr(prop['cspats']) + '\n')
+  pout.write(get_clblr(prop['cspats'], num_cts) + '\n')
   pout.write("in\n")
   pout.write("  NI PAYD COMPT COMPTDEC COMPS\n")
   pout.write("  IENVD KSTD INIT HANDLERS comp_lblr vlblr comp_list_lblr.\n")
@@ -946,7 +950,7 @@ def process_niprop(prop, pout):
   pout.write("Time Qed.")
 
 def process_tprop(prop, pout):
-  pout.write("Theorem t : forall st tr " + get_foralls(prop) + ',\n')
+  pout.write("Theorem t : forall " + get_foralls(prop, ['st', 'tr']) + '\n')
   pout.write("  Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->\n")
   pout.write("  ktr _ _ _ _ st = inhabits tr ->\n")
   pout.write("  " + prop['prim'] + " PAYD COMPT COMPS COMPTDEC\n")
@@ -957,7 +961,7 @@ def process_tprop(prop, pout):
   pout.write("  Time solve[crush].\n")
   pout.write("Time Qed.")
 
-def process_props(props):
+def process_props(props, num_cts):
   for prop in props:
     pout = open("Policy" + prop['name'] + ".v", 'w')
     pout.write("Require Import String.\n")
@@ -970,7 +974,7 @@ def process_props(props):
       process_tprop(prop['prop'], pout)
     else:
       pout.write("Require Import NIExists ReflexHVec ReflexIO.\n")
-      process_niprop(prop['prop'], pout)
+      process_niprop(prop['prop'], pout, num_cts)
 
 write_prelude(result['ops']['files'])
 process_msgs(result['msgs'])
@@ -981,4 +985,4 @@ end_sys_features()
 process_init(result['init'])
 process_hdlrs(result['hdlrs'], kstd, comp_map, result['ops']['ops'])
 finish_spec()
-process_props(result['props'])
+process_props(result['props'], len(comp_map.keys()))

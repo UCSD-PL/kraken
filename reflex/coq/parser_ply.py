@@ -970,7 +970,7 @@ def process_props(props, num_cts):
     pout.write("Require Import Reflex ReflexBase.\n")
     pout.write("Require Import PolLang ActionMatch.\n")
     pout.write("Require Import Kernel.\n")
-    pout.write("Local Opaque str_of_string.\n")
+#    pout.write("Local Opaque str_of_string.\n")
     pout.write("Import SystemFeatures Language Spec.\n")
     if prop['prop']['type'] == 'tprop':
       process_tprop(prop['prop'], pout)

@@ -43,7 +43,7 @@ Handlers :
   When slv:Slave sends LoginReq(u) respond:
     if (str_prefix attempts "  ")
     then send(Sys, SLoginReq(u, attempts));
-         attempts <- (attempts ++ " ")
+         attempts <- (" " ++ attempts)
     else nop
 
   When sys:System sends SLoginResT(u) respond:

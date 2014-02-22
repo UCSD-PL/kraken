@@ -950,7 +950,7 @@ def process_niprop(prop, pout, num_cts):
   pout.write("Time Qed.")
 
 def process_tprop(prop, pout):
-  pout.write("Theorem t : forall " + get_foralls(prop, ['st', 'tr']) + '\n')
+  pout.write("Theorem t : " + get_foralls(prop, ['st', 'tr']) + '\n')
   pout.write("  Reach PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS st ->\n")
   pout.write("  ktr _ _ _ _ st = inhabits tr ->\n")
   pout.write("  " + prop['prim'] + " PAYD COMPT COMPS COMPTDEC\n")

@@ -32,7 +32,8 @@ depend: $(FILES) $(BENCHKERNELS) $(UBENCHKERNELS)
 
 coq: $(FILES:.v=.vo)
 ubenchkernels: $(UBENCHKERNELS:.v=.vo)
-benchkernels: $(BENCHKERNELS:.v=.vo)
+benchkernels:
+	for i in `find . -name "bench-*"`; do make kernel -C $$i; done
 
 %.vo: %.v
 	$(COQC) $(INCLUDES) $*.v

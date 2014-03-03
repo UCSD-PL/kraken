@@ -184,7 +184,7 @@ def p_operations(p):
     p[0] = p[2]
     if 'files' in p[0]:
       p[0]['files'].add(p[1]['file'])
-      p[0]['ops'].update(p[1]['ops'])
+      p[0]['ops'].update(p[1]['op'])
   elif len(p) == 2:
     p[0] = {'files':Set([p[1]['file']]), 'ops':p[1]['op']}
   else:

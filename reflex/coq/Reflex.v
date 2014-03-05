@@ -555,6 +555,15 @@ Record kstate : Type := mkst
   ; kst : s[[ KSTD ]]
   }.
 
+Definition noninterffun :=
+  forall
+    (clblr : comp -> bool)
+    (vlblr : fin (projT1 KSTD) -> bool)
+    (cslblr : comp -> bool),
+    kstate.
+
+Definition KState := (kstate * noninterffun)%type.
+
 Inductive unop : cdesc -> cdesc -> Set :=
 | Not : unop (Desc num_d) (Desc num_d)
 | SplitFst : ascii -> unop (Desc str_d) (Desc str_d)
@@ -1119,7 +1128,7 @@ Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd bas
     init_state _envd -> s[[run_cmd_it _cmd]] -> init_state _envd
   with
   | Nop _ => fun s _ => s
-  
+
   | Seq envd c1 c2 => fun s i =>
     init_state_run_cmd envd (init_state_run_cmd envd s c1 (fst i)) c2 (snd i)
 
@@ -1350,7 +1359,7 @@ Fixpoint default_cpayload' (n : nat) :
 Definition default_cpayload (v : vcdesc) : s[[ v ]] :=
   default_cpayload' (projT1 v) (projT2 v).
 
-Definition default_hdlr_state s envd :=
+Definition default_hdlr_state s envd : hdlr_state envd :=
   {| hdlr_kst := s; hdlr_env := default_cpayload envd |}.
 
 Definition kstate_run_prog envd (s : kstate) (p : hdlr_prog CT CTAG envd)
@@ -1441,11 +1450,14 @@ Inductive BogusExchange (c:comp) (bmsg:bogus_msg)
 
 Inductive Reach : kstate -> Prop :=
 | Reach_init :
-  forall s input,
+  forall s (input : sdenote_itt (run_cmd_it IPROG)),
   InitialState input s ->
   Reach s
 | Reach_valid :
-  forall c m input s s',
+  forall c m
+         (input : sdenote_itt (run_cmd_it (projT2
+                                 (HANDLERS (tag m) (comp_type c)))))
+         s s',
   Reach s ->
   ValidExchange c m input s s' ->
   Reach s'
@@ -1454,6 +1466,55 @@ Inductive Reach : kstate -> Prop :=
   Reach s ->
   BogusExchange c bmsg s s' ->
   Reach s'.
+
+(*
+Inductive Reach' :
+  list (sigT (fun envd : vcdesc => sigT (fun term =>
+        sigT (fun cmd : cmd term envd => sdenote_itt (run_cmd_it cmd))))) ->
+  kstate -> Prop :=
+| Reach'_init :
+  forall s (input : sdenote_itt (run_cmd_it (envd := IENVD) IPROG)),
+  InitialState input s ->
+  Reach' ((existT _ IENVD (existT _ _ (existT _ IPROG input))) :: nil) s
+| Reach'_valid :
+  forall il s,
+  Reach' il s ->
+  forall c m s',
+  let p := HANDLERS (tag m) (comp_type c) in
+  forall
+         (input : sdenote_itt (run_cmd_it
+            (envd := projT1 (HANDLERS (tag m) (comp_type c)))
+            (projT2 (HANDLERS (tag m) (comp_type c))))),
+  ValidExchange c m input s s' ->
+  Reach' ((existT _ (projT1 p) (existT _ _ (existT _ (projT2 p) input))) :: il) s'
+| Reach'_bogus :
+  forall l s s' c bmsg,
+  Reach' l s ->
+  BogusExchange c bmsg s s' ->
+  Reach' l s'.
+*)
+
+(*
+
+(* This seems true. -- Valentin *)
+
+Theorem Zach : forall tr s1 s2,
+  Reach s1 ->
+  Reach s2 ->
+  tr = ktr s1 ->
+  tr = ktr s2 ->
+  s1 = s2.
+Proof.
+  crush.
+Qed.
+
+Want to prove:
+
+forall s,
+  Reach s ->
+  exists input, interp input = s
+
+*)
 
 Definition init_invariant {envd} (s : init_state envd) :=
 (*  let fds := init_fds _ s in*)
@@ -2660,17 +2721,24 @@ Definition run_hdlr_cmd :
          (c : cmd (hdlr_term (comp_type cc) (tag cm)) envd),
   STsep (tr :~~ ktr (hdlr_kst _ s) in
           hdlr_invariant cc cm s * traced (expand_ktrace tr))
-        (fun s' : hdlr_state envd => tr :~~ ktr (hdlr_kst _ s') in
-          hdlr_invariant cc cm s' * traced (expand_ktrace tr)
-          * [exists i, s' = hdlr_state_run_cmd cc cm envd s c i]).
+        (fun s' : hdlr_state envd * sdenote_itt (run_cmd_it c) =>
+           let (s', i) := s' in
+           tr :~~ ktr (hdlr_kst _ s') in
+           hdlr_invariant cc cm s' * traced (expand_ktrace tr)
+           * [s' = hdlr_state_run_cmd cc cm envd s c i]).
 Proof.
   intros cc cm envd sinit cinit;
   refine (Fix3
-    (fun envd c s => tr :~~ ktr (hdlr_kst envd s) in
-      hdlr_invariant cc cm s * traced (expand_ktrace tr))
-    (fun envd c s (s' : hdlr_state envd) => tr :~~ ktr (hdlr_kst envd s') in
-      hdlr_invariant cc cm s' * traced (expand_ktrace tr)
-      * [exists i, s' = hdlr_state_run_cmd cc cm envd s c i]
+    (fun envd c (s : hdlr_state envd) =>
+       tr :~~ ktr (hdlr_kst envd s) in
+       hdlr_invariant cc cm s * traced (expand_ktrace tr))
+    (fun envd c
+         (s : hdlr_state envd)
+         (s' : hdlr_state envd * sdenote_itt (run_cmd_it c)) =>
+       let (s', i') := s' in
+       tr :~~ ktr (hdlr_kst envd s') in
+       hdlr_invariant cc cm s' * traced (expand_ktrace tr)
+       * [s' = hdlr_state_run_cmd cc cm envd s c i']
     )
     (fun self envd0 c s0 => _) envd cinit sinit
   ).
@@ -2684,13 +2752,14 @@ Proof.
     STsep
      (tr :~~ ktr (hdlr_kst _ s) in
          hdlr_invariant cc cm s * traced (expand_ktrace tr))
-     (fun s' : hdlr_state _envd =>
+     (fun s' : hdlr_state _envd * sdenote_itt (run_cmd_it _c) =>
+        let (s', i) := s' in
       tr :~~ ktr (hdlr_kst _envd s') in
          hdlr_invariant cc cm s' * traced (expand_ktrace tr)
-         * [exists i, s' = hdlr_state_run_cmd cc cm _envd s _c i])
+         * [(*exists i, *)s' = hdlr_state_run_cmd cc cm _envd s _c i])
   with
 
-  | Nop _ => fun s => {{ Return s }}
+  | Nop _ => fun s => {{ Return (s, tt) }}
 
   | Seq _ c1 c2 => fun s =>
     let case := "Seq _ c1 c2"%string in _
@@ -2719,13 +2788,19 @@ Proof.
   end s0
   ); sep unfoldr simplr_base. (*sep''; try subst v; sep'; simpl in *.*)
 
+admit. admit. admit. admit. admit. admit. admit.
+
+Eval simpl in (fun a b c d => sdenote_itt (run_cmd_it (Seq a b c d))).
+
 (* Seq *)
 refine (
   s1 <- self _ c1 s;
-  s2 <- self _ c2 s1
-    <@> [exists i, s1 = hdlr_state_run_cmd _ _ envd s c1 i];
-  {{ Return s2 }}
-); sep unfoldr simplr_base.
+  s2 <- self _ c2 (fst s1)
+    <@> [(*exists i, *)fst s1 = hdlr_state_run_cmd _ _ envd s c1 (snd s1)];
+  {{ Return (fst s2, (snd s1, snd s2)) }}
+); try destruct s1; sep unfoldr simplr_base.
+
+(*
 
 (* Ite *)
 destruct s as [ ks env]_eqn.
@@ -2852,6 +2927,8 @@ refine (
   {{ Return s' }}
 ); sep unfoldr simplr_base.
 Qed.
+*)
+Admitted.
 
 Theorem all_open_unconcat : forall a b,
   all_open (a ++ b) ==> all_open a * all_open b.
@@ -3040,11 +3117,11 @@ Ltac simplr_body :=
   try solve [apply default_cpayload_fds]*).
 
 Definition kbody:
-  forall s,
-  STsep (kstate_inv s)
-        (fun s' => kstate_inv s').
+  forall (s : KState),
+  STsep (kstate_inv (fst s))
+        (fun (s' : KState) => kstate_inv (fst s')).
 Proof.
-  intro s; destruct s as [cs tr st]_eqn; refine (
+  intros [s ni]; destruct s as [cs tr st]_eqn; refine (
     let tr' := tr in
     c <- select_comp cs
     (tr ~~~ expand_ktrace tr)
@@ -3060,7 +3137,7 @@ Proof.
 
     match mm with
     | inl m =>
-      let tr := tr ~~~ KRecv c m :: tr in
+      (*let tr := tr ~~~ KRecv c m :: tr in*)
       let hdlrs := HANDLERS (tag m) (comp_type c) in
       let henv  := projT1 hdlrs in
       let hprog := projT2 hdlrs in
@@ -3073,10 +3150,35 @@ Proof.
       in
       s'' <- run_hdlr_cmd c m henv s' hprog
       <@> [Reach s] * [In c cs];
-      {{ Return (hdlr_kst _ s'') }}
+      {{ Return (hdlr_kst _ (fst s''),
+                 fun clblr vlblr cslblr =>
+                   let (cs, tr, st) := ni clblr vlblr cslblr in
+                   if clblr c
+                   then (* assuming yes means high *)
+  let tr := tr ~~~ KRecv c m :: tr in
+  let ni' := {| hdlr_kst := {| kcs := cs
+                             ; ktr := tr
+                             ; kst := st
+                            |}
+              ; hdlr_env := default_cpayload henv
+             |}
+  in
+  hdlr_kst _ (hdlr_state_run_cmd c m henv ni' hprog (snd s''))
+                   else
+                     ni clblr vlblr cslblr
+      ) }}
     | inr m =>
       let tr := tr ~~~ KBogus c m :: tr in
-      {{ Return {|kcs := cs; ktr := tr; kst := st |} }}
+      {{ Return ({|kcs := cs; ktr := tr; kst := st |},
+                 fun clblr vlblr cslblr =>
+                   let (cs, tr, st) := ni clblr vlblr cslblr in
+                   if clblr c
+                   then (* assuming yes means high *)
+                     let tr := tr ~~~ KBogus c m :: tr in
+                     {|kcs := cs; ktr := tr; kst := st |}
+                   else
+                     ni clblr vlblr cslblr
+      ) }}
     end
 
   ); sep unfoldr_body simplr_body.

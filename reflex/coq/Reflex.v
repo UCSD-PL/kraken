@@ -556,11 +556,7 @@ Record kstate : Type := mkst
   }.
 
 Definition noninterffun :=
-  forall
-    (clblr : comp -> bool)
-    (vlblr : fin (projT1 KSTD) -> bool)
-    (cslblr : comp -> bool),
-    kstate.
+  forall (clblr : comp -> bool), kstate.
 
 Definition KState := (kstate * noninterffun)%type.
 
@@ -2725,7 +2721,7 @@ Definition run_hdlr_cmd :
            let (s', i) := s' in
            tr :~~ ktr (hdlr_kst _ s') in
            hdlr_invariant cc cm s' * traced (expand_ktrace tr)
-           * [s' = hdlr_state_run_cmd cc cm envd s c i]).
+           * [(*exists i, *)s' = hdlr_state_run_cmd cc cm envd s c i]).
 Proof.
   intros cc cm envd sinit cinit;
   refine (Fix3
@@ -3137,7 +3133,7 @@ Proof.
 
     match mm with
     | inl m =>
-      (*let tr := tr ~~~ KRecv c m :: tr in*)
+      let tr := tr ~~~ KRecv c m :: tr in
       let hdlrs := HANDLERS (tag m) (comp_type c) in
       let henv  := projT1 hdlrs in
       let hprog := projT2 hdlrs in
@@ -3151,8 +3147,8 @@ Proof.
       s'' <- run_hdlr_cmd c m henv s' hprog
       <@> [Reach s] * [In c cs];
       {{ Return (hdlr_kst _ (fst s''),
-                 fun clblr vlblr cslblr =>
-                   let (cs, tr, st) := ni clblr vlblr cslblr in
+                 fun clblr =>
+                   let (cs, tr, st) := ni clblr in
                    if clblr c
                    then (* assuming yes means high *)
   let tr := tr ~~~ KRecv c m :: tr in
@@ -3165,19 +3161,19 @@ Proof.
   in
   hdlr_kst _ (hdlr_state_run_cmd c m henv ni' hprog (snd s''))
                    else
-                     ni clblr vlblr cslblr
+                     ni clblr
       ) }}
     | inr m =>
       let tr := tr ~~~ KBogus c m :: tr in
       {{ Return ({|kcs := cs; ktr := tr; kst := st |},
-                 fun clblr vlblr cslblr =>
-                   let (cs, tr, st) := ni clblr vlblr cslblr in
+                 fun clblr =>
+                   let (cs, tr, st) := ni clblr in
                    if clblr c
                    then (* assuming yes means high *)
                      let tr := tr ~~~ KBogus c m :: tr in
                      {|kcs := cs; ktr := tr; kst := st |}
                    else
-                     ni clblr vlblr cslblr
+                     ni clblr
       ) }}
     end
 

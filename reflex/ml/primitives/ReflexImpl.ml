@@ -220,3 +220,21 @@ let send_fd cfd x _ =
   log (Printf.sprintf "send_fd : %d %d -> ()"
         (int_of_fd fd) (int_of_fd x));
   ()
+
+let _INVOKE_FD_MAP : (string * (string list -> int)) list =
+  []
+
+let invoke_fd prog args _ =
+  let fd = (List.assoc prog _INVOKE_FD_MAP) args in
+  log (Printf.sprintf "invoke_fd : %s [%s] -> %s"
+    prog (String.concat ", " args) fd);
+  cfd_of_fd fd
+
+let _INVOKE_STR_MAP : (string * (string list -> string)) list =
+  []
+
+let invoke_str prog args _ =
+  let s = (List.assoc prog _INVOKE_STR_MAP) args in
+  log (Printf.sprintf "invoke_str : %s [%s] -> %s"
+    prog (String.concat ", " args) s);
+  str_of_string s

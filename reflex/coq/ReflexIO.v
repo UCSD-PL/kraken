@@ -302,13 +302,13 @@ Axiom call :
         (fun f : fd => tr ~~ open f *
           traced (Call prog args f :: tr)).
 
-Axiom invokefd :
+Axiom invoke_fd :
   forall (prog : str) (args : list str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
         (fun f : fd => tr ~~ open f *
           traced (InvokeFD prog args f :: tr)).
 
-Axiom invokestr :
+Axiom invoke_str :
   forall (prog : str) (args : list str) (tr : [Trace]),
   STsep (tr ~~ traced tr)
         (fun s : str => tr ~~

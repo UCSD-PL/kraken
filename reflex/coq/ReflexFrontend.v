@@ -1040,10 +1040,27 @@ Proof.
   auto.
 Qed.
 
+Ltac destruct_comp_var_pay :=
+  match goal with
+  | [ cp : sigT (fun (c : Reflex.comp _ _) => _) |- _ ]
+    => let pf := fresh "pf" in
+       let ct := fresh "ct" in
+       let f := fresh "f" in
+       let cfg := fresh "cfg" in
+       destruct cp as [ [ct f cfg] pf];
+       destruct ct; try discriminate; destruct_pay cfg
+       (*discriminate prunes impossible ctypes*)
+  end.
+
+Ltac extract_match_facts :=
+  repeat destruct_comp_var_pay; unfold Reflex.match_comp, Reflex.match_comp_pf in *;
+  simpl in *; destruct_atom_eqs; try discriminate; simpl in *.
+
 Ltac act_match :=
   simpl in *; autounfold; simpl;
   repeat destruct_comp_st_vars; intuition;
-  try congruence.
+  extract_match_facts; destruct_atom_eqs;
+  try discriminate; try congruence.
 
 Ltac releaser_match :=
   simpl;
@@ -1068,22 +1085,6 @@ Ltac reach_induction prune_init prune_hdlr :=
       => generalize dependent tr; induction H; unpack prune_init prune_hdlr
          (*Do not put simpl anywhere in here. It breaks destruct_unpack.*)
   end.
-
-Ltac destruct_comp_var_pay :=
-  match goal with
-  | [ cp : sigT (fun (c : Reflex.comp _ _) => _) |- _ ]
-    => let pf := fresh "pf" in
-       let ct := fresh "ct" in
-       let f := fresh "f" in
-       let cfg := fresh "cfg" in
-       destruct cp as [ [ct f cfg] pf];
-       destruct ct; try discriminate; destruct_pay cfg
-       (*discriminate prunes impossible ctypes*)
-  end.
-
-Ltac extract_match_facts :=
-  repeat destruct_comp_var_pay; unfold Reflex.match_comp, Reflex.match_comp_pf in *;
-  simpl in *; destruct_atom_eqs; try discriminate; simpl in *.
 
 Ltac invert_comp_eqs :=
   repeat match goal with

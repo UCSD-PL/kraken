@@ -76,8 +76,9 @@ Handlers :
     send(t, URLResponse(f))
 
   When t:Tab sends SocketRequest(url) respond:
-    if ((dom ":" url) == t.domain)
-    then f <- call "../test/quark/common/socket_creator.py"(url);
+    dom_ok <- invokestr "dom_ok" (url, t.domain);
+    if (dom_ok == "")
+    then f <- invokefd "create_socket" (url);
          send(t, SocketResponse(f))
     else nop
 
@@ -113,6 +114,24 @@ Properties :
       [Send(Tab(_, d), CookieProcessRegister(f))]
       Ensures
       [Send(CProc(d), TabProcessRegister(f))]
+
+  SocketCreateBeforeSend:
+    forall f:
+      [InvokeFD "create_socket" (_) f]
+      ImmBefore
+      [Send(Tab(_, _), SocketResponse(f))]
+
+  SocketDomOkBeforeCreate:
+    forall url:
+      [InvokeStr "dom_ok" (url, _) ""]
+      ImmBefore
+      [InvokeFD "create_socket" (url) _]
+
+  SocketRequestBeforeDomOk:
+    forall d, url:
+      [Recv(Tab(_, d), SocketRequest(url))]
+      ImmBefore
+      [InvokeStr "dom_ok" (url, d) _]
 
   TabIdUnique:
     forall id:

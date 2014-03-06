@@ -184,6 +184,10 @@ Proof.
 
     rewrite Htr in Htr'. apply pack_injective in Htr'. subst tr'. auto.
 
+    rewrite Htr in Htr'. apply pack_injective in Htr'. subst tr'. auto.
+
+    rewrite Htr in Htr'. apply pack_injective in Htr'. subst tr'. auto.
+
     destruct (find_comp COMPT COMPTDEC COMPS
                (eval_base_comp_pat COMPT COMPS envd
                   (init_env PAYD COMPT COMPS KSTD envd s) cp)
@@ -256,6 +260,12 @@ Proof.
 
     destruct s. simpl in *. unfold ktr in *. rewrite Htr in *. simpl in *.
     apply pack_injective in Htr'. subst tr'. simpl. auto.
+
+    destruct s. simpl in *. unfold ktr in *. rewrite Htr in Htr'.
+    apply pack_injective in Htr'. subst tr'. auto.
+
+    destruct s. simpl in *. unfold ktr in *. rewrite Htr in Htr'.
+    apply pack_injective in Htr'. subst tr'. auto.
 
     destruct s. simpl in *. unfold ktr in *. rewrite Htr in Htr'.
     apply pack_injective in Htr'. subst tr'. auto.
@@ -479,6 +489,46 @@ Proof.
       => destruct e
     end; [apply IHstmt2 with (i:=i2) (hst:=hst) | apply IHstmt1 with (i:=i1) (hst:=hst)];
     subst hst; auto.
+
+    intros.
+    destruct hst as [hkst henv];
+    destruct hkst; intros; simpl in *.
+    destruct ktr0.
+    simpl in *.
+    apply pack_injective in H0.
+    subst tr'.
+    apply pack_injective in H.
+    subst k.
+    match goal with
+    |- exists _, (?act::_) = _ ++ _ /\ _
+      => exists (act::nil)
+    end.
+    split; auto.
+    intros.
+    simpl in *.
+    destruct H.
+      subst act; auto.
+      contradiction.
+
+    intros.
+    destruct hst as [hkst henv];
+    destruct hkst; intros; simpl in *.
+    destruct ktr0.
+    simpl in *.
+    apply pack_injective in H0.
+    subst tr'.
+    apply pack_injective in H.
+    subst k.
+    match goal with
+    |- exists _, (?act::_) = _ ++ _ /\ _
+      => exists (act::nil)
+    end.
+    split; auto.
+    intros.
+    simpl in *.
+    destruct H.
+      subst act; auto.
+      contradiction.
 
     intros.
     destruct hst as [hkst henv];

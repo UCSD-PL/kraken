@@ -4,3 +4,8 @@ ml/_build
 ml/kernel
 c-stubs/*.o
 c-stubs/*.so
+coq/bench-*/*.v
+coq/bench-*/parser.out
+coq/bench-*/parselog.txt
+coq/bench-*/parsetab.py
+coq/benchmarks/*

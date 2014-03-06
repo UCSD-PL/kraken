@@ -17,10 +17,10 @@ BENCHDIR  := benchmarks
 BENCHFULL := $(BENCHDIR)/$(BENCHNAME)
 
 bench: all
-	./bench.sh $(COQC) $(YNOT) bench
+	./bench.sh $(COQC) $(YNOT) bench $(BENCHOUT) $(TIMEOUT)
 
 ubench: all
-	./bench.sh $(COQC) $(YNOT) ubench
+	./bench.sh $(COQC) $(YNOT) ubench $(BENCHOUT) $(TIMEOUT)
 
 build:
 	$(MAKE) depend
@@ -32,7 +32,8 @@ depend: $(FILES) $(BENCHKERNELS) $(UBENCHKERNELS)
 
 coq: $(FILES:.v=.vo)
 ubenchkernels: $(UBENCHKERNELS:.v=.vo)
-benchkernels: $(BENCHKERNELS:.v=.vo)
+benchkernels:
+	for i in `find . -name "bench-*"`; do make kernel -C $$i; done
 
 %.vo: %.v
 	$(COQC) $(INCLUDES) $*.v

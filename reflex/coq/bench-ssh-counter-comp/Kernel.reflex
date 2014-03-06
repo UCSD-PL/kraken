@@ -1,0 +1,93 @@
+Components :
+  System  "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys" () ()
+  Slave   "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/ssh"      () ()
+  Counter "/home/don/kraken/kraken/ssh-proto/counter.py"        () ()
+
+Messages :
+  LoginReq(str)
+  LoginResT()
+  LoginResF()
+  PubkeyReq()
+  PubkeyRes(str)
+  KeysignReq(str)
+  KeysignRes(str)
+  CreatePtyerReq()
+  CreatePtyerRes(fd, fd)
+  SLoginReq(str)
+  SLoginResT(str)
+  SLoginResF()
+  SPubkeyReq()
+  SPubkeyRes(str)
+  SKeysignReq(str)
+  SKeysignRes(str)
+  SCreatePtyerReq(str)
+  SCreatePtyerRes(fd, fd)
+  CLoginReq(str)
+  CLoginResT(str)
+  CLoginResF(str)
+
+State :
+  Sys           : System
+  Slv           : Slave
+  Cnt           : Counter
+  authenticated : num
+  user          : str
+
+Operations :
+  Misc.str_prefix : str -> str -> num
+
+Init :
+  Systemp <- spawn System();
+  Sys <- Systemp;
+  Slvtemp <- spawn Slave();
+  Slv <- Slvtemp;
+  Cnttemp <- spawn Counter();
+  Cnt <- Cnttemp
+
+Handlers :
+  When slv:Slave sends LoginReq(u) respond:
+    send(Cnt, CLoginReq(u))
+
+  When cnt:Counter sends CLoginResT(u) respond:
+    send(Sys, SLoginReq(u))
+
+  When sys:System sends SLoginResT(u) respond:
+    user <- u;
+    authenticated <- 1;
+    send(Slv, LoginResT())
+
+  When sys:System sends SLoginResF() respond:
+    send(Slv, LoginResF())
+
+  When slv:Slave sends PubkeyReq() respond:
+    send(Sys, SPubkeyReq())
+
+  When sys:System sends SPubkeyRes(key) respond:
+    send(Slv, PubkeyRes(key))
+
+  When slv:Slave sends KeysignReq(key) respond:
+    send(Sys, SKeysignReq(key))
+
+  When sys:System sends SKeysignRes(key) respond:
+    send(Slv, KeysignRes(key))
+
+  When slv:Slave sends CreatePtyerReq() respond:
+    if (authenticated == 0)
+    then nop
+    else send(Sys, SCreatePtyerReq(user))
+
+  When sys:System sends SCreatePtyerRes(f1, f2) respond:
+    send(Slv, CreatePtyerRes(f1, f2))
+
+Properties :
+  CounterObeyed:
+    forall u:
+      [Recv(Counter(), CLoginResT(u))]
+      ImmBefore
+      [Send(_, SLoginReq(u))]
+
+  LoginEnablesPTY:
+    forall u:
+      [Recv(System(), SLoginResT(u))]
+      Enables
+      [Send(_, SCreatePtyerReq(u))]

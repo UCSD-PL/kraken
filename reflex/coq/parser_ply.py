@@ -28,6 +28,8 @@ reserved = {
   'send' : 'SEND',
   'spawn' : 'SPAWN',
   'call' : 'CALL',
+  'invokefd' : 'INVOKEFD',
+  'invokestr' : 'INVOKESTR',
   'if' : 'IF',
   'then' : 'THEN',
   'else' : 'ELSE',
@@ -46,6 +48,8 @@ reserved = {
   'Recv' : 'KRECV',
   'Spawn' : 'KSPAWN',
   'Call' : 'KCALL',
+  'InvokeFD' : 'KINVOKEFD',
+  'InvokeStr' : 'KINVOKESTR',
   'num' : 'TYPE_D',
   'str' : 'TYPE_D',
   'fd' : 'TYPE_D',
@@ -241,6 +245,8 @@ def p_cmd(p):
          | send
          | spawn
          | call
+         | invokefd
+         | invokestr
          | ite
          | lookup
   '''
@@ -269,6 +275,14 @@ def p_spawn(p):
 def p_call(p):
   'call : ID ASSIGN CALL expr LPAREN exprlist RPAREN'
   p[0] = {'type' : 'call', 'var' : p[1], 'expr' : p[4], 'args' : p[6]}
+
+def p_invokefd(p):
+  'invokefd : ID ASSIGN INVOKEFD expr LPAREN exprlist RPAREN'
+  p[0] = {'type' : 'invokefd', 'var' : p[1], 'expr' : p[4], 'args' : p[6]}
+
+def p_invokestr(p):
+  'invokestr : ID ASSIGN INVOKESTR expr LPAREN exprlist RPAREN'
+  p[0] = {'type' : 'invokestr', 'var' : p[1], 'expr' : p[4], 'args' : p[6]}
 
 def p_ite(p):
   'ite : IF expr THEN cmd ELSE cmd'
@@ -322,6 +336,8 @@ def p_apat(p):
           | KRECV LPAREN cpat COMMA msgpat RPAREN
           | KSPAWN cpat
           | KCALL pat LPAREN patlist RPAREN pat
+          | KINVOKEFD pat LPAREN patlist RPAREN pat
+          | KINVOKESTR pat LPAREN patlist RPAREN pat
   '''
   p[0] = {'type' : p[1]}
   if p[0]['type'] == 'Send' or p[0]['type'] == 'Recv':
@@ -333,6 +349,14 @@ def p_apat(p):
     p[0]['cmd'] = p[2]
     p[0]['args'] = p[4]
     p[0]['fd'] = p[6]
+  elif p[0]['type'] == 'InvokeFD':
+    p[0]['cmd'] = p[2]
+    p[0]['args'] = p[4]
+    p[0]['fd'] = p[6]
+  elif p[0]['type'] == 'InvokeStr':
+    p[0]['cmd'] = p[2]
+    p[0]['args'] = p[4]
+    p[0]['str'] = p[6]
 
 def p_msgpat(p):
   '''msgpat : ID LPAREN patlist RPAREN
@@ -599,6 +623,12 @@ def get_envd_spawn(cmd, cont):
 def get_envd_call(cmd, cont):
   return {cmd['var'] : 'Desc _ fd_d'}
 
+def get_envd_invokefd(cmd, cont):
+  return {cmd['var'] : 'Desc _ fd_d'}
+
+def get_envd_invokestr(cmd, cont):
+  return {cmd['var'] : 'Desc _ str_d'}
+
 def get_envd_ite(cmd, cont):
   return dict(cont(cmd['cmd1']), **cont(cmd['cmd2']))
 
@@ -609,14 +639,16 @@ def get_envd_lookup(cmd, cont):
 # envd is a map from id to type
 def get_envd_nolkup(cmd):
   return {
-     'nop' : lambda x ,y: {},
-     'assign' : lambda x ,y: {},
-     'seq'    : get_envd_seq,
-     'send'   : lambda x, y: {},
-     'spawn'  : get_envd_spawn,
-     'call'   : get_envd_call,
-     'ite'    : get_envd_ite,
-     'lookup' : get_envd_lookup
+     'nop'       : lambda x ,y: {},
+     'assign'    : lambda x ,y: {},
+     'seq'       : get_envd_seq,
+     'send'      : lambda x, y: {},
+     'spawn'     : get_envd_spawn,
+     'call'      : get_envd_call,
+     'invokefd'  : get_envd_invokefd,
+     'invokestr' : get_envd_invokestr,
+     'ite'       : get_envd_ite,
+     'lookup'    : get_envd_lookup
     }[cmd['type']](cmd, get_envd_nolkup)
 
 # changes the vard to a map from id to a dictionary containing
@@ -785,6 +817,20 @@ def get_call(cmd, cont, expr_fun):
          + '] ' + str(cmd['ctxt']['envd'][cmd['var']]['fin']) + '%fin' + \
          ' (Logic.eq_refl _)'
 
+def get_invokefd(cmd, cont, expr_fun):
+  return 'Reflex.InvokeFD _ _ _ _ _ envd (' + \
+         expr_fun(cmd['expr'], cmd['ctxt']) + ') [' + \
+         ';'.join(map(lambda e: expr_fun(e, cmd['ctxt']), cmd['args'])) \
+         + '] ' + str(cmd['ctxt']['envd'][cmd['var']]['fin']) + '%fin' + \
+         ' (Logic.eq_refl _)'
+
+def get_invokestr(cmd, cont, expr_fun):
+  return 'Reflex.InvokeStr _ _ _ _ _ envd (' + \
+         expr_fun(cmd['expr'], cmd['ctxt']) + ') [' + \
+         ';'.join(map(lambda e: expr_fun(e, cmd['ctxt']), cmd['args'])) \
+         + '] ' + str(cmd['ctxt']['envd'][cmd['var']]['fin']) + '%fin' + \
+         ' (Logic.eq_refl _)'
+
 def get_ite(cmd, cont, expr_fun):
   return 'ite (' + expr_fun(cmd['cond'], cmd['ctxt']) + ')\n' + \
           '    (\n' + '      ' + cont(cmd['cmd1'], expr_fun) + \
@@ -804,14 +850,16 @@ def get_lookup(cmd, cont, expr_fun):
 
 def get_cmd(cmd, expr_fun):
   return {
-    'nop'    : get_nop,
-    'assign' : get_assign,
-    'seq'    : get_seq,
-    'send'   : get_send,
-    'spawn'  : get_spawn,
-    'call'   : get_call,
-    'ite'    : get_ite,
-    'lookup' : get_lookup
+    'nop'       : get_nop,
+    'assign'    : get_assign,
+    'seq'       : get_seq,
+    'send'      : get_send,
+    'spawn'     : get_spawn,
+    'call'      : get_call,
+    'invokefd'  : get_invokefd,
+    'invokestr' : get_invokestr,
+    'ite'       : get_ite,
+    'lookup'    : get_lookup
   }[cmd['type']](cmd, get_cmd, expr_fun)
 
 def process_init(init):
@@ -901,6 +949,16 @@ def get_pat_str(pat):
            '(' + get_opat(pat['cmd']) + ') ' + \
            '(Some (' + '::'.join(map(get_opat, pat['args']) + ['nil']) + \
            ')) (' + get_opat(pat['fd']) + ')'
+  elif pat['type'] == 'InvokeFD':
+    return 'KOInvokeFD PAYD COMPT COMPS ' + \
+           '(' + get_opat(pat['cmd']) + ') ' + \
+           '(Some (' + '::'.join(map(get_opat, pat['args']) + ['nil']) + \
+           ')) (' + get_opat(pat['fd']) + ')'
+  elif pat['type'] == 'InvokeStr':
+    return 'KOInvokeStr PAYD COMPT COMPS ' + \
+           '(' + get_opat(pat['cmd']) + ') ' + \
+           '(Some (' + '::'.join(map(get_opat, pat['args']) + ['nil']) + \
+           ')) (' + get_opat(pat['str']) + ')'
 
 def get_clblr(cpats, num_cts):
   res = 'fun c : comp COMPT COMPS => match c with\n'

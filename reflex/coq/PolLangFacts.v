@@ -61,6 +61,16 @@ Fixpoint no_match {envd term} (c:cmd PAYD COMPT COMPS KSTD term envd)
     | KOCall _ _ _ => False
     | _ => True
     end
+  | Reflex.InvokeFD _ _ _ _ _ =>
+    match oact with
+    | KOInvokeFD _ _ _ => False
+    | _ => True
+    end
+  | Reflex.InvokeStr _ _ _ _ _ =>
+    match oact with
+    | KOInvokeStr _ _ _ => False
+    | _ => True
+    end
   | Reflex.StUpd _ _ _ => True
   | Reflex.CompLkup _ _ c1 c2 =>
     no_match c1 oact /\
@@ -134,6 +144,16 @@ Proof.
     subst act. destruct oact; auto. destruct o1; try contradiction.
     destruct c. simpl.
     destruct (COMPTDEC t conc_pat_type); try tauto.
+
+    destruct (init_ktr PAYD COMPT COMPS KSTD envd i0).
+    simpl in *. apply pack_injective in Htr.
+    subst tr. simpl in *. decompose [or] Hin; eauto.
+    subst act. destruct oact; auto.
+
+    destruct (init_ktr PAYD COMPT COMPS KSTD envd i0).
+    simpl in *. apply pack_injective in Htr.
+    subst tr. simpl in *. decompose [or] Hin; eauto.
+    subst act. destruct oact; auto.
 
     destruct (init_ktr PAYD COMPT COMPS KSTD envd i0).
     simpl in *. apply pack_injective in Htr.
@@ -222,6 +242,20 @@ Proof.
     destruct o1; try contradiction.
     destruct c0. simpl.
     destruct (COMPTDEC t conc_pat_type); try tauto.
+
+    destruct s as [s env]. destruct (ktr _ _ _ _ s) as [ ? ]_eqn.
+    simpl in *. apply pack_injective in Htr.
+    subst tr. rewrite list_app_cons.
+    apply Hp; auto. intros a Ha. simpl in *.
+    decompose [or] Ha; auto.
+    subst a. destruct oact; auto.
+
+    destruct s as [s env]. destruct (ktr _ _ _ _ s) as [ ? ]_eqn.
+    simpl in *. apply pack_injective in Htr.
+    subst tr. rewrite list_app_cons.
+    apply Hp; auto. intros a Ha. simpl in *.
+    decompose [or] Ha; auto.
+    subst a. destruct oact; auto.
 
     destruct s as [s env]. destruct (ktr _ _ _ _ s) as [ ? ]_eqn.
     simpl in *. apply pack_injective in Htr.

@@ -302,6 +302,10 @@ Proof.
 
     destruct s'; simpl in *; auto.
 
+    destruct s'; simpl in *; auto.
+
+    destruct s'; simpl in *; auto.
+
     destruct s'; simpl in *;
     match goal with
     |- context[ match ?e with | Some _ => _ | None => _ end ]
@@ -383,6 +387,10 @@ Proof.
 
     destruct s'; simpl in *; auto.
 
+    destruct s'; simpl in *; auto.
+
+    destruct s'; simpl in *; auto.
+
     destruct i as [i1 i2].
     destruct Hno_spawn.
     destruct s'; simpl in *.
@@ -434,6 +442,10 @@ Proof.
     |- context [ if ?e then _ else _ ]
       => destruct e
     end; eauto.
+
+    destruct h; simpl in *; auto.
+
+    destruct h; simpl in *; auto.
 
     destruct h; simpl in *; auto.
 

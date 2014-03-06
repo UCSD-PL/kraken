@@ -24,13 +24,15 @@ Record opt_msg : Set :=
   }.
 
 Inductive KOAction : Set :=
-| KOExec   : option str -> option (list (option str)) -> option conc_pat
-             -> KOAction
-| KOCall   : option str -> option (list (option str)) -> option fd -> KOAction
-| KOSelect : option (list (option conc_pat)) -> option conc_pat -> KOAction
-| KOSend   : option conc_pat -> option opt_msg -> KOAction
-| KORecv   : option conc_pat -> option opt_msg -> KOAction
-| KOBogus  : option conc_pat -> option num -> KOAction.
+| KOExec      : option str -> option (list (option str)) -> option conc_pat
+                -> KOAction
+| KOCall      : option str -> option (list (option str)) -> option fd -> KOAction
+| KOInvokeFD  : option str -> option (list (option str)) -> option fd -> KOAction
+| KOInvokeStr : option str -> option (list (option str)) -> option str -> KOAction
+| KOSelect    : option (list (option conc_pat)) -> option conc_pat -> KOAction
+| KOSend      : option conc_pat -> option opt_msg -> KOAction
+| KORecv      : option conc_pat -> option opt_msg -> KOAction
+| KOBogus     : option conc_pat -> option num -> KOAction.
 
 Definition eltMatch (d:desc) (opt:option s[[d]]) (arg:s[[d]]) : Prop :=
   match opt with
@@ -120,6 +122,12 @@ match oact, act with
 | KOCall s ls f, KCall s' ls' f' => eltMatch str_d s s' /\
                                     listMatch str_d ls ls' /\
                                     eltMatch fd_d f f'
+| KOInvokeFD s ls f, KInvokeFD s' ls' f' => eltMatch str_d s s' /\
+                                            listMatch str_d ls ls' /\
+                                            eltMatch fd_d f f'
+| KOInvokeStr s ls res, KInvokeStr s' ls' res' => eltMatch str_d s s' /\
+                                                  listMatch str_d ls ls' /\
+                                                  eltMatch str_d res res'
 | KOSelect lcps cp, KSelect lcs c => comp_list_match lcps lcs /\
                                      match_comp cp c
 | KOSend cp omsg, KSend c amsg => match_comp cp c /\

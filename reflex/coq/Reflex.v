@@ -518,12 +518,14 @@ Proof.
 Qed.
 
 Inductive KAction : Set :=
-| KExec   : str -> list str -> comp -> KAction
-| KCall   : str -> list str -> fd -> KAction
-| KSelect : list comp -> comp -> KAction
-| KSend   : comp -> msg -> KAction
-| KRecv   : comp -> msg -> KAction
-| KBogus  : comp -> bogus_msg -> KAction
+| KExec      : str -> list str -> comp -> KAction
+| KCall      : str -> list str -> fd -> KAction
+| KInvokeFD  : str -> list str -> fd -> KAction
+| KInvokeStr : str -> list str -> str -> KAction
+| KSelect    : list comp -> comp -> KAction
+| KSend      : comp -> msg -> KAction
+| KRecv      : comp -> msg -> KAction
+| KBogus     : comp -> bogus_msg -> KAction
 .
 
 Definition KTrace : Set :=
@@ -533,6 +535,8 @@ Definition expand_kaction (ka : KAction) : Trace :=
   match ka with
   | KExec cmd args c => Exec cmd args (comp_fd c) :: nil
   | KCall cmd args pipe => Call cmd args pipe :: nil
+  | KInvokeFD cmd args pipe => InvokeFD cmd args pipe :: nil
+  | KInvokeStr cmd args res => InvokeStr cmd args res :: nil
   | KSelect cs c => Select (proj_fds cs) (comp_fd c) :: nil
   | KSend c m => trace_send_msg (comp_fd c) m
   | KRecv c m => trace_recv_msg (comp_fd c) m
@@ -977,13 +981,17 @@ Inductive cmd : vcdesc -> Type :=
 | Nop : forall envd, cmd envd
 | Seq : forall envd, cmd envd -> cmd envd -> cmd envd
 | Ite : forall envd, expr envd (Desc num_d) -> cmd envd -> cmd envd -> cmd envd
-| Send : forall envd ct, expr envd (Comp ct) -> forall (t : fin NB_MSG), payload_expr envd (lkup_tag t) -> cmd envd
-(*| SendAll : forall envd, comp_pat envd -> forall (t : fin NB_MSG), payload_expr envd (lkup_tag t) -> cmd envd*)
+| Send : forall envd ct, expr envd (Comp ct) ->
+  forall (t : fin NB_MSG), payload_expr envd (lkup_tag t) -> cmd envd
 | Spawn :
     forall (envd : vcdesc) (t : COMPT), payload_expr envd (comp_conf_desc t) ->
     forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Comp t -> cmd envd
 | Call : forall (envd : vcdesc), expr envd (Desc str_d) -> list (expr envd (Desc str_d)) ->
     forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Desc fd_d -> cmd envd
+| InvokeFD : forall (envd : vcdesc), expr envd (Desc str_d) -> list (expr envd (Desc str_d)) ->
+    forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Desc fd_d -> cmd envd
+| InvokeStr : forall (envd : vcdesc), expr envd (Desc str_d) -> list (expr envd (Desc str_d)) ->
+    forall (i : fin (projT1 envd)), svec_ith (projT2 envd) i = Desc str_d -> cmd envd
 | StUpd : forall envd i, expr envd (svec_ith (projT2 KSTD) i) -> cmd envd
 | CompLkup : forall (envd : vcdesc) cp,
   cmd (existT _ (S (projT1 envd)) (svec_shift (Comp (comp_pat_type envd cp)) (projT2 envd))) ->
@@ -1085,6 +1093,7 @@ Definition ktrace_send_msgs (cps : list comp) (m : msg) : KTrace :=
 
 Inductive InputTreeType :=
 | FD : InputTreeType
+| Str : InputTreeType
 | Unit : InputTreeType
 | Comb : InputTreeType -> InputTreeType -> InputTreeType.
 
@@ -1092,6 +1101,8 @@ Fixpoint run_cmd_it {envd : vcdesc} {term} (cmd : cmd term envd) : InputTreeType
   match cmd with
   | Spawn _ _ _ _ _ => FD
   | Call _ _ _ _ _ => FD
+  | InvokeFD _ _ _ _ _ => FD
+  | InvokeStr _ _ _ _ _ => Str
   | Seq _ c1 c2 => Comb (run_cmd_it c1)
                            (run_cmd_it c2)
   | Ite _ _ c1 c2 => Comb (run_cmd_it c1)
@@ -1104,6 +1115,7 @@ Fixpoint run_cmd_it {envd : vcdesc} {term} (cmd : cmd term envd) : InputTreeType
 Fixpoint sdenote_itt (itt : InputTreeType) :=
   match itt with
   | FD => fd
+  | Str => str
   | Unit => unit
   | Comb l r => ((sdenote_itt l) * (sdenote_itt r))%type
   end.
@@ -1159,6 +1171,28 @@ Fixpoint init_state_run_cmd (envd : vcdesc) (s : init_state envd) (cmd : cmd bas
     {| init_comps := init_comps _ s
      ; init_ktr   := tr ~~~ KCall c args f :: tr
      ; init_env   := shvec_replace_cast EQ (init_env _ s) f
+     ; init_kst   := init_kst _ s
+     |}
+
+  | InvokeFD _ ce argse i EQ => fun s i =>
+    let tr := init_ktr _ s in
+    let f := i in
+    let c := eval_base_expr (init_env _ s) ce in
+    let args := map (eval_base_expr (init_env _ s)) argse in
+    {| init_comps := init_comps _ s
+     ; init_ktr   := tr ~~~ KInvokeFD c args f :: tr
+     ; init_env   := shvec_replace_cast EQ (init_env _ s) f
+     ; init_kst   := init_kst _ s
+     |}
+
+  | InvokeStr _ ce argse i EQ => fun s i =>
+    let tr := init_ktr _ s in
+    let res := i in
+    let c := eval_base_expr (init_env _ s) ce in
+    let args := map (eval_base_expr (init_env _ s)) argse in
+    {| init_comps := init_comps _ s
+     ; init_ktr   := tr ~~~ KInvokeStr c args res :: tr
+     ; init_env   := shvec_replace_cast EQ (init_env _ s) res
      ; init_kst   := init_kst _ s
      |}
 
@@ -1258,6 +1292,34 @@ Fixpoint hdlr_state_run_cmd (envd : vcdesc) (s : hdlr_state envd) (cmd : cmd (hd
      ; hdlr_env := shvec_replace_cast EQ env f
      |}
 
+  | InvokeFD _ ce argse i EQ => fun s i =>
+    let (s', env) := s in
+    let tr := ktr s' in
+    let f := i in
+    let c := eval_hdlr_expr (kst s') env ce in
+    let args := map (eval_hdlr_expr (kst s') env) argse in
+    {| hdlr_kst :=
+         {| kcs := kcs s'
+          ; ktr := tr ~~~ KInvokeFD c args f :: tr
+          ; kst := kst s'
+          |}
+     ; hdlr_env := shvec_replace_cast EQ env f
+     |}
+
+  | InvokeStr _ ce argse i EQ => fun s i =>
+    let (s', env) := s in
+    let tr := ktr s' in
+    let res := i in
+    let c := eval_hdlr_expr (kst s') env ce in
+    let args := map (eval_hdlr_expr (kst s') env) argse in
+    {| hdlr_kst :=
+         {| kcs := kcs s'
+          ; ktr := tr ~~~ KInvokeStr c args res :: tr
+          ; kst := kst s'
+          |}
+     ; hdlr_env := shvec_replace_cast EQ env res
+     |}
+
   | StUpd _ i ve => fun s _ =>
     let (s', env) := s in
     let v := eval_hdlr_expr (kst s') env ve in
@@ -1301,6 +1363,8 @@ Fixpoint default_input {envd term} (c : cmd term envd) : s[[run_cmd_it c]] :=
   match c with
   | Spawn _ _ _ _ _ => devnull
   | Call _ _ _ _ _ => devnull
+  | InvokeFD _ _ _ _ _ => devnull
+  | InvokeStr _ _ _ _ _ => nil
   | Seq _ c1 c2 => (default_input c1, default_input c2)
   | Ite _ _ c1 c2 => (default_input c1, default_input c2)
   | CompLkup _ _ c1 c2 => (default_input c1, default_input c2)
@@ -1589,6 +1653,8 @@ Ltac get_input :=
        destruct H as [i H']; exists (default_input c, i)
   | [ f : fd |- exists i : fd, _ ]
     => exists f
+  | [ s : str |- exists i : str, _ ]
+    => exists s
   end.
 
 Ltac misc :=
@@ -2092,6 +2158,25 @@ Proof.
     apply in_if_fd_cdesc_right; auto.
 Qed.
 
+Lemma vcdesc_fds_set_replace_not_fd : forall envd i d
+  (EQ:svec_ith (projT2 envd) i = Desc d) e f fds,
+  d <> fd_d ->
+  vcdesc_fds_all_in e fds ->
+  vcdesc_fds_all_in (vd:=envd)
+      (shvec_replace_cast EQ e f)
+      fds.
+Proof.
+  intros envd i d EQ e f fds Hnot_fd Hall_in.
+  unfold vcdesc_fds_all_in, in_if_fd_cdesc. intro i'.
+  pose proof (fin_eq_dec i i') as Hfeq_dec.
+  destruct Hfeq_dec as [Hfeq | Hfneq].
+    rewrite <- Hfeq in *. rewrite shvec_ith_replace_cast_ith.
+    unfold vcdesc'. rewrite EQ. destruct d; intuition.
+
+    rewrite shvec_ith_replace_cast_other; auto.
+    apply Hall_in.
+Qed.
+
 Lemma find_comp_suc : forall envd e cp cs c,
   find_comp (eval_base_comp_pat envd e cp) cs = Some c ->
   In (projT1 c) cs.
@@ -2378,6 +2463,8 @@ Ltac simplr_base :=
   try apply all_comp_fds_in_app_hdlr;
   try apply vcdesc_fds_set_replace_comp;
   try apply vcdesc_fds_set_replace_fd;
+  try solve [apply vcdesc_fds_set_replace_not_fd;
+    intuition congruence];
   try solve [apply vcdesc_fds_sub; auto];
   try solve [apply all_comp_fds_in_sub; auto];
   try solve [apply stupd_sub_base; auto];
@@ -2436,6 +2523,12 @@ Proof.
 
     | Call _ ce argse i EQ => fun s =>
       let case := "Call _ ce argse i EQ"%string in _
+
+    | InvokeFD _ ce argse i EQ => fun s =>
+      let case := "InvokeFD _ ce argse i EQ"%string in _
+
+    | InvokeStr _ ce argse i EQ => fun s =>
+      let case := "InvokeStr _ ce argse i EQ"%string in _
 
     | StUpd _ i ve => fun s =>
       let case := "StUpd _ i ve"%string in _
@@ -2513,6 +2606,40 @@ refine (
   {{ Return {| init_comps := cs
              ; init_ktr   := tr
              ; init_env   := shvec_replace_cast EQ e f
+             ; init_kst   := st
+             |}
+  }}
+); sep unfoldr simplr_base.
+
+(* InvokeFD *)
+destruct s as [cs tr e st fds]_eqn; simpl.
+refine (
+  let c := eval_base_expr e ce in
+  let args := map (eval_base_expr e) argse in
+  f <- invokefd c args (tr ~~~ expand_ktrace tr)
+   <@> init_invariant s;
+
+  let tr := tr ~~~ KInvokeFD c args f :: tr in
+  {{ Return {| init_comps := cs
+             ; init_ktr   := tr
+             ; init_env   := shvec_replace_cast EQ e f
+             ; init_kst   := st
+             |}
+  }}
+); sep unfoldr simplr_base.
+
+(* InvokeStr *)
+destruct s as [cs tr e st fds]_eqn; simpl.
+refine (
+  let c := eval_base_expr e ce in
+  let args := map (eval_base_expr e) argse in
+  res <- invokestr c args (tr ~~~ expand_ktrace tr)
+   <@> init_invariant s;
+
+  let tr := tr ~~~ KInvokeStr c args res :: tr in
+  {{ Return {| init_comps := cs
+             ; init_ktr   := tr
+             ; init_env   := shvec_replace_cast EQ e res
              ; init_kst   := st
              |}
   }}
@@ -2701,11 +2828,14 @@ Proof.
   | Send _ ct ce t me => fun s =>
     let case := "Send _ ct ce t me"%string in _
 
-  (*| SendAll _ cp t me => fun s =>
-    let case := "SendAll _ cp t me"%string in _*)
-
   | Call _ ce argse i EQ => fun s =>
     let case := "Call _ ce argse i EQ"%string in _
+
+  | InvokeFD _ ce argse i EQ => fun s =>
+    let case := "InvokeFD _ ce argse i EQ"%string in _
+
+  | InvokeStr _ ce argse i EQ => fun s =>
+    let case := "InvokeStr _ ce argse i EQ"%string in _
 
   | Spawn _ ct cfge i EQ => fun s =>
     let case := "Spawn _ ct cfg i EQ"%string in _
@@ -2786,18 +2916,57 @@ eapply comp_in_cs; eauto.
 (*Call*)
 destruct s as [ [cs tr st] env]_eqn.
 refine (
-(*  let c := eval_hdlr_expr _ _ _ _ ce in
-  let args := map (eval_hdlr_expr _ _ _ _) argse in*)
-  f <- call (eval_hdlr_expr _ _ _ _ ce) (map (eval_hdlr_expr _ _ _ _) argse) (tr ~~~ expand_ktrace tr)
+  f <- call (eval_hdlr_expr _ _ _ _ ce)
+            (map (eval_hdlr_expr _ _ _ _) argse)
+            (tr ~~~ expand_ktrace tr)
     <@> hdlr_invariant cc cm s;
+  {{ Return
+    {| hdlr_kst :=
+      {| kcs := cs
+       ; ktr := tr ~~~ KCall (eval_hdlr_expr _ _ _ _ ce)
+                             (map (eval_hdlr_expr _ _ _ _) argse) f :: tr
+       ; kst := st
+       |}
+     ; hdlr_env := shvec_replace_cast EQ env f
+     |}
+  }}
+); sep unfoldr simplr_base.
 
-(*  let tr := tr ~~~ KCall (eval_hdlr_expr _ _ _ _ ce) (map (eval_hdlr_expr _ _ _ _) argse) f :: tr in*)
-  {{ Return {| hdlr_kst := {| kcs := cs
-                            ; ktr := tr ~~~ KCall (eval_hdlr_expr _ _ _ _ ce) (map (eval_hdlr_expr _ _ _ _) argse) f :: tr
-                            ; kst := st
-                            |}
-             ; hdlr_env := shvec_replace_cast EQ env f
-             |}
+(*InvokeFD*)
+destruct s as [ [cs tr st] env]_eqn.
+refine (
+  f <- invokefd (eval_hdlr_expr _ _ _ _ ce)
+            (map (eval_hdlr_expr _ _ _ _) argse)
+            (tr ~~~ expand_ktrace tr)
+    <@> hdlr_invariant cc cm s;
+  {{ Return
+    {| hdlr_kst :=
+      {| kcs := cs
+       ; ktr := tr ~~~ KInvokeFD (eval_hdlr_expr _ _ _ _ ce)
+                             (map (eval_hdlr_expr _ _ _ _) argse) f :: tr
+       ; kst := st
+       |}
+     ; hdlr_env := shvec_replace_cast EQ env f
+     |}
+  }}
+); sep unfoldr simplr_base.
+
+(*InvokeStr*)
+destruct s as [ [cs tr st] env]_eqn.
+refine (
+  res <- invokestr (eval_hdlr_expr _ _ _ _ ce)
+            (map (eval_hdlr_expr _ _ _ _) argse)
+            (tr ~~~ expand_ktrace tr)
+    <@> hdlr_invariant cc cm s;
+  {{ Return
+    {| hdlr_kst :=
+      {| kcs := cs
+       ; ktr := tr ~~~ KInvokeStr (eval_hdlr_expr _ _ _ _ ce)
+                             (map (eval_hdlr_expr _ _ _ _) argse) res :: tr
+       ; kst := st
+       |}
+     ; hdlr_env := shvec_replace_cast EQ env res
+     |}
   }}
 ); sep unfoldr simplr_base.
 

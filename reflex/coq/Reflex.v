@@ -2616,7 +2616,7 @@ destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let c := eval_base_expr e ce in
   let args := map (eval_base_expr e) argse in
-  f <- invokefd c args (tr ~~~ expand_ktrace tr)
+  f <- invoke_fd c args (tr ~~~ expand_ktrace tr)
    <@> init_invariant s;
 
   let tr := tr ~~~ KInvokeFD c args f :: tr in
@@ -2633,7 +2633,7 @@ destruct s as [cs tr e st fds]_eqn; simpl.
 refine (
   let c := eval_base_expr e ce in
   let args := map (eval_base_expr e) argse in
-  res <- invokestr c args (tr ~~~ expand_ktrace tr)
+  res <- invoke_str c args (tr ~~~ expand_ktrace tr)
    <@> init_invariant s;
 
   let tr := tr ~~~ KInvokeStr c args res :: tr in
@@ -2935,7 +2935,7 @@ refine (
 (*InvokeFD*)
 destruct s as [ [cs tr st] env]_eqn.
 refine (
-  f <- invokefd (eval_hdlr_expr _ _ _ _ ce)
+  f <- invoke_fd (eval_hdlr_expr _ _ _ _ ce)
             (map (eval_hdlr_expr _ _ _ _) argse)
             (tr ~~~ expand_ktrace tr)
     <@> hdlr_invariant cc cm s;
@@ -2954,7 +2954,7 @@ refine (
 (*InvokeStr*)
 destruct s as [ [cs tr st] env]_eqn.
 refine (
-  res <- invokestr (eval_hdlr_expr _ _ _ _ ce)
+  res <- invoke_str (eval_hdlr_expr _ _ _ _ ce)
             (map (eval_hdlr_expr _ _ _ _) argse)
             (tr ~~~ expand_ktrace tr)
     <@> hdlr_invariant cc cm s;

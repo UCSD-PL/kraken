@@ -34,10 +34,7 @@ let dom_ok args =
                     ("yahoo.com", ["yimg.com"]);
                     ("wikipedia.org", ["wikimedia.org"]);
                     ("twitter.com", ["twimg.com"]);
-                    ("blogger.com", ["google.com"; "blogspot.com"; "gstatic.com";
-                                     "googleusercontent.com"]);
-                    ("ebay.com", ["ebaystatic.com"; "ebayimg.com"; "ebayrtm.com";
-                                  "ebay-stories.com" ]) ] in
+                    ("ebay.com", ["ebaystatic.com"])] in
    if (is_suffix host domain) then ""
    else if (List.fold_left (fun acc (dmn, whtlst) -> acc ||
                             if (is_suffix domain dmn)

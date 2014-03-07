@@ -221,19 +221,25 @@ let send_fd cfd x _ =
         (int_of_fd fd) (int_of_fd x));
   ()
 
-let _INVOKE_FD_MAP : (string * (string list -> int)) list =
+(* BEGIN:UserPrimitives *)
+let _INVOKE_FD_MAP : (string * (string list -> Unix.file_descr)) list =
   []
-
-let invoke_fd prog args _ =
-  let fd = (List.assoc prog _INVOKE_FD_MAP) args in
-  log (Printf.sprintf "invoke_fd : %s [%s] -> %s"
-    prog (String.concat ", " args) fd);
-  cfd_of_fd fd
 
 let _INVOKE_STR_MAP : (string * (string list -> string)) list =
   []
+(* END:UserPrimitives *)
 
-let invoke_str prog args _ =
+let invoke_fd cprog cargs _ =
+  let prog = string_of_str cprog in
+  let args = List.map string_of_str cargs in
+  let fd = (List.assoc prog _INVOKE_FD_MAP) args in
+  log (Printf.sprintf "invoke_fd : %s [%s] -> %d"
+    prog (String.concat ", " args) (int_of_fd fd));
+  cfd_of_fd fd
+
+let invoke_str cprog cargs _ =
+  let prog = string_of_str cprog in
+  let args = List.map string_of_str cargs in
   let s = (List.assoc prog _INVOKE_STR_MAP) args in
   log (Printf.sprintf "invoke_str : %s [%s] -> %s"
     prog (String.concat ", " args) s);

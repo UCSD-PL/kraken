@@ -8,6 +8,7 @@ SOBJS := $(patsubst %,-dllib\ -l%,$(SOBJS))
 FLAGS := \
 	-verbose 2 \
 	-lib unix \
+	-lib str \
 	-cflags -g \
 	-lflags -g,-I,$(SODIR),$(SOBJS),-dllpath,$(SODIR) \
 	-no-links

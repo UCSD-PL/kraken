@@ -7,7 +7,7 @@ Require Import ReflexFin.
 Require Import ReflexHVec.
 Require Import ReflexIO.
 Require Import ReflexFacts.
-Require Import NIExists.
+Require Import NIInputTree.
 Require Import Ynot.
 Require Import PruneFacts.
 Require Import Decidable.
@@ -187,7 +187,7 @@ Ltac impossible :=
   end.
 
 Ltac remove_redundant_ktr :=
-  unfold NIExists.ktr in *;
+  unfold NIInputTree.ktr in *;
   match goal with
   | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
       H' : Reflex.ktr _ _ _ _ ?s = inhabits ?tr' |- _ ]

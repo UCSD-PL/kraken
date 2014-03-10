@@ -28,7 +28,7 @@ Definition kstate := kstate PAYD COMPT COMPS KSTD.
 Definition ktr := ktr PAYD COMPT COMPS KSTD.
 Definition Nop := Reflex.Nop PAYD COMPT COMPS KSTD.
 
-Require Import NIExists.
+Require Import NIInputTree.
 Require Import Ynot.
 
 Ltac uninhabit :=
@@ -38,7 +38,7 @@ Ltac uninhabit :=
   end.
 
 Ltac remove_redundant_ktr :=
-  unfold NIExists.ktr in *;
+  unfold NIInputTree.ktr in *;
   match goal with
   | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
       H' : Reflex.ktr _ _ _ _ ?s = inhabits ?tr' |- _ ]

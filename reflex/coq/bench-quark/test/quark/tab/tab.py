@@ -107,6 +107,14 @@ class Tab:
     shm_obj = None
     sem_obj = None
     message_handler = None
+    whitelist = {
+        "google.com":"gstatic.com",
+        "facebook.com":"fbcdn.net",
+        "youtube.com":"ytimg.com",
+        "yahoo.com":"yimg.com",
+        "wikipedia.org":"wikimedia.org",
+        "twitter.com":"twimg.com",
+        "ebay.com":"ebaystatic.com"}
 
     def get_origin(self, uri) :
         p1 = urlparse.urlparse(uri)
@@ -173,12 +181,16 @@ class Tab:
                     # if it's not the main frame, Webkit will use a
                     # Wget message.
                     pass
+
         #print "something different.."
         # let's disable socket creation temporarily
-        #if self.is_tab_sub_origin(uri) :
-        # if this request is within the tab's origin, it's allowed for socket conneciton
-        # tlog(uri + " is within the tab origin : " + self.tab_origin)
-        #return
+        if self.is_tab_sub_origin(uri) :
+            # if this request is within the tab's origin, it's allowed for socket conneciton
+            # tlog(uri + " is within the tab origin : " + self.tab_origin)
+            return
+
+        if self.tab_origin in self.whitelist :
+            if self.is_sub_origin(self.whitelist[self.tab_origin], str(uri)): return
 
         self.message_handler.send([message.URLRequest, uri])
         

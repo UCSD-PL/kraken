@@ -12,6 +12,7 @@ all:
 build:
 	$(MAKE) kernel
 	cp -r ../../ml/ .
+	../userprims.sh
 	$(MAKE) extract
 	$(MAKE) -C ml
 

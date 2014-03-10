@@ -1033,7 +1033,7 @@ def process_props(props, num_cts):
     if prop['prop']['type'] == 'tprop':
       process_tprop(prop['prop'], pout)
     else:
-      pout.write("Require Import NIExists ReflexHVec ReflexIO.\n")
+      pout.write("Require Import NIInputTree ReflexHVec ReflexIO.\n")
       process_niprop(prop['prop'], pout, num_cts)
 
 write_prelude(result['ops']['files'])

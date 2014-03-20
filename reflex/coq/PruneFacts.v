@@ -16,7 +16,7 @@ Variable COMPT    : Set.
 Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
 Variable COMPS    : COMPT -> compd.
 Variable IENVD    : vcdesc COMPT.
-Variable KSTD     : vcdesc COMPT.
+Variable KSTD     : stvdesc.
 Variable INIT : init_prog PAYD COMPT COMPS KSTD IENVD.
 Variable HANDLERS : handlers PAYD COMPT COMPS KSTD.
 Definition comp := comp COMPT COMPS.
@@ -47,13 +47,16 @@ Ltac remove_redundant_ktr :=
 
 Lemma prune_nop_1 : forall clblr vlblr cslblr c m i s s',
   ValidExchange c m i s s' ->
-  projT2 (HANDLERS (tag _ m) (comp_type COMPT COMPS c)) =
+  proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type COMPT COMPS c))) =
   Nop _ _ ->
   high_out_eq _ _ _ _ s s' clblr /\ vars_eq _ _ _ _ s s' vlblr /\ cs_eq _ _ _ _ s s' cslblr.
 Proof.
   intros clblr vlblr cslblr c m i s s' Hve Hnop.
   inversion Hve. clear Hve.
-    subst s'0. unfold hdlrs. generalize i. rewrite Hnop. 
+    subst s'0. unfold hdlrs. generalize i.
+    destruct (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)).
+    simpl in *. destruct h. simpl in *. unfold kstate_run_prog.
+    simpl in *. clear H3. clear hdlrs. clear h. rewrite Hnop. 
     intros. simpl. unfold kstate_run_prog. unfold hdlr_state_run_cmd.
     simpl. split. 
       unfold high_out_eq. intros. simpl in *.
@@ -68,7 +71,7 @@ Qed.
 Lemma prune_nop_2 : forall clblr vlblr cslblr c m i s1 s1' s2 s2',
   ValidExchange c m i s1 s1' ->
   ValidExchange c m i s2 s2' ->
-  projT2 (HANDLERS (tag _ m) (comp_type COMPT COMPS c)) =
+  proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type COMPT COMPS c))) =
   Nop _ _ ->
   high_out_eq _ _ _ _ s1 s2 clblr -> vars_eq _ _ _ _ s1 s2 vlblr ->
   cs_eq _ _ _ _ s1 s2 cslblr ->
@@ -77,7 +80,10 @@ Lemma prune_nop_2 : forall clblr vlblr cslblr c m i s1 s1' s2 s2',
 Proof.
   intros clblr vlblr cslblr c m i s1 s2 s1' s2' Hve1 Hve2 Hnop Hout Hvars.
   inversion Hve1. inversion Hve2. clear Hve1. clear Hve2.
-    subst s'0. subst s'. unfold hdlrs. unfold hdlrs0. generalize i. rewrite Hnop. 
+    subst s'0. subst s'. unfold hdlrs. unfold hdlrs0. generalize i.
+    destruct (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)).
+    simpl in *. destruct h. simpl in *. unfold kstate_run_prog.
+    simpl in *. clear H3 H8. clear hdlrs. clear hdlrs0. clear h. rewrite Hnop. 
     intros. unfold kstate_run_prog. unfold hdlr_state_run_cmd.
     simpl. split. 
       unfold high_out_eq. intros. simpl in *.

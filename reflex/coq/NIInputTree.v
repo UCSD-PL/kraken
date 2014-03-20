@@ -17,7 +17,7 @@ Variable COMPT    : Set.
 Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
 Variable COMPS    : COMPT -> compd.
 Variable IENVD    : vcdesc COMPT.
-Variable KSTD     : vcdesc COMPT.
+Variable KSTD     : stvdesc.
 Variable INIT : init_prog PAYD COMPT COMPS KSTD IENVD.
 Variable HANDLERS : handlers PAYD COMPT COMPS KSTD.
 Definition comp := comp COMPT COMPS.
@@ -29,14 +29,14 @@ Definition ktr := ktr PAYD COMPT COMPS KSTD.
 Definition kcs := kcs PAYD COMPT COMPS KSTD.
 
 Definition init_input :=
-  sdenote_itt (run_cmd_it PAYD COMPT COMPS KSTD INIT).
+  sdenote_itt (run_cmd_it PAYD COMPT COMPS KSTD (proj1_sig INIT)).
 
 Record hdlr_input :=
   { cc : comp;
     cmsg : msg PAYD;
     input : sdenote_itt
       (run_cmd_it PAYD COMPT COMPS KSTD
-        (projT2 ((HANDLERS (tag _ cmsg) (comp_type _ _ cc)))))
+        (proj1_sig (projT2 ((HANDLERS (tag _ cmsg) (comp_type _ _ cc))))))
   }.
 
 Record bogus_input :=
@@ -125,7 +125,7 @@ Fixpoint ReachFix (i_init:init_input)
   match i_hdlrs with
   | nil =>
     let s := init_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD IENVD
-      (initial_init_state PAYD COMPT COMPS KSTD IENVD) INIT i_init in
+      (initial_init_state PAYD COMPT COMPS KSTD IENVD) (proj1_sig INIT) i_init in
      Some {| Reflex.kcs := init_comps _ _ _ _ _ s
            ; Reflex.ktr := init_ktr _ _ _ _ _ s
            ; Reflex.kst := init_kst _ _ _ _ _ s

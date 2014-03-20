@@ -24,7 +24,7 @@ Module Type SystemFeaturesInterface.
   Parameter COMPTDEC : forall (x y : COMPT), decide (x = y).
   Parameter COMPS    : COMPT -> compd.
   Parameter IENVD    : vcdesc COMPT.
-  Parameter KSTD     : vcdesc COMPT.
+  Parameter KSTD     : stvdesc.
 End SystemFeaturesInterface.
 
 Module MkLanguage (Import SF : SystemFeaturesInterface).
@@ -76,12 +76,6 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
               (hdlr_env PAYD COMPT COMPS KSTD ENVD s) i.
   Notation "s ## i" := (env_ith s i) (at level 0) : env.
   Delimit Scope env with env.
-
-  Definition kst_ith s i :=
-    shvec_ith (n := projT1 KSTD) (sdenote_cdesc COMPT COMPS) (projT2 KSTD)
-              (kst PAYD COMPT COMPS KSTD s) i.
-  Notation "s ## i" := (kst_ith s i) (at level 0) : kst.
-  Delimit Scope kst with kst.
 
   Definition eq {term d envd} e1 e2 :=
     BinOp COMPT COMPS term envd

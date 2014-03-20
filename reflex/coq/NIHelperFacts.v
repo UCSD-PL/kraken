@@ -13,7 +13,7 @@ Variable COMPT    : Set.
 Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
 Variable COMPS    : COMPT -> compd.
 Variable IENVD    : vcdesc COMPT.
-Variable KSTD     : vcdesc COMPT.
+Variable KSTD     : stvdesc.
 Variable INIT : init_prog PAYD COMPT COMPS KSTD IENVD.
 Variable HANDLERS : handlers PAYD COMPT COMPS KSTD.
 Definition comp := comp COMPT COMPS.

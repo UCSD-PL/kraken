@@ -83,8 +83,6 @@ Definition trace_fds (tr : Trace) : list fd :=
 
 Definition devnull := Num "000" "000".
 
-Axiom devnull_open : emp ==> open devnull.
-
 Axiom exec :
   forall (prog : str) (args : list str) (tr : [Trace]),
     STsep (tr ~~ traced tr)

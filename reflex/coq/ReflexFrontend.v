@@ -45,6 +45,10 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition envvar {cc m} envd i :=
     Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd
          (Base _ _ _ _ _ _ _ (Var _ envd i)).
+  Definition i_envvar_t envd i :=
+    Var COMPT envd i.
+  Definition envvar_t {ct mt} envd i :=
+    Base PAYD COMPT COMPS KSTD ct mt envd (Var _ envd i).
   Definition slit {cc envd m} v :=
     Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (SLit _ _ v)).
   Definition nlit {cc envd m} v :=
@@ -1484,6 +1488,14 @@ Fixpoint mk_vdesc' l : vdesc' (List.length l) :=
 
 Definition mk_vdesc l : vdesc := existT _ (List.length l) (mk_vdesc' l).
 
+Fixpoint mk_stvdesc' l : stvdesc' (List.length l) :=
+  match l with
+  | nil     => tt
+  | x :: xs => (x, mk_stvdesc' xs)
+  end.
+
+Definition mk_stvdesc l : stvdesc := existT _ (List.length l) (mk_stvdesc' l).
+
 Fixpoint mk_vcdesc' {COMPT} l : vcdesc' COMPT (List.length l) :=
   match l with
   | nil     => tt
@@ -1504,6 +1516,12 @@ Definition mk_compd name cmd args conf :=
    ; compd_args := List.map str_of_string args
    ; compd_conf := conf
    |}.
+
+Lemma num_d_stdesc : num_d <> fd_d.
+Proof. congruence. Qed.
+
+Lemma str_d_stdesc : str_d <> fd_d.
+Proof. congruence. Qed.
 
 Notation " [ ] " := nil.
 Notation " [ x ] " := (cons x nil).

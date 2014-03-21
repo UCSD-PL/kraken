@@ -21,52 +21,50 @@ Messages :
 
 State :
   crashed : num
-  E       : Engine
-  B       : Brakes
-  CC      : CruiseCtrl
-  D       : Doors
-  R       : Radio
-  AB      : Airbag
-  Alrm    : Alarm
 
 Operations:
 
 Init :
   crashed <- 0;
-  Etemp <- spawn Engine();
-  E <- Etemp;
-  Btemp <- spawn Brakes();
-  B <- Btemp;
-  CCtemp <- spawn CruiseCtrl();
-  CC <- CCtemp;
-  Dtemp <- spawn Doors();
-  D <- Dtemp;
-  Rtemp <- spawn Radio();
-  R <- Rtemp;
-  ABtemp <- spawn Airbag();
-  AB <- ABtemp;
-  Alrmtemp <- spawn Alarm();
-  Alrm <- Alrmtemp
+  E <- spawn Engine();
+  B <- spawn Brakes();
+  CC <- spawn CruiseCtrl();
+  D <- spawn Doors();
+  R <- spawn Radio();
+  AB <- spawn Airbag();
+  Alrm <- spawn Alarm()
 
 Handlers :
   When e:Engine sends Crash() respond:
-    send(AB, InflateAirbag());
-    send(D, UnlockDoors());
-    crashed <- 1
+    crashed <- 1;
+    lookup Airbag()
+    { AB => lookup Doors()
+            { D => send(AB, InflateAirbag());
+                   send(D, UnlockDoors()) }
+            { nop } }
+    { nop }
 
   When e:Engine sends Acceleration() respond:
-    send(R, VolumeUp())
+    lookup Radio()
+    { R => send(R, VolumeUp()) }
+    { nop }
 
   When d:Doors sends DoorsOpen() respond:
-    send(R, VolumeDown())
+    lookup Radio()
+    { R => send(R, VolumeDown()) }
+    { nop }
 
   When a:Alarm sends LockDoors() respond:
     if (crashed == 0)
-    then send(D, LockDoors())
+    then lookup Doors()
+         { D => send(D, LockDoors()) }
+         { nop }
     else nop
 
   When b:Brakes sends BrakesApplied() respond:
-    send(CC, CruiseOff())
+    lookup CruiseCtrl()
+    { CC => send(CC, CruiseOff()) }
+    { nop }
 
 Properties :
   AirbagImmAfterCrash:

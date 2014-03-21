@@ -9,7 +9,8 @@ BENCHKERNELS  := $(wildcard bench-*/Kernel.v)
 all:
 	$(MAKE) depend
 	$(MAKE) coq
-	$(MAKE) ubenchkernels
+# Need to rewrite ubench kernels
+#	$(MAKE) ubenchkernels
 	$(MAKE) benchkernels
 
 BENCHNAME := benchmark-$(shell date +"%y-%m-%d-%H:%M:%S")

@@ -24,51 +24,59 @@ Messages :
   DomainSet(str)
 
 State :
-  Out    : Output
-  CurTab : Tab
-  User   : UserInput
+  CurTab : str
 
 Operations :
   Misc.dom : str -> str -> str
 
 Init :
-  Outtemp <- spawn Output();
-  Usertemp <- spawn UserInput();
-  Out <- Outtemp;
-  User <- Usertemp
+  Out <- spawn Output();
+  User <- spawn UserInput()
 
 Handlers :
   When u:UserInput sends TabCreate(id, domain) respond:
     lookup Tab(id, _)
     { t => nop }
     { t <- spawn Tab(id, domain);
-      send(t, DomainSet(domain));
-      CurTab <- t;
-      send(User, AddrAdd(id, domain))
+           send(t, DomainSet(domain));
+           CurTab <- id;
+           lookup UserInput()
+           { u => send(u, AddrAdd(id, domain)) }
+           { nop }
     }
 
   When u:UserInput sends TabSwitch(id) respond:
     lookup Tab(id, _)
-    { t => CurTab <- t;
-           send(User, AddrFocus(id));
-           send(CurTab, RenderRequest(""))
+    { t => CurTab <- id;
+           lookup UserInput()
+           { u => send(u, AddrFocus(id));
+                  send(t, RenderRequest("")) }
+           { nop }
     }
     { nop }
 
   When u:UserInput sends Navigate(url) respond:
-    if ((dom "/" url) == CurTab.domain)
-    then send(CurTab, Navigate(url))
-    else nop
+    lookup Tab(CurTab, _)
+    { t => if ((dom "/" url) == t.domain)
+           then send(t, Navigate(url))
+           else nop }
+    { nop }
 
   When u:UserInput sends KeyPress(key) respond:
-    send(CurTab, KeyPress(key))
+    lookup Tab(CurTab, _)
+    { t => send(t, KeyPress(key)) }
+    { nop }
 
   When u:UserInput sends MouseClick(coord) respond:
-    send(CurTab, MouseClick(coord))
+    lookup Tab(CurTab, _)
+    { t => send(t, MouseClick(coord)) }
+    { nop }
 
   When t:Tab sends RenderCompleted(key) respond:
-    if (t == CurTab)
-    then send(Out, RenderCompleted(key))
+    if (t.id == CurTab)
+    then lookup Output()
+         { o => send(o, RenderCompleted(key)) }
+         { nop }
     else nop
 
   When t:Tab sends URLRequest(url) respond:
@@ -141,5 +149,5 @@ Properties :
     forall d:
       NoInterfere
         HighComps : Tab(_, d), CProc(d), UserInput()
-        HighVars : CurTab, Out, User
+        HighVars : CurTab
         HighCompList : Tab(_, _), UserInput(), Output()

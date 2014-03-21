@@ -27,9 +27,6 @@ Messages :
   CLoginResF(str)
 
 State :
-  Sys           : System
-  Slv           : Slave
-  Cnt           : Counter
   authenticated : num
   user          : str
 
@@ -37,47 +34,64 @@ Operations :
   Misc.str_prefix : str -> str -> num
 
 Init :
-  Systemp <- spawn System();
-  Sys <- Systemp;
-  Slvtemp <- spawn Slave();
-  Slv <- Slvtemp;
-  Cnttemp <- spawn Counter();
-  Cnt <- Cnttemp
+  Sys <- spawn System();
+  Slv <- spawn Slave();
+  Cnt <- spawn Counter()
 
 Handlers :
   When slv:Slave sends LoginReq(u) respond:
-    send(Cnt, CLoginReq(u))
+    lookup Counter()
+    { c => send(c, CLoginReq(u)) }
+    { nop }
 
   When cnt:Counter sends CLoginResT(u) respond:
-    send(Sys, SLoginReq(u))
+    lookup System()
+    { s => send(s, SLoginReq(u)) }
+    { nop }
 
   When sys:System sends SLoginResT(u) respond:
     user <- u;
     authenticated <- 1;
-    send(Slv, LoginResT())
+    lookup Slave()
+    { s => send(s, LoginResT()) }
+    { nop }
 
   When sys:System sends SLoginResF() respond:
-    send(Slv, LoginResF())
+    lookup Slave()
+    { s => send(s, LoginResF()) }
+    { nop }
 
   When slv:Slave sends PubkeyReq() respond:
-    send(Sys, SPubkeyReq())
+    lookup System()
+    { s => send(s, SPubkeyReq()) }
+    { nop }
 
   When sys:System sends SPubkeyRes(key) respond:
-    send(Slv, PubkeyRes(key))
+    lookup Slave()
+    { s => send(s, PubkeyRes(key)) }
+    { nop }
 
   When slv:Slave sends KeysignReq(key) respond:
-    send(Sys, SKeysignReq(key))
+    lookup System()
+    { s => send(s, SKeysignReq(key)) }
+    { nop }
 
   When sys:System sends SKeysignRes(key) respond:
-    send(Slv, KeysignRes(key))
+    lookup Slave()
+    { s => send(s, KeysignRes(key)) }
+    { nop }
 
   When slv:Slave sends CreatePtyerReq() respond:
     if (authenticated == 0)
     then nop
-    else send(Sys, SCreatePtyerReq(user))
+    else lookup System()
+         { s => send(s, SCreatePtyerReq(user)) }
+         { nop }
 
   When sys:System sends SCreatePtyerRes(f1, f2) respond:
-    send(Slv, CreatePtyerRes(f1, f2))
+    lookup Slave()
+    { s => send(s, CreatePtyerRes(f1, f2)) }
+    { nop }
 
 Properties :
   CounterObeyed:

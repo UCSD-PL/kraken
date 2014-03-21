@@ -567,6 +567,7 @@ def write_prelude(imports):
   out.write("Module SystemFeatures <: SystemFeaturesInterface.\n\n")
 
 spec_to_desc = { 'str' : 'str_d', 'fd' : 'fd_d', 'num' : 'num_d' }
+spec_to_desc_d = Set(['str_d', 'fd_d', 'num_d'])
 
 def get_desc(x):
   return spec_to_desc[x]
@@ -574,6 +575,8 @@ def get_desc(x):
 def get_cdesc(x):
   if x in spec_to_desc:
     return 'Desc _ ' + spec_to_desc[x]
+  elif x in spec_to_desc_d:
+    return 'Desc _ ' + x
   else:
     return 'Comp _ ' + x
 
@@ -618,16 +621,16 @@ def get_envd_seq(cmd, cont):
   return dict(cont(cmd['cmd1']), **cont(cmd['cmd2']))
 
 def get_envd_spawn(cmd, cont):
-  return {cmd['var'] : 'Comp _ ' + cmd['ctag']}
+  return {cmd['var'] : cmd['ctag']}
 
 def get_envd_call(cmd, cont):
-  return {cmd['var'] : 'Desc _ fd_d'}
+  return {cmd['var'] : 'fd_d'}
 
 def get_envd_invokefd(cmd, cont):
-  return {cmd['var'] : 'Desc _ fd_d'}
+  return {cmd['var'] : 'fd_d'}
 
 def get_envd_invokestr(cmd, cont):
-  return {cmd['var'] : 'Desc _ str_d'}
+  return {cmd['var'] : 'str_d'}
 
 def get_envd_ite(cmd, cont):
   return dict(cont(cmd['cmd1']), **cont(cmd['cmd2']))
@@ -673,13 +676,13 @@ def add_ctxt(cmd, envd, kstd, other):
       new_fin = 0
     else:
       new_fin = max(envd.values(), key=lambda x: x['fin'])['fin']+1
-    new_envd[cmd['var']] = {'type' : 'Comp _ ' + cmd['ctag'],
+    new_envd[cmd['var']] = {'type' : cmd['ctag'],
                             'fin' : new_fin}
     add_ctxt(cmd['cmd1'], new_envd, kstd, other)
     add_ctxt(cmd['cmd2'], envd, kstd, other)
 
 def get_type_list(vard):
-  types_list = map(lambda x: x['type'],
+  types_list = map(lambda x: get_cdesc(x['type']),
     sorted(vard.values(), key=lambda x: x['fin']))
   return '[' + ';'.join(types_list) + ']'
 
@@ -688,7 +691,7 @@ def process_init_envd(init, kstd, comp_map, ops):
   out.write("  [\n")
   envd = get_vard_fin(get_envd_nolkup(init))
   add_ctxt(init, envd, kstd, {'comps':comp_map, 'ops':ops})
-  types_list = map(lambda x: x['type'],
+  types_list = map(lambda x: get_cdesc(x['type']),
     sorted(init['ctxt']['envd'].values(), key=lambda x: x['fin']))
   out.write("   " + ";\n   ".join(types_list))
   out.write("\n  ].\n\n")
@@ -696,12 +699,13 @@ def process_init_envd(init, kstd, comp_map, ops):
   out.write("\n")
 
 def process_kstd(state):
-  out.write("Definition KSTD : vcdesc COMPT := mk_vcdesc\n")
+  out.write("Definition KSTD : stvdesc := mk_stvdesc\n")
   out.write("  [\n")
   state_with_fin = get_vard_fin(state)
-  types_list = map(lambda x: get_cdesc(x['type']),
+  types_list = map(lambda x: get_desc(x['type']),
     sorted(state_with_fin.values(), key=lambda x: x['fin']))
-  out.write("   " + ";\n   ".join(types_list))
+  types_proofs_list = map(lambda d:'(exist _ ' + d + ' ' + d + '_stdesc)', types_list)
+  out.write("   " + ";\n   ".join(types_proofs_list))
   out.write("\n  ].\n\n")
   gen_fin_notation(state_with_fin)
   out.write("\n")
@@ -730,6 +734,11 @@ def get_op(op, ops, arity):
 def get_envd_str(envd):
   return 'mk_vcdesc ' + get_type_list(envd)
 
+def get_envvar_term(ctxt, var, pref):
+  return pref + 'envvar_t envd ' + \
+         str(ctxt['envd'][var]['fin']) + \
+         '%fin'
+
 def get_envvar(ctxt, var, pref):
   return pref + 'envvar envd ' + \
          str(ctxt['envd'][var]['fin']) + \
@@ -750,7 +759,7 @@ def get_expr(expr, ctxt, pref):
       e = 'CComp _ _ _ _ _ _ _'
     elif expr['id'] in ctxt['envd']:
       ct = ctxt['envd'][expr['id']]['type']
-      e = get_envvar(ctxt, expr['id'], pref)
+      e = get_envvar_term(ctxt, expr['id'], pref)
     elif expr['id'] in ctxt['kstd']:
       ct = ctxt['kstd'][expr['id']]['type']
       e = 'StVar _ _ _ KSTD _ _ _ ' + expr['id']
@@ -865,7 +874,7 @@ def get_cmd(cmd, expr_fun):
 def process_init(init):
   out.write("Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=\n")
   out.write("let envd := IENVD in\n")
-  out.write(get_cmd(init, get_iexpr) + '.\n\n')
+  out.write('(exist _ (' + get_cmd(init, get_iexpr) + ') (Logic.eq_refl _)).\n\n')
 
 def process_hdlr(hdlr, kstd, comp_map, ops):
   envd = get_vard_fin(get_envd_nolkup(hdlr['cmd']))
@@ -875,7 +884,7 @@ def process_hdlr(hdlr, kstd, comp_map, ops):
   out.write('|' + hdlr['ctag'] + ', ' + hdlr['mtag'] + ' =>\n')
   out.write('let envd := ' + get_envd_str(hdlr['cmd']['ctxt']['envd']) + ' in\n')
   out.write('[[ envd :\n')
-  out.write('  ' + get_cmd(hdlr['cmd'], get_hexpr) + '\n')
+  out.write('  exist _ (' + get_cmd(hdlr['cmd'], get_hexpr) + ') (Logic.eq_refl _)\n')
   out.write(']]\n')
 
 def process_hdlrs(hdlrs, kstd, comp_map, ops):
@@ -888,7 +897,7 @@ def process_hdlrs(hdlrs, kstd, comp_map, ops):
   for hdlr in hdlrs:
     process_hdlr(hdlr, kstd, comp_map, ops)
   out.write("| _, _ =>\n")
-  out.write("  [[ mk_vcdesc [] : nop ]]\n")
+  out.write("  [[ mk_vcdesc [] : exist _ nop (Logic.eq_refl _)]]\n")
   out.write("end.\n")
   out.write("Close Scope hdlr.\n")
 

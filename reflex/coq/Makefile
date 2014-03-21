@@ -34,7 +34,7 @@ depend: $(FILES) $(BENCHKERNELS) $(UBENCHKERNELS)
 coq: $(FILES:.v=.vo)
 ubenchkernels: $(UBENCHKERNELS:.v=.vo)
 benchkernels:
-	for i in `find . -name "bench-*"`; do make kernel -C $$i; done
+	for i in `find . -maxdepth 1 -name "bench-*"`; do make kernel -C $$i; done
 
 %.vo: %.v
 	$(COQC) $(INCLUDES) $*.v
@@ -42,7 +42,7 @@ benchkernels:
 clean:
 	rm -f *.vo *.glob
 	rm -f ../ml/*.vo ../ml/*.ml ../ml/*.mli
-	for i in `find . -name "bench-*"`; do make clean -C $$i; done
+	for i in `find . -maxdepth 1 -name "bench-*"`; do make clean -C $$i; done
 
 include .depend
 

@@ -23,6 +23,8 @@ Messages :
   SCreatePtyerRes(fd, fd)
 
 State :
+  Sys           : System
+  Slv           : Slave
   authenticated : num
   user          : str
   attempts      : str
@@ -31,62 +33,48 @@ Operations :
   Misc.str_prefix : str -> str -> num
 
 Init :
-  Sys <- spawn System();
-  Slv <- spawn Slave();
-  attempts <- ""
+  Systemp <- spawn System();
+  Sys <- Systemp;
+  Slvtemp <- spawn Slave();
+  Slv <- Slvtemp;
+  attempts <- "";
+  authenticated <- 0;
+  user <- ""
 
 Handlers :
   When slv:Slave sends LoginReq(u) respond:
     if (str_prefix attempts "  ")
-    then lookup System()
-         { s => send(s, SLoginReq(u, attempts));
-           attempts <- (" " ++ attempts) }
-         { nop }
+    then send(Sys, SLoginReq(u, attempts));
+         attempts <- (" " ++ attempts)
     else nop
 
   When sys:System sends SLoginResT(u) respond:
     user <- u;
     authenticated <- 1;
-    lookup Slave()
-    { s => send(s, LoginResT()) }
-    { nop }
+    send(Slv, LoginResT())
 
   When sys:System sends SLoginResF() respond:
-    lookup Slave()
-    { s => send(s, LoginResF()) }
-    { nop }
+    send(Slv, LoginResF())
 
   When slv:Slave sends PubkeyReq() respond:
-    lookup System()
-    { s => send(s, SPubkeyReq()) }
-    { nop }
+    send(Sys, SPubkeyReq())
 
   When sys:System sends SPubkeyRes(key) respond:
-    lookup Slave()
-    { s => send(s, PubkeyRes(key)) }
-    { nop }
+    send(Slv, PubkeyRes(key))
 
   When slv:Slave sends KeysignReq(key) respond:
-    lookup System()
-    { s => send(s, SKeysignReq(key)) }
-    { nop }
+    send(Sys, SKeysignReq(key))
 
   When sys:System sends SKeysignRes(key) respond:
-    lookup Slave()
-    { s => send(s, KeysignRes(key)) }
-    { nop }
+    send(Slv, KeysignRes(key))
 
   When slv:Slave sends CreatePtyerReq() respond:
     if (authenticated == 0)
     then nop
-    else lookup System()
-         { s => send(s, SCreatePtyerReq(user)) }
-         { nop }
+    else send(Sys, SCreatePtyerReq(user))
 
   When sys:System sends SCreatePtyerRes(f1, f2) respond:
-    lookup Slave()
-    { s => send(s, CreatePtyerRes(f1, f2)) }
-    { nop }
+    send(Slv, CreatePtyerRes(f1, f2))
 
 Properties :
   LoginAtt0:

@@ -23,14 +23,26 @@ Messages :
   DomainSet(str)
 
 State :
-  CurTab : str
+  Out    : Output
+  CurTab : Tab
+  User   : UserInput
 
 Operations :
   Misc.dom : str -> str -> str
 
 Init :
-  Out <- spawn Output();
-  User <- spawn UserInput()
+  Outtemp <- spawn Output();
+  Usertemp <- spawn UserInput();
+  Out <- Outtemp;
+  User <- Usertemp;
+  t <- spawn Tab("", "google.com");
+  send(t, DomainSet("google.com"));
+  f <- call "create_ckchan.py"();
+  send(t, CookieProcessRegister(f));
+  c <- spawn CProc("google.com");
+  send(c, TabProcessRegister(f));
+  CurTab <- t;
+  send(Usertemp, AddrAdd("", "google.com"))
 
 Handlers :
   When u:UserInput sends TabCreate(id, domain) respond:
@@ -45,44 +57,32 @@ Handlers :
       { c <- spawn CProc(domain);
         send(c, TabProcessRegister(f))
       };
-      CurTab <- id;
-      lookup UserInput()
-      { u => send(u, AddrAdd(id, domain)) }
-      { nop }
+      CurTab <- t;
+      send(User, AddrAdd(id, domain))
     }
 
   When u:UserInput sends TabSwitch(id) respond:
     lookup Tab(id, _)
-    { t => CurTab <- id;
-           lookup UserInput()
-           { u => send(u, AddrFocus(id));
-                  send(t, RenderRequest("")) }
-           { nop }
+    { t => CurTab <- t;
+           send(User, AddrFocus(id));
+           send(CurTab, RenderRequest(""))
     }
     { nop }
 
   When u:UserInput sends Navigate(url) respond:
-    lookup Tab(CurTab, _)
-    { t => if ((dom "/" url) == t.domain)
-           then send(t, Navigate(url))
-           else nop }
-    { nop }
+    if ((dom "/" url) == CurTab.domain)
+    then send(CurTab, Navigate(url))
+    else nop
 
   When u:UserInput sends KeyPress(key) respond:
-    lookup Tab(CurTab, _)
-    { t => send(t, KeyPress(key)) }
-    { nop }
+    send(CurTab, KeyPress(key))
 
   When u:UserInput sends MouseClick(coord) respond:
-    lookup Tab(CurTab, _)
-    { t => send(t, MouseClick(coord)) }
-    { nop }
+    send(CurTab, MouseClick(coord))
 
   When t:Tab sends RenderCompleted(key) respond:
-    if (t.id == CurTab)
-    then lookup Output()
-         { o => send(o, RenderCompleted(key)) }
-         { nop }
+    if (t == CurTab)
+    then send(Out, RenderCompleted(key))
     else nop
 
   When t:Tab sends URLRequest(url) respond:
@@ -145,5 +145,5 @@ Properties :
     forall d:
       NoInterfere
         HighComps : Tab(_, d), CProc(d), UserInput()
-        HighVars : CurTab
+        HighVars : CurTab, Out, User
         HighCompList : Tab(_, _), UserInput(), Output()

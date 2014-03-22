@@ -22,43 +22,39 @@ Messages :
   FileResF(str)
 
 State :
+  AC : AccessControl
+  D  : Disk
+  L  : Listener
 
 Operations :
 
 Init :
-  AC <- spawn AccessControl();
-  D <- spawn Disk();
-  L <- spawn Listener()
+  ACtemp <- spawn AccessControl();
+  AC <- ACtemp;
+  Dtemp <- spawn Disk();
+  D <- Dtemp;
+  Ltemp <- spawn Listener();
+  L <- Ltemp
 
 Handlers :
   When l:Listener sends LoginReq(u, p, a) respond:
-    lookup AccessControl()
-    { ac => send(ac, ACLoginReq(u, p, a)) }
-    { nop }
+    send(AC, ACLoginReq(u, p, a))
 
   When ac:AccessControl sends ACLoginResT(u, a) respond:
     lookup Client(u, a)
     { cl => nop }
     { c <- spawn Client(u, a);
-      lookup Listener()
-      { l => send(l, LoginResT(u, a)) }
-      { nop }
+      send(L, LoginResT(u, a))
     }
 
   When ac:AccessControl sends ACLoginResF(u, a) respond:
-    lookup Listener()    
-    { l => send(l, LoginResF(u, a)) }
-    { nop }
+    send(L, LoginResF(u, a))
 
   When c:Client sends FileReq(r) respond:
-    lookup AccessControl()
-    { ac => send(ac, ACFileReq(c.user, c.addr, r)) }
-    { nop }
+    send(AC, ACFileReq(c.user, c.addr, r))
 
   When ac:AccessControl sends ACFileResT(u, a, r) respond:
-    lookup Disk()
-    { d => send(d, DFileReq(u, a, r)) }
-    { nop }
+    send(D, DFileReq(u, a, r))
 
   When ac:AccessControl sends ACFileResF(u, a, r) respond:
     lookup Client(u, a)

@@ -152,7 +152,7 @@ Proof.
   now rewrite lift_proj_fin in p.
   right. intro H. exact (n0 (H (max_fin n))).
   right. intro. apply n0. intro. apply H.
-Qed.
+Defined.
 
 Definition fin_ind : forall {n} {P},
   (forall i : fin n, proj_prop_fin P i) ->

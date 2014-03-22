@@ -16,7 +16,7 @@ Variable COMPT    : Set.
 Variable COMPTDEC : forall (x y : COMPT), decide (x = y).
 Variable COMPS    : COMPT -> compd.
 Variable IENVD    : vcdesc COMPT.
-Variable KSTD     : stvdesc.
+Variable KSTD     : vcdesc COMPT.
 Variable HANDLERS : handlers PAYD COMPT COMPS KSTD.
 
 Fixpoint no_match {envd term} (c:cmd PAYD COMPT COMPS KSTD term envd)
@@ -103,7 +103,7 @@ Proof.
   generalize dependent tr. generalize dependent act.
   pose proof (no_match_initial_init_state oact).
   generalize dependent (initial_init_state PAYD COMPT COMPS KSTD IENVD).
-  destruct init as [init ?]. simpl in *. clear i.
+  destruct init as [init pf]. simpl in *. clear pf.
   induction init; simpl in *; intros; eauto.
     destruct input as [input1 input2]. simpl in *.
     destruct Hno_en as [Hno_en1 Hno_en2].

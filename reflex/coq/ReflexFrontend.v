@@ -24,7 +24,7 @@ Module Type SystemFeaturesInterface.
   Parameter COMPTDEC : forall (x y : COMPT), decide (x = y).
   Parameter COMPS    : COMPT -> compd.
   Parameter IENVD    : vcdesc COMPT.
-  Parameter KSTD     : stvdesc.
+  Parameter KSTD     : vcdesc COMPT.
 End SystemFeaturesInterface.
 
 Module MkLanguage (Import SF : SystemFeaturesInterface).
@@ -1487,14 +1487,6 @@ Fixpoint mk_vdesc' l : vdesc' (List.length l) :=
   end.
 
 Definition mk_vdesc l : vdesc := existT _ (List.length l) (mk_vdesc' l).
-
-Fixpoint mk_stvdesc' l : stvdesc' (List.length l) :=
-  match l with
-  | nil     => tt
-  | x :: xs => (x, mk_stvdesc' xs)
-  end.
-
-Definition mk_stvdesc l : stvdesc := existT _ (List.length l) (mk_stvdesc' l).
 
 Fixpoint mk_vcdesc' {COMPT} l : vcdesc' COMPT (List.length l) :=
   match l with

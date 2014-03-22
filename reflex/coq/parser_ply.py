@@ -699,13 +699,12 @@ def process_init_envd(init, kstd, comp_map, ops):
   out.write("\n")
 
 def process_kstd(state):
-  out.write("Definition KSTD : stvdesc := mk_stvdesc\n")
+  out.write("Definition KSTD : vcdesc COMPT := mk_vcdesc\n")
   out.write("  [\n")
   state_with_fin = get_vard_fin(state)
-  types_list = map(lambda x: get_desc(x['type']),
+  types_list = map(lambda x: get_cdesc(x['type']),
     sorted(state_with_fin.values(), key=lambda x: x['fin']))
-  types_proofs_list = map(lambda d:'(exist _ ' + d + ' ' + d + '_stdesc)', types_list)
-  out.write("   " + ";\n   ".join(types_proofs_list))
+  out.write("   " + ";\n   ".join(types_list))
   out.write("\n  ].\n\n")
   gen_fin_notation(state_with_fin)
   out.write("\n")
@@ -874,7 +873,8 @@ def get_cmd(cmd, expr_fun):
 def process_init(init):
   out.write("Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=\n")
   out.write("let envd := IENVD in\n")
-  out.write('(exist _ (' + get_cmd(init, get_iexpr) + ') (Logic.eq_refl _)).\n\n')
+  out.write('(exist _ (' + get_cmd(init, get_iexpr) + ')\n')
+  out.write('  (Logic.eq_refl _, Logic.eq_refl _)).\n\n')
 
 def process_hdlr(hdlr, kstd, comp_map, ops):
   envd = get_vard_fin(get_envd_nolkup(hdlr['cmd']))

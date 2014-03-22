@@ -874,7 +874,7 @@ def process_init(init):
   out.write("Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=\n")
   out.write("let envd := IENVD in\n")
   out.write('(exist _ (' + get_cmd(init, get_iexpr) + ')\n')
-  out.write('  (Logic.eq_refl _, Logic.eq_refl _)).\n\n')
+  out.write('  (conj (Logic.eq_refl _) (Logic.eq_refl _))).\n\n')
 
 def process_hdlr(hdlr, kstd, comp_map, ops):
   envd = get_vard_fin(get_envd_nolkup(hdlr['cmd']))

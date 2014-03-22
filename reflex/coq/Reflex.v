@@ -1539,34 +1539,10 @@ Fixpoint cmd_fins_assigned {envd} (c:cmd base_term envd)
 Definition cmd_assigns_all_st {envd} (c:cmd base_term envd) :=
   proj1_sig (bool_of_sumbool
     (forall_fin (fun i => in_dec fin_eq_dec i (cmd_fins_assigned c)))).
-(*
-(*Returns true iff the fin is assigned to in the cmd.*)
-Fixpoint cmd_assigns_fin {envd} (c:cmd base_term envd)
-  (i:fin KSTD_SIZE) : bool :=
-  match c with
-  | Seq _ c1 c2 => cmd_assigns_fin c1 i || cmd_assigns_fin c2 i
-  | Ite _ _ c1 c2 => cmd_assigns_fin c1 i || cmd_assigns_fin c2 i
-  | CompLkup _ _ c1 c2 => cmd_assigns_fin c1 i || cmd_assigns_fin c2 i
-  | StUpd _ i' _ => projT1 (bool_of_sumbool (fin_eq_dec i i'))
-  | _ => false
-  end.
 
-Fixpoint cmd_assigns_all_fins {envd} (c:cmd base_term envd)
-  (l:list (fin KSTD_SIZE)) : bool :=
-  forallb (cmd_assigns_fin c) l.
-
-Fixpoint list_all_fins n : list (fin n) :=
-  match n with
-  | O => nil
-  | S n' => max_fin n' :: map lift_fin (list_all_fins n')
-  end.
-
-Definition cmd_assigns_all_st {envd} (c:cmd base_term envd) :=
-  cmd_assigns_all_fins c (list_all_fins KSTD_SIZE).
-*)
 Definition init_prog envd :=
   sig (fun c:cmd base_term envd =>
-    prod (init_cmd_ok c nil) (cmd_assigns_all_st c = true)).
+    init_cmd_ok c nil /\ cmd_assigns_all_st c = true).
 
 Definition hdlr_prog (ct : COMPT) (tag : fin NB_MSG) envd :=
   sig (fun c:cmd (hdlr_term ct tag) envd =>
@@ -3129,7 +3105,7 @@ Proof.
   intros; refine (
     let s := initial_init_state in
     s' <- run_init_cmd _ s (proj1_sig IPROG)
-      {|nn_env:=nil;nn_st:=nil;env_ok:=fst (proj2_sig IPROG)|};
+      {|nn_env:=nil;nn_st:=nil;env_ok:=proj1 (proj2_sig IPROG)|};
     {{ Return {| kcs := init_comps _ s'
                ; ktr := init_ktr _ s'
                ; kst := init_kst _ s'

@@ -860,7 +860,7 @@ Ltac unpack prune_init prune_hdlr :=
            Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
          => simpl in Htr; destruct_input input;
             run_opt rewrite_symb
-                    ltac:(idtac; unfold prog, seq, spawn, stupd, call, ite, send, complkup in Hs)
+                    ltac:(idtac; unfold seq, spawn, stupd, call, ite, send, complkup in Hs)
                     ltac:(idtac);
             simpl_proj Hs; simpl_step_isrp_run_opt Hs; subst s'; simpl in *
        end

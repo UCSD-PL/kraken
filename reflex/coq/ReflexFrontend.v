@@ -517,6 +517,8 @@ Ltac simpl_proj H :=
   repeat match type of H with
          | context [projT1 ?e ] => simpl (projT1 e) in H
          | context [projT2 ?e ] => simpl (projT2 e) in H
+         | context [proj1_sig ?e ] => simpl (proj1_sig e) in H
+         | context [proj2_sig ?e ] => simpl (proj2_sig e) in H
          end.
 
 Ltac simpl_nested_isrp H :=
@@ -860,7 +862,7 @@ Ltac unpack prune_init prune_hdlr :=
             run_opt rewrite_symb
                     ltac:(idtac; unfold prog, seq, spawn, stupd, call, ite, send, complkup in Hs)
                     ltac:(idtac);
-            simpl_step_isrp_run_opt Hs; subst s'; simpl in *
+            simpl_proj Hs; simpl_step_isrp_run_opt Hs; subst s'; simpl in *
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
     => destruct_msg; destruct_comp;

@@ -96,3 +96,9 @@ Properties :
       [Spawn Client(u, a)]
       Disables
       [Spawn Client(u, a)]
+
+  AuthEnablesReq:
+    forall u, a:
+      [Recv(AccessControl(), ACLoginResT(u, a))]
+      Enables
+      [Send(AccessControl(), ACFileReq(u, a, _))]

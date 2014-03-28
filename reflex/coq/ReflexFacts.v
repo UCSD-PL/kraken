@@ -287,7 +287,7 @@ Proof.
     (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd).
   intros s' Hin Hcs.
   generalize dependent c.
-  destruct cmd as [cmd ?]. simpl in *. clear h.
+  simpl in *.
   induction cmd; simpl in *; auto.
     destruct i as [i1 i2].
     match goal with
@@ -346,7 +346,7 @@ Fixpoint no_spawn {NB_MSG} {PAYD:vvdesc NB_MSG} {COMPT:Set}
 Lemma no_spawn_cs :
   forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPTDEC COMPS KSTD HANDLERS s s' cc m i c,
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS cc m i s s' ->
-  no_spawn COMPTDEC (comp_type _ _ c) (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ cc)))) ->
+  no_spawn COMPTDEC (comp_type _ _ c) (projT2 (HANDLERS (tag _ m) (comp_type _ _ cc))) ->
   List.In c (kcs _ _ _ _ s') ->
   List.In c (kcs _ _ _ _ s).
 Proof.
@@ -364,7 +364,7 @@ Proof.
     (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd).
   intros s' Hin Hcs.
   generalize dependent c.
-  destruct cmd as [cmd ?]. simpl in *. clear h.
+  simpl in *.
   induction cmd; intros; auto; simpl in *.
     destruct i as [i1 i2].
     destruct Hno_spawn.
@@ -419,7 +419,7 @@ Fixpoint no_stupd {NB_MSG} {PAYD:vvdesc NB_MSG} {COMPT:Set}
 Lemma no_stupd_kst :
   forall NB_MSG (PAYD:vvdesc NB_MSG) COMPT COMPTDEC COMPS KSTD HANDLERS s s' cc m i,
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS cc m i s s' ->
-  no_stupd (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ cc)))) ->
+  no_stupd (projT2 (HANDLERS (tag _ m) (comp_type _ _ cc))) ->
   kst _ _ _ _ s' = kst _ _ _ _ s.
 Proof.
   intros NB_MSG PAYD COMPT COMPTDEC COMPS KSTD HANDLERS
@@ -433,7 +433,7 @@ Proof.
   revert Hst.
   generalize (default_hdlr_state PAYD COMPT COMPS KSTD
     (mk_inter_ve_st PAYD COMPT COMPS KSTD cc m s tr) envd).
-  destruct cmd as [cmd ?]. simpl in *. clear h.
+  simpl in *.
   induction cmd; intros; auto; simpl in *.
     destruct i as [i1 i2].
     destruct Hno_stupd.

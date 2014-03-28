@@ -91,7 +91,7 @@ Qed.
 
 Lemma no_match_init : forall init input oact s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match (proj1_sig init) oact ->
+  no_match init oact ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
    forall act, List.In act tr ->
@@ -103,7 +103,7 @@ Proof.
   generalize dependent tr. generalize dependent act.
   pose proof (no_match_initial_init_state oact).
   generalize dependent (initial_init_state PAYD COMPT COMPS KSTD IENVD).
-  destruct init as [init pf]. simpl in *. clear pf.
+  simpl in *.
   induction init; simpl in *; intros; eauto.
     destruct input as [input1 input2]. simpl in *.
     destruct Hno_en as [Hno_en1 Hno_en2].
@@ -181,8 +181,8 @@ Lemma no_match_hdlr' : forall c m oact (P:Reflex.KTrace _ _ _ -> Prop),
   let hdlrs := HANDLERS (tag _ m) (comp_type _ _ c) in
   forall s s' input,
   hdlr_state_run_cmd PAYD COMPT COMPTDEC COMPS KSTD c m
-    (projT1 hdlrs) s (proj1_sig (projT2 hdlrs)) input = s' ->
-  no_match (proj1_sig (projT2 hdlrs)) oact ->
+    (projT1 hdlrs) s (projT2 hdlrs) input = s' ->
+  no_match (projT2 hdlrs) oact ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD (hdlr_kst _ _ _ _ _ s) = inhabits tr ->
    P tr) ->
@@ -197,7 +197,7 @@ Proof.
   intros c m oact P hdlrs s s' input Hrun Hno Hind Hp tr Htr.
   destruct hdlrs as [envd cmd]. simpl in *. subst s'.
   generalize dependent tr.
-  destruct cmd as [cmd ?]. simpl in *. clear h.
+  simpl in *.
   induction cmd; simpl in *; intros; auto.
     destruct input as [input1 input2]. simpl in *.
     destruct Hno as [Hno_en1 Hno_en2].
@@ -313,7 +313,7 @@ Definition not_select_match ct (oact:KOAction PAYD COMPT COMPS) :=
   
 Lemma no_match_hdlr : forall c m input oact s s' (P : Reflex.KTrace _ _ _ -> Prop),
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ c)))) oact ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact ->
   not_recv_match (comp_type _ _ c) (tag _ m) oact ->
   not_select_match (comp_type _ _ c) oact ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
@@ -377,7 +377,7 @@ Qed.
 
 Lemma no_enablee_init : forall init input oact oact' s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match (proj1_sig init) oact' ->
+  no_match init oact' ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
    Enables PAYD COMPT COMPS COMPTDEC oact oact' tr.
@@ -391,7 +391,7 @@ Qed.
 
 Lemma no_enablee_hdlr : forall c m input oact oact' s s',
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ c)))) oact' ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact' ->
   not_recv_match (comp_type _ _ c) (tag _ m) oact' ->
   not_select_match (comp_type _ _ c) oact' ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
@@ -447,7 +447,7 @@ Qed.
 
 Lemma no_ensurer_init : forall init input A B s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match (proj1_sig init) A ->
+  no_match init A ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
    Ensures PAYD COMPT COMPS COMPTDEC A B tr.
@@ -461,7 +461,7 @@ Qed.
 
 Lemma no_ensurer_hdlr : forall c m input A B s s',
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ c)))) A ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) A ->
   not_recv_match (comp_type _ _ c) (tag _ m) A ->
   not_select_match (comp_type _ _ c) A ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
@@ -495,7 +495,7 @@ Qed.
 
 Lemma no_after_IB_init : forall init input oact oact' s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match (proj1_sig init) oact' ->
+  no_match init oact' ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
    ImmBefore PAYD COMPT COMPS COMPTDEC oact oact' tr.
@@ -509,7 +509,7 @@ Qed.
 
 Lemma no_after_IB_hdlr : forall c m input oact oact' s s',
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ c)))) oact' ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact' ->
   not_recv_match (comp_type _ _ c) (tag _ m) oact' ->
   not_select_match (comp_type _ _ c) oact' ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
@@ -604,7 +604,7 @@ Qed.*)
 
 Lemma no_before_IA_init : forall init input B A s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match (proj1_sig init) A ->
+  no_match init A ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
    ImmAfter _ _ _ COMPTDEC B A tr.
@@ -618,7 +618,7 @@ Qed.
 
 Lemma no_before_IA_hdlr : forall c m input B A s s',
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ c)))) A ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) A ->
   not_recv_match (comp_type _ _ c) (tag _ m) A ->
   not_select_match (comp_type _ _ c) A ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
@@ -652,7 +652,7 @@ Qed.
 
 Lemma no_disablee_init : forall init input oact oact' s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match (proj1_sig init) oact' ->
+  no_match init oact' ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
    Disables PAYD COMPT COMPS COMPTDEC oact oact' tr.
@@ -666,7 +666,7 @@ Qed.
 
 Lemma no_disablee_hdlr : forall c m input oact oact' s s',
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ c)))) oact' ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact' ->
   not_recv_match (comp_type _ _ c) (tag _ m) oact' ->
   not_select_match (comp_type _ _ c) oact' ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
@@ -683,7 +683,7 @@ Qed.
 
 Lemma no_disabler_init : forall init input oact s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match (proj1_sig init) oact ->
+  no_match init oact ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
    forall act,
@@ -695,7 +695,7 @@ Qed.
 
 Lemma no_disabler_hdlr : forall c m input oact s s' act,
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (proj1_sig (projT2 (HANDLERS (tag _ m) (comp_type _ _ c)))) oact ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact ->
   not_recv_match (comp_type _ _ c) (tag _ m) oact ->
   not_select_match (comp_type _ _ c) oact ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,

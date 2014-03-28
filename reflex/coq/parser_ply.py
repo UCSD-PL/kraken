@@ -873,8 +873,7 @@ def get_cmd(cmd, expr_fun):
 def process_init(init):
   out.write("Definition INIT : init_prog PAYD COMPT COMPS KSTD IENVD :=\n")
   out.write("let envd := IENVD in\n")
-  out.write('(exist _ (' + get_cmd(init, get_iexpr) + ')\n')
-  out.write('  (conj (Logic.eq_refl _) (Logic.eq_refl _))).\n\n')
+  out.write(get_cmd(init, get_iexpr) + '.\n\n')
 
 def process_hdlr(hdlr, kstd, comp_map, ops):
   envd = get_vard_fin(get_envd_nolkup(hdlr['cmd']))
@@ -884,7 +883,7 @@ def process_hdlr(hdlr, kstd, comp_map, ops):
   out.write('|' + hdlr['ctag'] + ', ' + hdlr['mtag'] + ' =>\n')
   out.write('let envd := ' + get_envd_str(hdlr['cmd']['ctxt']['envd']) + ' in\n')
   out.write('[[ envd :\n')
-  out.write('  exist _ (' + get_cmd(hdlr['cmd'], get_hexpr) + ') (Logic.eq_refl _)\n')
+  out.write('   ' + get_cmd(hdlr['cmd'], get_hexpr) + '\n')
   out.write(']]\n')
 
 def process_hdlrs(hdlrs, kstd, comp_map, ops):
@@ -897,9 +896,24 @@ def process_hdlrs(hdlrs, kstd, comp_map, ops):
   for hdlr in hdlrs:
     process_hdlr(hdlr, kstd, comp_map, ops)
   out.write("| _, _ =>\n")
-  out.write("  [[ mk_vcdesc [] : exist _ nop (Logic.eq_refl _)]]\n")
+  out.write("  [[ mk_vcdesc [] : nop ]]\n")
   out.write("end.\n")
   out.write("Close Scope hdlr.\n")
+
+def process_init_ok():
+  out.write("Definition INIT_OK : init_cmd_ok PAYD COMPT COMPS KSTD INIT nil /\ \n")
+  out.write("  cmd_assigns_all_st PAYD COMPT COMPS KSTD INIT = true\n")
+  out.write("  := conj (Logic.eq_refl _) (Logic.eq_refl _).\n\n")
+
+def process_hdlrs_ok(hdlrs):
+  out.write("Definition HANDLERS_OK : forall ct t,\n")
+  out.write("  hdlr_cmd_ok PAYD COMPT COMPS KSTD ct t (projT2 (HANDLERS t ct)) nil :=\n")
+  out.write("  fun ct t =>\n")
+  out.write("    match ct, t with\n")
+  for hdlr in hdlrs:
+    out.write('|' + hdlr['ctag'] + ', ' + hdlr['mtag'] + ' => Logic.eq_refl _\n')
+  out.write("| _, _ => Logic.eq_refl _\n")
+  out.write("end.\n\n")
 
 def finish_spec():
   out.write("End Spec.\n\n")
@@ -1053,5 +1067,7 @@ process_init_envd(result['init'], kstd, comp_map, result['ops']['ops'])
 end_sys_features()
 process_init(result['init'])
 process_hdlrs(result['hdlrs'], kstd, comp_map, result['ops']['ops'])
+process_init_ok()
+process_hdlrs_ok(result['hdlrs'])
 finish_spec()
 process_props(result['props'], len(comp_map.keys()))

@@ -45,10 +45,6 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
   Definition envvar {cc m} envd i :=
     Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd
          (Base _ _ _ _ _ _ _ (Var _ envd i)).
-  Definition i_envvar_t envd i :=
-    Var COMPT envd i.
-  Definition envvar_t {ct mt} envd i :=
-    Base PAYD COMPT COMPS KSTD ct mt envd (Var _ envd i).
   Definition slit {cc envd m} v :=
     Term COMPT COMPS (hdlr_term PAYD COMPT COMPS KSTD cc m) envd (Base _ _ _ _ _ _ _ (SLit _ _ v)).
   Definition nlit {cc envd m} v :=
@@ -80,6 +76,12 @@ Module MkLanguage (Import SF : SystemFeaturesInterface).
               (hdlr_env PAYD COMPT COMPS KSTD ENVD s) i.
   Notation "s ## i" := (env_ith s i) (at level 0) : env.
   Delimit Scope env with env.
+
+  Definition kst_ith s i :=
+    shvec_ith (n := projT1 KSTD) (sdenote_cdesc COMPT COMPS) (projT2 KSTD)
+              (kst PAYD COMPT COMPS KSTD s) i.
+  Notation "s ## i" := (kst_ith s i) (at level 0) : kst.
+  Delimit Scope kst with kst.
 
   Definition eq {term d envd} e1 e2 :=
     BinOp COMPT COMPS term envd
@@ -517,8 +519,6 @@ Ltac simpl_proj H :=
   repeat match type of H with
          | context [projT1 ?e ] => simpl (projT1 e) in H
          | context [projT2 ?e ] => simpl (projT2 e) in H
-         | context [proj1_sig ?e ] => simpl (proj1_sig e) in H
-         | context [proj2_sig ?e ] => simpl (proj2_sig e) in H
          end.
 
 Ltac simpl_nested_isrp H :=
@@ -860,9 +860,9 @@ Ltac unpack prune_init prune_hdlr :=
            Htr : Reflex.ktr _ _ _ _ _ = _ |- _ ]
          => simpl in Htr; destruct_input input;
             run_opt rewrite_symb
-                    ltac:(idtac; unfold seq, spawn, stupd, call, ite, send, complkup in Hs)
+                    ltac:(idtac; unfold prog, seq, spawn, stupd, call, ite, send, complkup in Hs)
                     ltac:(idtac);
-            simpl_proj Hs; simpl_step_isrp_run_opt Hs; subst s'; simpl in *
+            simpl_step_isrp_run_opt Hs; subst s'; simpl in *
        end
   | [ H : Reflex.ValidExchange _ _ _ _ _ _ _ _ _ _ _ |- _ ]
     => destruct_msg; destruct_comp;
@@ -1474,12 +1474,16 @@ End MkLanguage.
 Module Type SpecInterface.
   Include SystemFeaturesInterface.
   Parameter INIT : init_prog PAYD COMPT COMPS KSTD IENVD.
+  Parameter INIT_OK : init_cmd_ok PAYD COMPT COMPS KSTD INIT nil /\
+    cmd_assigns_all_st PAYD COMPT COMPS KSTD INIT = true.
   Parameter HANDLERS : handlers PAYD COMPT COMPS KSTD.
+  Parameter HANDLERS_OK : forall ct t,
+    hdlr_cmd_ok PAYD COMPT COMPS KSTD ct t (projT2 (HANDLERS t ct)) nil.
 End SpecInterface.
 
 Module MkMain (Import S : SpecInterface).
   Definition main :=
-    @main _ PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS.
+    @main _ PAYD COMPT COMPTDEC COMPS KSTD IENVD INIT HANDLERS INIT_OK HANDLERS_OK.
 End MkMain.
 
 Fixpoint mk_vdesc' l : vdesc' (List.length l) :=
@@ -1510,12 +1514,6 @@ Definition mk_compd name cmd args conf :=
    ; compd_args := List.map str_of_string args
    ; compd_conf := conf
    |}.
-
-Lemma num_d_stdesc : num_d <> fd_d.
-Proof. congruence. Qed.
-
-Lemma str_d_stdesc : str_d <> fd_d.
-Proof. congruence. Qed.
 
 Notation " [ ] " := nil.
 Notation " [ x ] " := (cons x nil).

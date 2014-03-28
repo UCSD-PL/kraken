@@ -1415,6 +1415,115 @@ Definition default_cpayload (v : vcdesc) : s[[ v ]] :=
 Definition default_hdlr_state s envd :=
   {| hdlr_kst := s; hdlr_env := default_cpayload envd |}.
 
+Definition init_prog envd := cmd base_term envd.
+(*    init_cmd_ok c nil /\ cmd_assigns_all_st c = true).*)
+
+Definition hdlr_prog (ct : COMPT) (tag : fin NB_MSG) envd :=
+  cmd (hdlr_term ct tag) envd.
+(*    hdlr_cmd_ok ct tag c nil).*)
+
+Definition kstate_run_prog envd (s : kstate) (p : hdlr_prog CT CTAG envd)
+  (input : s[[run_cmd_it p]]) : kstate :=
+  hdlr_kst envd (hdlr_state_run_cmd envd (default_hdlr_state s envd) p input).
+
+End WITHIN_HANDLER.
+
+Variable IENVD : vcdesc.
+
+Variable IPROG : init_prog IENVD.
+
+Definition initial_init_state :=
+  {| init_comps := nil
+   ; init_ktr   := [nil]%inhabited
+   ; init_env   := default_cpayload IENVD
+   ; init_kst   := default_cpayload KSTD
+   |}.
+
+Section WITH_HANDLER.
+
+Definition handlers := forall (tag : fin NB_MSG) (ct : COMPT),
+  sigT (fun prog_envd => hdlr_prog ct tag prog_envd).
+
+Variable HANDLERS : handlers.
+
+Fixpoint payload_fds' (n : nat) :
+  forall (v : vdesc' n), sdenote_vdesc' n v -> list fd :=
+  match n with
+  | 0 => fun _ _ => nil
+  | S n' => fun v =>
+    let (d, v') as _v return (sdenote_vdesc' (S n') _v -> list fd) := v in
+    match d with
+    | fd_d => fun vv =>
+      let (vd, vv') := vv in
+      vd :: payload_fds' n' v' vv'
+    | _ => fun vv =>
+      let (_, vv') := vv in
+      payload_fds' n' v' vv'
+    end
+  end.
+
+Definition payload_fds (v : vdesc) : s[[ v ]] -> list fd :=
+  payload_fds' (projT1 v) (projT2 v).
+
+Inductive InitialState input : kstate -> Prop :=
+| C_is : forall s,
+           s = init_state_run_cmd IENVD initial_init_state IPROG input ->
+           InitialState input {| kcs := init_comps _ s
+                               ; ktr := init_ktr _ s
+                               ; kst := init_kst _ s
+                               |}.
+
+Definition mk_inter_ve_st c m s tr :=
+  let cs := kcs s in
+  {| kcs := cs
+   ; ktr := [KRecv c m :: KSelect cs c :: tr]
+   ; kst := kst s
+   |}.
+
+Inductive ValidExchange (c:comp) (m:msg)
+  (input:sdenote_itt (run_cmd_it (projT2 ((HANDLERS (tag m) (comp_type c))))))
+  : kstate -> kstate -> Prop :=
+| C_ve : forall s tr s',
+           let cs := kcs s in
+           In c cs ->
+           ktr s = [tr]%inhabited ->
+           s' = mk_inter_ve_st c m s tr ->
+           let hdlrs := HANDLERS (tag m) (comp_type c) in
+           ValidExchange c m input s
+             (kstate_run_prog c m (projT1 hdlrs) s'
+               (projT2 hdlrs) input).
+
+Definition mk_bogus_st c bmsg s tr :=
+  let cs := kcs s in
+  {| kcs := cs
+   ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
+   ; kst := kst s
+   |}.
+
+Inductive BogusExchange (c:comp) (bmsg:bogus_msg)
+  : kstate -> kstate -> Prop :=
+| C_be : forall s tr,
+  let cs := kcs s in
+  In c cs ->
+  ktr s = [tr]%inhabited ->
+  BogusExchange c bmsg s (mk_bogus_st c bmsg s tr).
+
+Inductive Reach : kstate -> Prop :=
+| Reach_init :
+  forall s input,
+  InitialState input s ->
+  Reach s
+| Reach_valid :
+  forall c m input s s',
+  Reach s ->
+  ValidExchange c m input s s' ->
+  Reach s'
+| Reach_bogus :
+  forall s s' c bmsg,
+  Reach s ->
+  BogusExchange c bmsg s s' ->
+  Reach s'.
+
 Fixpoint get_non_null {envd term} (c : cmd term envd) :
   list (fin (projT1 envd)) :=
   match c with
@@ -1540,115 +1649,8 @@ Definition cmd_assigns_all_st {envd} (c:cmd base_term envd) :=
   proj1_sig (bool_of_sumbool
     (forall_fin (fun i => in_dec fin_eq_dec i (cmd_fins_assigned c)))).
 
-Definition init_prog envd :=
-  sig (fun c:cmd base_term envd =>
-    init_cmd_ok c nil /\ cmd_assigns_all_st c = true).
-
-Definition hdlr_prog (ct : COMPT) (tag : fin NB_MSG) envd :=
-  sig (fun c:cmd (hdlr_term ct tag) envd =>
-    hdlr_cmd_ok ct tag c nil).
-
-Definition kstate_run_prog envd (s : kstate) (p : hdlr_prog CT CTAG envd)
-  (input : s[[run_cmd_it (proj1_sig p)]]) : kstate :=
-  hdlr_kst envd (hdlr_state_run_cmd envd (default_hdlr_state s envd) (proj1_sig p) input).
-
-End WITHIN_HANDLER.
-
-Variable IENVD : vcdesc.
-
-Variable IPROG : init_prog IENVD.
-
-Definition initial_init_state :=
-  {| init_comps := nil
-   ; init_ktr   := [nil]%inhabited
-   ; init_env   := default_cpayload IENVD
-   ; init_kst   := default_cpayload KSTD
-   |}.
-
-Section WITH_HANDLER.
-
-Definition handlers := forall (tag : fin NB_MSG) (ct : COMPT),
-  sigT (fun prog_envd => hdlr_prog ct tag prog_envd).
-
-Variable HANDLERS : handlers.
-
-Fixpoint payload_fds' (n : nat) :
-  forall (v : vdesc' n), sdenote_vdesc' n v -> list fd :=
-  match n with
-  | 0 => fun _ _ => nil
-  | S n' => fun v =>
-    let (d, v') as _v return (sdenote_vdesc' (S n') _v -> list fd) := v in
-    match d with
-    | fd_d => fun vv =>
-      let (vd, vv') := vv in
-      vd :: payload_fds' n' v' vv'
-    | _ => fun vv =>
-      let (_, vv') := vv in
-      payload_fds' n' v' vv'
-    end
-  end.
-
-Definition payload_fds (v : vdesc) : s[[ v ]] -> list fd :=
-  payload_fds' (projT1 v) (projT2 v).
-
-Inductive InitialState input : kstate -> Prop :=
-| C_is : forall s,
-           s = init_state_run_cmd IENVD initial_init_state (proj1_sig IPROG) input ->
-           InitialState input {| kcs := init_comps _ s
-                               ; ktr := init_ktr _ s
-                               ; kst := init_kst _ s
-                               |}.
-
-Definition mk_inter_ve_st c m s tr :=
-  let cs := kcs s in
-  {| kcs := cs
-   ; ktr := [KRecv c m :: KSelect cs c :: tr]
-   ; kst := kst s
-   |}.
-
-Inductive ValidExchange (c:comp) (m:msg)
-  (input:sdenote_itt (run_cmd_it (proj1_sig (projT2 ((HANDLERS (tag m) (comp_type c)))))))
-  : kstate -> kstate -> Prop :=
-| C_ve : forall s tr s',
-           let cs := kcs s in
-           In c cs ->
-           ktr s = [tr]%inhabited ->
-           s' = mk_inter_ve_st c m s tr ->
-           let hdlrs := HANDLERS (tag m) (comp_type c) in
-           ValidExchange c m input s
-             (kstate_run_prog c m (projT1 hdlrs) s'
-               (projT2 hdlrs) input).
-
-Definition mk_bogus_st c bmsg s tr :=
-  let cs := kcs s in
-  {| kcs := cs
-   ; ktr := [KBogus c bmsg :: KSelect cs c :: tr]
-   ; kst := kst s
-   |}.
-
-Inductive BogusExchange (c:comp) (bmsg:bogus_msg)
-  : kstate -> kstate -> Prop :=
-| C_be : forall s tr,
-  let cs := kcs s in
-  In c cs ->
-  ktr s = [tr]%inhabited ->
-  BogusExchange c bmsg s (mk_bogus_st c bmsg s tr).
-
-Inductive Reach : kstate -> Prop :=
-| Reach_init :
-  forall s input,
-  InitialState input s ->
-  Reach s
-| Reach_valid :
-  forall c m input s s',
-  Reach s ->
-  ValidExchange c m input s s' ->
-  Reach s'
-| Reach_bogus :
-  forall s s' c bmsg,
-  Reach s ->
-  BogusExchange c bmsg s s' ->
-  Reach s'.
+Variable INIT_OK : init_cmd_ok IPROG nil /\ cmd_assigns_all_st IPROG = true.
+Variable HANDLERS_OK : forall ct tag, hdlr_cmd_ok ct tag (projT2 (HANDLERS tag ct)) nil.
 
 Definition init_invariant {envd} (s : init_state envd)
   non_null_env non_null_st :=
@@ -2805,7 +2807,7 @@ Proof.
       [exists i, s' = init_state_run_cmd envd s c i])
     (fun self envd0 c0 s0 ok => _) envd cinit sinit okinit
   ).
-  clear cinit sinit okinit envd HANDLERS IPROG IENVD.
+  clear cinit sinit okinit envd HANDLERS_OK HANDLERS IPROG INIT_OK IENVD.
   refine (
     match 
       c0 as _c0 in cmd _ _envd0 return
@@ -3064,13 +3066,12 @@ Qed.
 
 Ltac init_st_assigned :=
   match goal with
-  | [ H : forall i, In i _ -> in_if_fd_cdesc _ _ _ |- _ ]
+  | [ H : forall i, In i _ -> in_if_fd_cdesc _ _ _,
+      Hok : cmd_assigns_all_st _ = true |- _ ]
     => unfold vcdesc_fds_all_in; intros; apply H;
        apply set_union_intro2;
-       let st_ok := fresh "st_ok" in
-       destruct IPROG as [? [? st_ok] ];
-       simpl in *; unfold cmd_assigns_all_st in st_ok;
-       match type of st_ok with
+       simpl in *; unfold cmd_assigns_all_st in Hok;
+       match type of Hok with
        | context [ bool_of_sumbool ?x ] =>
          destruct x; try discriminate; simpl in *;
          unfold set_In; auto
@@ -3104,8 +3105,8 @@ Definition kinit :
 Proof.
   intros; refine (
     let s := initial_init_state in
-    s' <- run_init_cmd _ s (proj1_sig IPROG)
-      {|nn_env:=nil;nn_st:=nil;env_ok:=proj1 (proj2_sig IPROG)|};
+    s' <- run_init_cmd _ s IPROG
+      {|nn_env:=nil;nn_st:=nil;env_ok:=proj1 INIT_OK|};
     {{ Return {| kcs := init_comps _ s'
                ; ktr := init_ktr _ s'
                ; kst := init_kst _ s'
@@ -3139,7 +3140,7 @@ Proof.
     )
     (fun self envd0 c s0 ok => _) envd cinit sinit okinit
   ).
-  clear cinit sinit okinit envd HANDLERS IPROG IENVD.
+  clear cinit sinit okinit envd HANDLERS_OK HANDLERS IPROG INIT_OK IENVD.
 
   refine (
   (* /!\ We lose track of the let-open equalities if existentials remain,
@@ -3615,7 +3616,7 @@ Proof.
                  |}
       in
       s'' <- run_hdlr_cmd c m henv s'
-        (proj1_sig hprog) (existT _ nil (proj2_sig hprog))
+        hprog (existT _ nil (HANDLERS_OK (comp_type c) (tag m)))
       <@> [Reach s] * [In c cs];
       {{ Return (hdlr_kst _ s'') }}
     | inr m =>

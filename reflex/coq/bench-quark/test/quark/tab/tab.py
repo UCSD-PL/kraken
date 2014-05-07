@@ -140,7 +140,7 @@ class Tab:
             tlog('resource-request-starting for something weird:this is redirected to webkit')
             return
 
-        print "uri(%s) is called with resource_cb." % uri
+        #print "uri(%s) is called with resource_cb." % uri
 
         if string.find(uri, "http") != 0: 
             # tlog("strange url:" + uri)
@@ -188,6 +188,8 @@ class Tab:
             # if this request is within the tab's origin, it's allowed for socket conneciton
             # tlog(uri + " is within the tab origin : " + self.tab_origin)
             return
+
+        return
 
         if self.tab_origin in self.whitelist :
             if self.is_sub_origin(self.whitelist[self.tab_origin], str(uri)): return

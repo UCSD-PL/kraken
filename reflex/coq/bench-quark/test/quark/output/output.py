@@ -15,6 +15,7 @@ import array
 import cPickle as pickle
 
 import message
+import config
 
 #gtk.gdk.threads_init()
 
@@ -156,12 +157,14 @@ class UI:
         window.set_colormap(rgba)
 
         window.set_title("Quark Web Browser Output")
-        window.set_default_size(1100,710)
+        vsize = config.ydimension
+        window.set_default_size(1100,vsize - 200)
         #window.set_keep_above(True)
         window.set_decorated(False)
         window.connect("destroy", self.window_destroyed)
         window.connect('expose-event', self.expose)
-        window.move(100,300)
+        #window.move(100,300)
+        window.move(63,143)
         self.win = window
 
         window.show_all()

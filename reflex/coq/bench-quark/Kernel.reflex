@@ -35,10 +35,10 @@ Init :
   Usertemp <- spawn UserInput();
   Out <- Outtemp;
   User <- Usertemp;
-  t <- spawn Tab("", "google.com");
+  t <- spawn Tab("g", "google.com");
   send(t, DomainSet("google.com"));
   CurTab <- t;
-  send(Usertemp, AddrAdd("", "google.com"))
+  send(Usertemp, AddrAdd("g", "google.com"))
 
 Handlers :
   When u:UserInput sends TabCreate(id, domain) respond:

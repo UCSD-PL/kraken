@@ -89,8 +89,9 @@ class MessageHandler(object) :
             atexit.register(lambda: self.LOG.close())
         
     def log(self, msg):
-        self.LOG.write('%15s @ %f || %s\n' %
-                       ('%s(%d)' % (self.PROG, self.FD - 1), time.time(), msg))
+        pass
+        #self.LOG.write('%15s @ %f || %s\n' %
+        #               ('%s(%d)' % (self.PROG, self.FD - 1), time.time(), msg))
 
     def recv_num(self):
         # TODO(d1jang): Is 2 bytes enough?
@@ -172,7 +173,7 @@ class MessageHandler(object) :
 
     def send(self, m):
         tag = m[0]
-        print "%d is sent:" % tag
+        #print "%d is sent:" % tag
         {
             TabCreate   : lambda : [self.send_num(0), self.send_str(m[1]), self.send_str(m[2])],
             TabSwitch   : lambda : [self.send_num(1), self.send_str(m[1])],

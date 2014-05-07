@@ -44,6 +44,7 @@ class AddressBarHandler(threading.Thread) :
         if esc_seq in _new_tab_map :
             return self.AddressBarEvent(self.NEWTAB_EVENT, _new_tab_map[esc_seq])
         elif esc_seq in _tab_switch_map :
+            #print "tab switch " + str(_tab_switch_map[esc_seq])
             return self.AddressBarEvent(self.TAB_SWITCH_EVENT, _tab_switch_map[esc_seq])
         else :
             raise "non-reachable"
@@ -64,7 +65,7 @@ class AddressBarHandler(threading.Thread) :
             return self.AddressBarEvent(self.CHAR_EVENT, c)
 
     def refresh(self) :
-        subprocess.call("clear")
+        #subprocess.call("clear")
         print "-------------------------------------------------------------------------------------------------------------"
         addr_strs = []
         for addr in self.addrs :
@@ -86,8 +87,9 @@ class AddressBarHandler(threading.Thread) :
             i,o,e = select.select([sys.stdin] + [self.message_handler.KCHAN],[],[],None)
             for s in i:
                 if s == self.message_handler.KCHAN :
-                    print "sth is receved from kernel"
+                    print "sth is receved from kernel:"
                     m = self.message_handler.recv()
+                    print m
                     if m[0] == message.AddrAdd :
                         # (id,domain)
                         print "addr add-1"
@@ -95,6 +97,7 @@ class AddressBarHandler(threading.Thread) :
                         self.focused_tabid = m[1]
                         print "addr add-2"
                     elif m[0] == message.AddrFocus :
+                        print "address focus:'" + m[1] + "'"
                         self.focused_tabid = m[1]
                     self.refresh()
                 elif s == sys.stdin:
@@ -115,6 +118,7 @@ class AddressBarHandler(threading.Thread) :
                         self.message_handler.send([message.TabCreate, ("%d.%s" % (len(self.addrs),str(domain))), str(domain)])
                         print "done well"
                     elif event.event_type == self.TAB_SWITCH_EVENT :
+                        print "tab switching:" + str(self.addrs)
                         debugmode.printmsg("TAB_SWITCH_EVENT" + self.addrs[int(event.event_value)][0])
                         self.message_handler.send([message.TabSwitch, self.addrs[int(event.event_value)][0]])
                     elif event.event_type == self.CHAR_EVENT : 

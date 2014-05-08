@@ -22,13 +22,16 @@ def clog(str):
     clog_nonl(str + "\n")
 
 def clog_nonl(str):
-    sys.stderr.write("C: " + str)
-    sys.stderr.flush()
+    f = open("cookie.log", "a")
+    #sys.stderr.write("C: " + str)
+    f.write("C: " + str + "\n")
+    f.close()
+    #sys.stderr.flush()
     
 class CookieManager:
     tabs = []
 
-    def __init(self) :
+    def __init__(self) :
         self.tabs = []
     
     def cookies_for_domain(self, domain):
@@ -119,18 +122,19 @@ class CookieManager:
 
         while (True):
             i,o,e = select.select(self.tabs + [self.ksock],[],[],None)
-            print "cookie %s received a message " % self.name
+            clog("cookie %s received a message " % self.name)
             for s in i:
                 message_handler = message.MessageHandler(s)
                 m = message_handler.recv()
                 mtype = m[0]
 
                 if s == self.ksock :
+                    clog("kernel sent a message:")
                     if mtype == message.TabProcessRegister :
-                        print "message : %s " % str(m[1])
+                        clog("tab register message : %s " % str(m[1].fileno()))
                         self.tabs.append(socket.fromfd(m[1].fileno(), socket.AF_UNIX, socket.SOCK_STREAM))
                     else :
-                        sys.stderr.write("Invalid message type from kernel :%d " % mtype)
+                        clog("Invalid message type from kernel :%d " % mtype)
                         #sys.exit(1)
                         c.exit()
                 elif mtype == message.CookieJarRequest : 
@@ -152,12 +156,12 @@ class CookieManager:
                         [message.CookieJarResponse, cookies])
                 elif mtype == message.CookieUpdate : 
                     self.add_cookie(m[1])
-                    for t in self.tabs : 
-                        if t != s : 
-                            message.MessageHandler(s).send(
-                                [message.CookieBroadcast, m[1]])
+                    #for t in self.tabs : 
+                    #    if t != s : 
+                    #        message.MessageHandler(s).send(
+                    #            [message.CookieBroadcast, m[1]])
                 else :
-                    sys.stderr.write("Invalid message type :%d " % mtype)
+                    clog("Invalid message type :%d " % mtype)
                     sys.exit(1)
 
     def exit(self):

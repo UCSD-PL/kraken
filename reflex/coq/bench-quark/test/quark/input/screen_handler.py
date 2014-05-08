@@ -60,9 +60,17 @@ class ScreenHandler(pymouse.PyMouseEvent):
         if keyval == 65506:
             self.rshift_pressed = True
             return 
-        print "keyval:" + str(keyval)
+        #print "keyval:" + str(keyval)
     
-        if 0 <= keyval and keyval <= 255:
+
+        specialMap = { 65289:'\t', 65293:'\n', 65288:'\b'}
+        rawMap = { 65362:19, 65364: 20 }
+
+        if keyval in specialMap :
+            self.message_handler.send([message.KeyPress, str(specialMap[keyval])])
+        elif keyval in rawMap :
+            self.message_handler.send([message.KeyPress, str(chr(rawMap[keyval]))])
+        elif 0 <= keyval and keyval <= 255:
             c = chr(keyval)
             # keyval is always lowercase when it's alphabet
             if self.lshift_pressed or self.rshift_pressed :

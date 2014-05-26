@@ -18,6 +18,7 @@ Messages :
   URLResponse(fd)
   SocketRequest(str)
   SocketResponse(fd)
+  OpenLink(str)
   CookieChannelInit(fd)
   TabProcessRegister(fd)
   AddrFocus(str)
@@ -65,7 +66,7 @@ Handlers :
   When u:UserInput sends Navigate(url) respond:
     if ((dom "/" url) == CurTab.domain)
     then send(CurTab, Navigate(url))
-    else send(Link, Navigate(url))
+    else nop
 
   When u:UserInput sends KeyPress(key) respond:
     send(CurTab, KeyPress(key))
@@ -88,6 +89,9 @@ Handlers :
     then f <- invokefd "create_socket" (url);
          send(t, SocketResponse(f))
     else nop
+
+  When t:Tab sends OpenLink(url) respond:
+    send(Link, OpenLink(url))
 
   When t:Tab sends CookieChannelInit(f) respond:
     lookup CProc(t.domain)

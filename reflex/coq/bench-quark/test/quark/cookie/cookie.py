@@ -156,10 +156,10 @@ class CookieManager:
                         [message.CookieJarResponse, cookies])
                 elif mtype == message.CookieUpdate : 
                     self.add_cookie(m[1])
-                    #for t in self.tabs : 
-                    #    if t != s : 
-                    #        message.MessageHandler(s).send(
-                    #            [message.CookieBroadcast, m[1]])
+                    for t in self.tabs :
+                        if t != s : 
+                            message.MessageHandler(t).send(
+                                [message.CookieBroadcast, m[1]])
                 else :
                     clog("Invalid message type :%d " % mtype)
                     sys.exit(1)

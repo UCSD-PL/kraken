@@ -30,6 +30,8 @@ import threading
 import select
 import quarkexec
 
+import config
+
 gtk.gdk.threads_init()
 
 rrender=True
@@ -69,6 +71,8 @@ def tlog2(str):
 def tlog_nonl(str):
     sys.stderr.write("T: " + str)
     sys.stderr.flush()
+    #sys.stdout.write("T:" + str)
+    #sys.stdout.flush()
 
 def same_orig(url1, url2):
     p1 = urlparse.urlparse(url1)
@@ -295,8 +299,10 @@ class Tab:
     def delayed_render(self):
         #tlog("DELAY_RENDER:Delayed_render is called")
         view = self.view
-        win = view.get_window()
+        win = self.win.get_window()
+        #win = self.win
         (x,y,width,height,depth) = win.get_geometry()
+        #(x,y,width,height,depth) = win.get_geometry()
         self.render(x,y,width,height)
         return False
 
@@ -316,9 +322,11 @@ class Tab:
     def write_webkit_as_png(self, x,y,width,height):
         stime = time.time()
         view = self.view
-        win = view.get_window()
+        win = self.win.get_window()
         pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,width,height)
         pixbuf.get_from_drawable(win,view.get_colormap(),x,y,0,0,width,height)
+
+        #pixbuf.get_from_drawable(
 
         self.shm_size = 4 * 5 # shm_size, x, y, width, height
         def pixbuf_save_func(buf, data=None):
@@ -345,12 +353,16 @@ class Tab:
     def handle_cinput(self, source, condition):
         m = self.cmessage_handler.recv()
         mtype = m[0]
+        #tlog("handle_cinput:cookies are received!")
         if mtype == message.CookieBroadcast :
             libsoup.soup_add_invalidated_cookie(ctypes.create_string_buffer(m[1]));
+            #pass
         else :
             sys.stderr.write("invalid message type from the cookie process :%d" % mtype)
             gtk.main_quit()
-        gobject.io_add_watch(self.soc.fileno(), gobject.IO_IN, self.handle_input)
+        #gtk.timeout_add(500, lambda : gobject.io_add_watch(self.cookie_soc.fileno(), gobject.IO_IN, self.handle_cinput))
+        gobject.io_add_watch(self.cookie_soc.fileno(), gobject.IO_IN, self.handle_cinput)
+        #gobject.io_add_watch(self.soc.fileno(), gobject.IO_IN, self.handle_input)
         return False
 
     def handle_input(self, source, condition):
@@ -385,7 +397,8 @@ class Tab:
         e.button = 1
         e.x = x
         e.y = y
-        e.window = self.view.get_window()
+        e.window = self.win.get_window()
+        #e.window = self.win
         self.view.emit("button_release_event", e)
         #gtk.timeout_add(200, self.delayed_render)
 
@@ -398,25 +411,35 @@ class Tab:
             tlog("pressed key:" + str(m[1]) + "\n")
             mkey = (m[1])
             e = gtk.gdk.Event(gtk.gdk.KEY_PRESS)
-            e.window = self.view.get_window()
-            if ord(mkey) == 19:
-                e.keyval = int(keysyms.Page_Up)
-                e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Page_Up))[0][0]
-            elif ord(mkey) == 20:
-                e.keyval = int(keysyms.Page_Down)
-                e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Page_Down))[0][0]
-            elif ord(mkey) == 8:
-                e.keyval = int(keysyms.BackSpace)
-                e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.BackSpace))[0][0]
-            elif ord(mkey) == 9:
-                e.keyval = int(keysyms.Tab)
-                e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Tab))[0][0]
-            elif ord(mkey) == 10:
-                e.keyval = int(keysyms.Return)
-                e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Return))[0][0]
+            e.window = self.win.get_window()
+
+            if self.escaped == None :
+                if mkey == '\\' :
+                    self.escaped = ""
+                elif ord(mkey) == 19:
+                    e.keyval = int(keysyms.Page_Up)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Page_Up))[0][0]
+                elif ord(mkey) == 20:
+                    e.keyval = int(keysyms.Page_Down)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Page_Down))[0][0]
+                elif ord(mkey) == 8:
+                    e.keyval = int(keysyms.BackSpace)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.BackSpace))[0][0]
+                elif ord(mkey) == 9:
+                    e.keyval = int(keysyms.Tab)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Tab))[0][0]
+                elif ord(mkey) == 10:
+                    e.keyval = int(keysyms.Return)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Return))[0][0]
+                else :
+                    e.keyval = ord(mkey)
+                self.view.emit("key_press_event", e)
             else :
-                e.keyval = ord(mkey)
-            self.view.emit("key_press_event", e)
+                if mkey == '\n' :
+                    self.process_escaped(self.escaped)
+                    self.escaped = None
+                else :
+                    self.escaped += mkey
         elif mtype == message.MouseClick :
             e = gtk.gdk.Event(gtk.gdk.BUTTON_PRESS)
             e.button = 1
@@ -424,7 +447,8 @@ class Tab:
             tlog("raw_coors:%s, (%f,%f)" % (m[1], coors[0], coors[1]))
             e.x = coors[0]
             e.y = coors[1]
-            e.window = self.view.get_window()
+            e.window = self.win.get_window()
+            #e.window = self.win
             self.view.emit("button_press_event", e)
             gtk.timeout_add(5, self.delayed_mouse_release, coors[0], coors[1])
         elif mtype == message.RenderRequest : 
@@ -470,6 +494,14 @@ class Tab:
         if re.match("[a-zA-Z]+://.*", url) == None :
             return "http://" + url
         return url
+
+    def process_escaped(self, s):
+        if s[0] == "g":
+            url = self.add_http(s[2:].strip())
+            if not self.is_tab_sub_origin(self.get_origin(url)) :
+                tlog("not sub origin : " + url)
+                return
+            self.view.open(url)
 
     def handle_hup(self, source, condition):
         gtk.main_quit()
@@ -521,6 +553,7 @@ class Tab:
         # tlog("tab argv:" + str(sys.argv))
 	
         #self.tab_origin = sys.argv[2]
+        self.escaped = None
         self.message_handler = message.MessageHandler()
         m = self.message_handler.recv()
         assert m[0] == message.DomainSet
@@ -537,8 +570,9 @@ class Tab:
         libsoup.soup_set_t2c_raw_socket(int(cparent.fileno()))
         print "t2c_socket is set"
         self.cookie_soc = cparent
-        #gobject.io_add_watch(self.cookie_soc.fileno(), gobject.IO_IN, self.handle_cinput)
-        gtk.timeout_add(500, lambda : gobject.io_add_watch(self.cookie_soc.fileno(), gobject.IO_IN, self.handle_cinput))
+        self.cookie_soc.setblocking(1)
+        gobject.io_add_watch(self.cookie_soc.fileno(), gobject.IO_IN, self.handle_cinput)
+        #gtk.timeout_add(500, lambda : gobject.io_add_watch(self.cookie_soc.fileno(), gobject.IO_IN, self.handle_cinput))
         self.cmessage_handler = message.MessageHandler(self.cookie_soc)
 
         #self.soc = socket.fromfd(int(sys.argv[1]), msg.FAMILY, msg.TYPE)
@@ -571,12 +605,30 @@ class Tab:
 
         self.frames = {}
         win = gtk.OffscreenWindow()
-        win.set_default_size(1100,700)
+        vsize = config.ydimension
+        win.set_default_size(1100, vsize - 200)
         win.add(self.view)
+        #vbox = gtk.VBox(False, 0)
+        #win.add(vbox)
+        #vbox.show()
+
+        #addr_bar = gtk.Entry(max=0)
+        #addr_bar.set_text("hello world!")
+        #vbox.pack_start(addr_bar, True, True, 0)
+        #addr_bar.show()
+        
+        #vbox.add(self.view)
+        #win.add(self.view)
+        self.view.show()
         win.connect('damage-event', self.damage)
         win.show_all()
+        #self.vbox = vbox
         self.win = win
         (x,y,width,height,depth) = self.view.get_window().get_geometry()
+        #(x,y,width,height,depth) = self.win.get_window().get_geometry()
+        #print self.win.get_window()
+        #raise "aa"
+        #(x,y,width,height,depth) = self.win.get_window().get_geometry()
         self.pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB,False,8,width,height)
 
         #self.tab_origin = sys.argv[2]

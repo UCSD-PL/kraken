@@ -64,6 +64,10 @@ class UI:
                         self.sem_obj.V()
                         pass
 
+                    #print pixbuf.get_width()
+                    #print pixbuf.get_height()
+                    #print x
+                    #print y
                     pixbuf.copy_area(0, 0, pixbuf.get_width(), pixbuf.get_height(), self.pixbuf, x, y)
                     self.rectangle = (x,y,width,height)
                     self.win.queue_draw_area(x,y, pixbuf.get_width(), pixbuf.get_height())
@@ -158,7 +162,7 @@ class UI:
 
         window.set_title("Quark Web Browser Output")
         vsize = config.ydimension
-        window.set_default_size(1100,vsize - 200)
+        window.set_default_size(1100, vsize - 200)
         #window.set_keep_above(True)
         window.set_decorated(False)
         window.connect("destroy", self.window_destroyed)
@@ -170,6 +174,9 @@ class UI:
         window.show_all()
 
         (x,y,width,height,depth) = self.win.window.get_geometry()
+        #width = 4000
+        #height = 4000
+        #self.pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, False, 8, width, height)
         self.pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, False, 8, width, height)
         gtk.main()
 

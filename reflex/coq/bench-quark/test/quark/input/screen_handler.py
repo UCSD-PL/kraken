@@ -44,25 +44,34 @@ class ScreenHandler(pymouse.PyMouseEvent):
         pymouse.PyMouseEvent.__init__(self)
         self.message_handler = message_handler
         self.screen_tracker = OutputWindowTracker()
+        self.lshift_pressed = False
+        self.rshift_pressed = False
 
     def move(self, x, y):
         pass
         
+    def keyrelease(self, keysym) :
+        if self.screen_tracker.focused() : self.key_released (keysym)
+
     def keypress(self, keysym) :
-        if self.screen_tracker.focused() :
-            self.key_pressed (keysym)
+        if self.screen_tracker.focused() : self.key_pressed (keysym)
+
+    def key_released(self, keyval):
+        if keyval == 65505 :
+            self.lshift_pressed = False
+        elif keyval == 65506 :
+            self.rshift_pressed = False
 
     def key_pressed(self, keyval):
         if keyval == 65505:
             self.lshift_pressed = True
             return 
-
         if keyval == 65506:
             self.rshift_pressed = True
             return 
+        
         #print "keyval:" + str(keyval)
     
-
         specialMap = { 65289:'\t', 65293:'\n', 65288:'\b'}
         rawMap = { 65362:19, 65364: 20 }
 
@@ -77,9 +86,10 @@ class ScreenHandler(pymouse.PyMouseEvent):
                 for i in range(len(self.lowercase_map)) : 
                     if self.lowercase_map[i] == c :
                         keyval = ord(self.uppercase_map[i])
-                        break
+                        self.message_handler.send([message.KeyPress, str(chr(keyval))])
+                        return
             self.message_handler.send([message.KeyPress, str(c)])
-        
+
     def click(self, x, y, button, press):
         if not press and self.screen_tracker.focused() :
             line = os.popen("xwininfo -name 'Quark Web Browser Output'").read()

@@ -42,17 +42,20 @@ AddrFocus  = 14
 
 DomainSet = 15
 
+# Kernel -> Link
+OpenLink = 16
+
 # Tab -> Cookie
-CookieJarRequest = 16
+CookieJarRequest = 17
 
 # Cookie -> Tab
-CookieJarResponse = 17
+CookieJarResponse = 18
 
 # Tab -> Cookie
-CookieUpdate = 18
+CookieUpdate = 19
 
 # Cookie -> Tabs
-CookieBroadcast = 19
+CookieBroadcast = 20
 
 
 
@@ -163,10 +166,11 @@ class MessageHandler(object) :
             # tab_id
             14 : lambda : [AddrFocus, self.recv_str()],
             15 : lambda : [DomainSet, self.recv_str()],
-            16 : lambda : [CookieJarRequest, self.recv_str()],
-            17 : lambda : [CookieJarResponse, self.recv_str()],
-            18 : lambda : [CookieUpdate, self.recv_str()],
-            19 : lambda : [CookieBroadcast, self.recv_str()]
+            16 : lambda : [OpenLink, self.recv_str()],
+            17 : lambda : [CookieJarRequest, self.recv_str()],
+            18 : lambda : [CookieJarResponse, self.recv_str()],
+            19 : lambda : [CookieUpdate, self.recv_str()],
+            20 : lambda : [CookieBroadcast, self.recv_str()]
             } [tag] ()
         self.log('recv : %s(%s)' % (m[0], m[1]))
         return m
@@ -191,9 +195,10 @@ class MessageHandler(object) :
             TabProcessRegister : lambda : [self.send_num(13), self.send_fd(m[1])],
             AddrFocus : lambda : [self.send_num(14), self.send_str(m[1])],
             DomainSet : lambda : [self.send_num(15), self.send_str(m[1])],
-            CookieJarRequest : lambda : [self.send_num(16), self.send_str(m[1])],
-            CookieJarResponse : lambda : [self.send_num(17), self.send_str(m[1])],
-            CookieUpdate : lambda : [self.send_num(18), self.send_str(m[1])],
-            CookieBroadcast : lambda : [self.send_num(19), self.send_str(m[1])]
+            OpenLink : lambda : [self.send_num(16), self.send_str(m[1])],
+            CookieJarRequest : lambda : [self.send_num(17), self.send_str(m[1])],
+            CookieJarResponse : lambda : [self.send_num(18), self.send_str(m[1])],
+            CookieUpdate : lambda : [self.send_num(19), self.send_str(m[1])],
+            CookieBroadcast : lambda : [self.send_num(20), self.send_str(m[1])]
          }[tag]()
         self.log('send : %s(%s)' % (m[0], m[1]))

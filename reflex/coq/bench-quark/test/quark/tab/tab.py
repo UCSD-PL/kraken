@@ -243,6 +243,7 @@ class Tab:
         uri = request.get_uri()
         if frame == view.get_main_frame() and (not self.is_tab_sub_origin(self.get_origin(uri))) :
             tlog('NAV: ' + frame.get_name() + " is navigating to " + uri)
+            self.message_handler.send([message.OpenLink, uri])
             #m = msg.create_navigate(uri)
             #self.write_message(m)
             #policy.ignore()
@@ -636,7 +637,7 @@ class Tab:
         #m = msg.create_display_shm(self.shm_obj.shmid, 0)
         #self.write_message(m)
         tlog("default url : " + self.add_http(self.tab_origin))
-        self.view.open(self.add_http(self.tab_origin))
+        #self.view.open(self.add_http(self.tab_origin))
 
         #gtk.timeout_add(50, self.iterated_render)
 

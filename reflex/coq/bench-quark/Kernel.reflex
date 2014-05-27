@@ -3,6 +3,7 @@ Components :
   Output    "../test/quark/output/output.sh" () ()
   Tab       "../test/quark/tab/tab.sh"       () (id:str, domain:str)
   CProc     "../test/quark/cookie/cookie.py" () (domain:str)
+  LinkDisp  "../test/quark/link/link.py"     () ()
 
 Messages :
   TabCreate(str, str)
@@ -17,6 +18,7 @@ Messages :
   URLResponse(fd)
   SocketRequest(str)
   SocketResponse(fd)
+  OpenLink(str)
   CookieChannelInit(fd)
   TabProcessRegister(fd)
   AddrFocus(str)
@@ -26,6 +28,7 @@ State :
   Out    : Output
   CurTab : Tab
   User   : UserInput
+  Link   : LinkDisp
 
 Operations :
   Misc.dom : str -> str -> str
@@ -33,6 +36,8 @@ Operations :
 Init :
   Outtemp <- spawn Output();
   Usertemp <- spawn UserInput();
+  Linktemp <- spawn LinkDisp();
+  Link <- Linktemp;
   Out <- Outtemp;
   User <- Usertemp;
   t <- spawn Tab("g", "google.com");
@@ -84,6 +89,9 @@ Handlers :
     then f <- invokefd "create_socket" (url);
          send(t, SocketResponse(f))
     else nop
+
+  When t:Tab sends OpenLink(url) respond:
+    send(Link, OpenLink(url))
 
   When t:Tab sends CookieChannelInit(f) respond:
     lookup CProc(t.domain)

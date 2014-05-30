@@ -5,6 +5,8 @@ import debugmode
 import message
 import subprocess
 import re
+import time
+from urlparse import urlparse
 
 _tab_switch_map = {"OP":0, "OQ":1, "OR":2, "OS":3, "[15~":4, "[17~":5, "[18~":6, "[19~":7, "[20~":8, "[21~":9,}
 _new_tab_map = {"[24~":0}
@@ -44,6 +46,7 @@ class AddressBarHandler(threading.Thread) :
         if esc_seq in _new_tab_map :
             return self.AddressBarEvent(self.NEWTAB_EVENT, _new_tab_map[esc_seq])
         elif esc_seq in _tab_switch_map :
+            #print "tab switch " + str(_tab_switch_map[esc_seq])
             return self.AddressBarEvent(self.TAB_SWITCH_EVENT, _tab_switch_map[esc_seq])
         else :
             raise "non-reachable"
@@ -64,7 +67,7 @@ class AddressBarHandler(threading.Thread) :
             return self.AddressBarEvent(self.CHAR_EVENT, c)
 
     def refresh(self) :
-        subprocess.call("clear")
+        #subprocess.call("clear")
         print "-------------------------------------------------------------------------------------------------------------"
         addr_strs = []
         for addr in self.addrs :
@@ -81,13 +84,23 @@ class AddressBarHandler(threading.Thread) :
     def echo_off(self) :
         subprocess.call(["stty","cbreak", "-echo"])
 
+    def parse_url(self, url) :
+        o = urlparse(url)
+        m = re.search("\w+\.\w+$",o.netloc)
+        if m == None : return None
+        else : return o
+
     def run(self):
+        time.sleep(1)
+        navigate_str = "\\g http://google.com\n"
+        for c in navigate_str : self.message_handler.send([message.KeyPress, str(c)])
         while True :
             i,o,e = select.select([sys.stdin] + [self.message_handler.KCHAN],[],[],None)
             for s in i:
                 if s == self.message_handler.KCHAN :
-                    print "sth is receved from kernel"
+                    print "sth is receved from kernel:"
                     m = self.message_handler.recv()
+                    print m
                     if m[0] == message.AddrAdd :
                         # (id,domain)
                         print "addr add-1"
@@ -95,6 +108,7 @@ class AddressBarHandler(threading.Thread) :
                         self.focused_tabid = m[1]
                         print "addr add-2"
                     elif m[0] == message.AddrFocus :
+                        print "address focus:'" + m[1] + "'"
                         self.focused_tabid = m[1]
                     self.refresh()
                 elif s == sys.stdin:
@@ -103,18 +117,32 @@ class AddressBarHandler(threading.Thread) :
                     elif event.event_type == self.NEWTAB_EVENT :
                         debugmode.printmsg("NEWTAB_EVENT")
                         self.echo_on()
+                        urlobj = None
                         while True :
                             print "Enter the trusted domain for a new tab(e.g.,a.com):"
-                            domain = raw_input("")
+                            urlstr = raw_input("")
                             # if the domain is not a top-level domain, take the top domain out of it.
-                            m = re.search("\w+\.\w+$",domain)
-                            if m == None : continue
-                            domain = m.group()
+                            if urlstr.find("http") == 0 :
+                                urlobj = self.parse_url(urlstr)
+                                if urlobj == None : continue
+                                m = re.search("\w+\.\w+$", urlobj.netloc)
+                                domain = str(m.group())
+                            else :
+                                m = re.search("\w+\.\w+$", urlstr)
+                                if m == None : continue
+                                domain = str(m.group())
                             break
                         self.echo_off()
-                        self.message_handler.send([message.TabCreate, ("%d.%s" % (len(self.addrs),str(domain))), str(domain)])
-                        print "done well"
+                        self.message_handler.send([message.TabCreate, ("%d.%s" % (len(self.addrs),domain)), domain])
+                        target_url = (urlobj.geturl() if urlobj != None else ("http://" + urlstr))
+                        navigate_str = "\\g " + target_url + "\n"
+                        print "The new tab is navigating to " + target_url + " ..."
+                        time.sleep(3)
+                        for c in navigate_str :
+                            self.message_handler.send([message.KeyPress, str(c)])
+                        #print "done well"
                     elif event.event_type == self.TAB_SWITCH_EVENT :
+                        print "tab switching:" + str(self.addrs)
                         debugmode.printmsg("TAB_SWITCH_EVENT" + self.addrs[int(event.event_value)][0])
                         self.message_handler.send([message.TabSwitch, self.addrs[int(event.event_value)][0]])
                     elif event.event_type == self.CHAR_EVENT : 

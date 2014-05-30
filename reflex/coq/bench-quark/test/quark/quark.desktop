@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Terminal=true
+Name=Quark Web Browser
+Icon=/home/ucsd/kraken/reflex/coq/bench-quark/test/quark/quark.png
+Exec=/home/ucsd/kraken/reflex/coq/bench-quark/run.sh

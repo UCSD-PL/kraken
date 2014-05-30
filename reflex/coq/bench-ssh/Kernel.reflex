@@ -1,6 +1,6 @@
 Components :
-  System "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/sshd_sys" () ()
-  Slave  "/home/don/kraken/kraken/ssh-proto/kmsg-ssh/ssh"      () ()
+  System "/home/ucsd/kraken/reflex/coq/bench-ssh/test/ssh/kmsg-ssh/sshd_sys" () ()
+  Slave  "/home/ucsd/kraken/reflex/coq/bench-ssh/test/ssh/kmsg-ssh/sshd"      () ()
 
 Messages :
   LoginReq(str)

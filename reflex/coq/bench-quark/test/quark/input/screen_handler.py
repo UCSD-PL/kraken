@@ -4,6 +4,7 @@ import os
 import pymouse
 import debugmode
 import message
+import sys
 
 class OutputWindowTracker(object) : 
     @staticmethod
@@ -44,34 +45,52 @@ class ScreenHandler(pymouse.PyMouseEvent):
         pymouse.PyMouseEvent.__init__(self)
         self.message_handler = message_handler
         self.screen_tracker = OutputWindowTracker()
+        self.lshift_pressed = False
+        self.rshift_pressed = False
 
     def move(self, x, y):
         pass
         
+    def keyrelease(self, keysym) :
+        if self.screen_tracker.focused() : self.key_released (keysym)
+
     def keypress(self, keysym) :
-        if self.screen_tracker.focused() :
-            self.key_pressed (keysym)
+        if self.screen_tracker.focused() : self.key_pressed (keysym)
+
+    def key_released(self, keyval):
+        if keyval == 65505 :
+            self.lshift_pressed = False
+        elif keyval == 65506 :
+            self.rshift_pressed = False
 
     def key_pressed(self, keyval):
         if keyval == 65505:
             self.lshift_pressed = True
             return 
-
         if keyval == 65506:
             self.rshift_pressed = True
             return 
+        
         print "keyval:" + str(keyval)
     
-        if 0 <= keyval and keyval <= 255:
+        specialMap = { 65289:'\t', 65293:'\n', 65288:'\b'}
+        rawMap = { 65361:18, 65362:19, 65363:20, 65364: 21 }
+
+        if keyval in specialMap :
+            self.message_handler.send([message.KeyPress, str(specialMap[keyval])])
+        elif keyval in rawMap :
+            self.message_handler.send([message.KeyPress, str(chr(rawMap[keyval]))])
+        elif 0 <= keyval and keyval <= 255:
             c = chr(keyval)
             # keyval is always lowercase when it's alphabet
             if self.lshift_pressed or self.rshift_pressed :
                 for i in range(len(self.lowercase_map)) : 
                     if self.lowercase_map[i] == c :
                         keyval = ord(self.uppercase_map[i])
-                        break
+                        self.message_handler.send([message.KeyPress, str(chr(keyval))])
+                        return
             self.message_handler.send([message.KeyPress, str(c)])
-        
+
     def click(self, x, y, button, press):
         if not press and self.screen_tracker.focused() :
             line = os.popen("xwininfo -name 'Quark Web Browser Output'").read()

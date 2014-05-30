@@ -21,7 +21,8 @@ let create_socket args =
   with
     _ -> fd_of_int 0
 
-let dom_ok args =
+let dom_ok args = ""
+(*
   let is_suffix str suffix = 
     (Str.string_match (Str.regexp (String.concat "" (".*"::suffix::[]))) str 0) in
   let socket_desc = (List.nth args 0) in
@@ -41,6 +42,7 @@ let dom_ok args =
                             then (List.fold_left (fun a whtdmn -> a || (is_suffix host whtdmn)) false whtlst)
                             else false) false whitelist) then ""
    else "error"
+*)
 
 let _INVOKE_FD_MAP : (string * (string list -> Unix.file_descr)) list =
   [("create_socket", create_socket)]

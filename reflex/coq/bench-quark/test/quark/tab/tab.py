@@ -417,12 +417,18 @@ class Tab:
             if self.escaped == None :
                 if mkey == '\\' :
                     self.escaped = ""
+                elif ord(mkey) == 18:
+                    e.keyval = int(keysyms.Left)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Left))[0][0]
                 elif ord(mkey) == 19:
-                    e.keyval = int(keysyms.Page_Up)
-                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Page_Up))[0][0]
+                    e.keyval = int(keysyms.Up)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Up))[0][0]
                 elif ord(mkey) == 20:
-                    e.keyval = int(keysyms.Page_Down)
-                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Page_Down))[0][0]
+                    e.keyval = int(keysyms.Right)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Right))[0][0]
+                elif ord(mkey) == 21:
+                    e.keyval = int(keysyms.Down)
+                    e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Down))[0][0]
                 elif ord(mkey) == 8:
                     e.keyval = int(keysyms.BackSpace)
                     e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.BackSpace))[0][0]
@@ -434,7 +440,13 @@ class Tab:
                     e.hardware_keycode = gtk.gdk.keymap_get_default().get_entries_for_keyval(int(keysyms.Return))[0][0]
                 else :
                     e.keyval = ord(mkey)
+
                 self.view.emit("key_press_event", e)
+                r_e = gtk.gdk.Event(gtk.gdk.KEY_RELEASE)
+                r_e.window = self.win.get_window()
+                r_e.keyval = e.keyval
+                r_e.hardware_keycode = e.hardware_keycode
+                self.view.emit("key_release_event", r_e)
             else :
                 if mkey == '\n' :
                     self.process_escaped(self.escaped)

@@ -4,6 +4,7 @@ import os
 import pymouse
 import debugmode
 import message
+import sys
 
 class OutputWindowTracker(object) : 
     @staticmethod
@@ -70,10 +71,10 @@ class ScreenHandler(pymouse.PyMouseEvent):
             self.rshift_pressed = True
             return 
         
-        #print "keyval:" + str(keyval)
+        print "keyval:" + str(keyval)
     
         specialMap = { 65289:'\t', 65293:'\n', 65288:'\b'}
-        rawMap = { 65362:19, 65364: 20 }
+        rawMap = { 65361:18, 65362:19, 65363:20, 65364: 21 }
 
         if keyval in specialMap :
             self.message_handler.send([message.KeyPress, str(specialMap[keyval])])

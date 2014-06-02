@@ -71,7 +71,7 @@ class ScreenHandler(pymouse.PyMouseEvent):
             self.rshift_pressed = True
             return 
         
-        print "keyval:" + str(keyval)
+        #print "keyval:" + str(keyval)
     
         specialMap = { 65289:'\t', 65293:'\n', 65288:'\b'}
         rawMap = { 65361:18, 65362:19, 65363:20, 65364: 21 }

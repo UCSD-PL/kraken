@@ -61,6 +61,16 @@ Fixpoint no_match {envd term} (c:cmd PAYD COMPT COMPS KSTD term envd)
     | KOCall _ _ _ => False
     | _ => True
     end
+  | Reflex.InvokeFD _ _ _ _ _ =>
+    match oact with
+    | KOInvokeFD _ _ _ => False
+    | _ => True
+    end
+  | Reflex.InvokeStr _ _ _ _ _ =>
+    match oact with
+    | KOInvokeStr _ _ _ => False
+    | _ => True
+    end
   | Reflex.StUpd _ _ _ => True
   | Reflex.CompLkup _ _ c1 c2 =>
     no_match c1 oact /\
@@ -93,6 +103,7 @@ Proof.
   generalize dependent tr. generalize dependent act.
   pose proof (no_match_initial_init_state oact).
   generalize dependent (initial_init_state PAYD COMPT COMPS KSTD IENVD).
+  simpl in *.
   induction init; simpl in *; intros; eauto.
     destruct input as [input1 input2]. simpl in *.
     destruct Hno_en as [Hno_en1 Hno_en2].
@@ -140,6 +151,16 @@ Proof.
     subst tr. simpl in *. decompose [or] Hin; eauto.
     subst act. destruct oact; auto.
 
+    destruct (init_ktr PAYD COMPT COMPS KSTD envd i0).
+    simpl in *. apply pack_injective in Htr.
+    subst tr. simpl in *. decompose [or] Hin; eauto.
+    subst act. destruct oact; auto.
+
+    destruct (init_ktr PAYD COMPT COMPS KSTD envd i0).
+    simpl in *. apply pack_injective in Htr.
+    subst tr. simpl in *. decompose [or] Hin; eauto.
+    subst act. destruct oact; auto.
+
     destruct Hno_en as [Hno_en1 Hno_en2].
     match goal with
     | [ _ : context [ match ?e with | Some _ => _ | None => _ end ] |- _ ]
@@ -176,6 +197,7 @@ Proof.
   intros c m oact P hdlrs s s' input Hrun Hno Hind Hp tr Htr.
   destruct hdlrs as [envd cmd]. simpl in *. subst s'.
   generalize dependent tr.
+  simpl in *.
   induction cmd; simpl in *; intros; auto.
     destruct input as [input1 input2]. simpl in *.
     destruct Hno as [Hno_en1 Hno_en2].
@@ -222,6 +244,20 @@ Proof.
     destruct o1; try contradiction.
     destruct c0. simpl.
     destruct (COMPTDEC t conc_pat_type); try tauto.
+
+    destruct s as [s env]. destruct (ktr _ _ _ _ s) as [ ? ]_eqn.
+    simpl in *. apply pack_injective in Htr.
+    subst tr. rewrite list_app_cons.
+    apply Hp; auto. intros a Ha. simpl in *.
+    decompose [or] Ha; auto.
+    subst a. destruct oact; auto.
+
+    destruct s as [s env]. destruct (ktr _ _ _ _ s) as [ ? ]_eqn.
+    simpl in *. apply pack_injective in Htr.
+    subst tr. rewrite list_app_cons.
+    apply Hp; auto. intros a Ha. simpl in *.
+    decompose [or] Ha; auto.
+    subst a. destruct oact; auto.
 
     destruct s as [s env]. destruct (ktr _ _ _ _ s) as [ ? ]_eqn.
     simpl in *. apply pack_injective in Htr.
@@ -370,6 +406,76 @@ Proof.
   apply enables_no_match.
 Qed.
 
+Lemma enables_compose : forall A B T1 T2,
+  Enables PAYD COMPT COMPS COMPTDEC A B T1 ->
+  Enables _ _ _ COMPTDEC A B T2 ->
+  Enables _ _ _ COMPTDEC A B (T2 ++ T1).
+Proof.
+  intros A B T1 T2 Hen1 Hen2.
+  induction Hen2.
+    simpl. auto.
+
+    simpl. apply E_not_future; auto.
+
+    simpl. apply E_future; auto.
+    destruct H as [a H].
+    exists a. intuition.
+Qed.
+
+Lemma ensures_no_match : forall A B tr tr',
+  Ensures PAYD COMPT COMPS COMPTDEC A B tr ->
+  (forall a, List.In a tr' ->
+             ~ActionMatch.AMatch _ _ _ COMPTDEC A a) ->
+  Ensures _ _ _ COMPTDEC A B (tr' ++ tr).
+Proof.
+  unfold Ensures.
+  intros A B tr tr' Hen Hno_match.
+  rewrite List.rev_app_distr.
+  apply enables_compose; auto.
+  induction tr'.
+    constructor.
+
+    simpl. apply enables_compose.
+      apply E_not_future.
+        constructor.
+
+        apply Hno_match; simpl; auto.
+
+      apply IHtr'. intros a0 Hin0.
+      apply Hno_match; simpl; auto.
+Qed.
+
+Lemma no_ensurer_init : forall init input A B s,
+  InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
+  no_match init A ->
+  forall tr : Reflex.KTrace PAYD COMPT COMPS,
+   ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
+   Ensures PAYD COMPT COMPS COMPTDEC A B tr.
+Proof.
+  intros. rewrite <- List.app_nil_r.
+  apply ensures_no_match.
+    constructor.
+
+    eapply no_match_init; eauto.
+Qed.
+
+Lemma no_ensurer_hdlr : forall c m input A B s s',
+  ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) A ->
+  not_recv_match (comp_type _ _ c) (tag _ m) A ->
+  not_select_match (comp_type _ _ c) A ->
+  (forall tr : Reflex.KTrace PAYD COMPT COMPS,
+   ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
+   Ensures PAYD COMPT COMPS COMPTDEC A B tr) ->
+  forall tr : Reflex.KTrace PAYD COMPT COMPS,
+   ktr PAYD COMPT COMPS KSTD s' = inhabits tr ->
+   Ensures PAYD COMPT COMPS COMPTDEC A B tr.
+Proof.
+  intros.
+  eapply no_match_hdlr; eauto.
+  apply ensures_no_match.
+Qed.
+
 Lemma immbefore_no_match : forall oact oact' tr tr',
   ImmBefore PAYD COMPT COMPS COMPTDEC oact oact' tr ->
   (forall a, List.In a tr' ->
@@ -380,7 +486,7 @@ Proof.
   induction tr'.
     auto.
 
-    apply IB_nA. apply IHtr'.
+    apply IB_nB. apply IHtr'.
       intros a0 Hina0.
       apply Hno_match. simpl. auto.
 
@@ -418,29 +524,90 @@ Proof.
   apply immbefore_no_match.
 Qed.
 
-Lemma immafter_no_match : forall oact oact' tr tr',
-  ImmAfter PAYD COMPT COMPS COMPTDEC oact oact' tr ->
-  (forall a, List.In a tr' ->
-             ~ActionMatch.AMatch _ _ _ COMPTDEC oact' a) ->
-  ImmAfter _ _ _ COMPTDEC oact oact' (tr' ++ tr).
+Lemma IB_compose : forall A B T1 T2,
+  ImmBefore PAYD COMPT COMPS COMPTDEC A B T1 ->
+  ImmBefore PAYD COMPT COMPS COMPTDEC A B T2 ->
+  ImmBefore PAYD COMPT COMPS COMPTDEC A B (T2 ++ T1).
 Proof.
-  intros oact oact' tr tr' Hen Hno_match.
-  induction tr'.
+  intros A B T1 T2 H1 H2.
+  induction H2.
+    simpl. auto.
+
+    simpl. apply IB_nB; auto.
+
+    simpl in *. apply IB_A; auto.
+Qed.
+
+(*Inductive ImmAfterStrong B A :
+  KTrace PAYD COMPT COMPS -> Prop :=
+| IAS_nil : ImmAfterStrong B A nil
+| IAS_cons : forall a tr,
+               ImmAfter _ _ _ COMPTDEC B A (a::tr) ->
+               ~ActionMatch.AMatch _ _ _ COMPTDEC A a ->
+               ImmAfterStrong B A (a::tr).
+
+Lemma ia_strong : forall A B tr,
+  ImmAfterStrong B A tr ->
+  ImmAfter _ _ _ COMPTDEC B A tr.
+Proof.
+  intros A B tr Hias.
+  destruct Hias.
+    constructor.
     auto.
+Qed.
+*)
+Lemma immafter_no_match : forall B A tr tr',
+  ImmAfter PAYD COMPT COMPS COMPTDEC B A tr ->
+  (forall a, List.In a tr' ->
+             ~ActionMatch.AMatch _ _ _ COMPTDEC A a) ->
+  ImmAfter _ _ _ COMPTDEC B A (tr' ++ tr).
+Proof.
+  unfold ImmAfter.
+  intros B A tr tr' Hia Hno_match.
+  rewrite List.rev_app_distr.
+  apply IB_compose; auto.
+  induction tr'.
+    simpl. constructor.
 
-    apply IA_nB. apply IHtr'.
-      intros a0 Hina0.
-      apply Hno_match. simpl. auto.
+    simpl. apply IB_compose.
+      apply IB_nB.
+        constructor.
 
+        apply Hno_match. simpl. auto.
+
+      apply IHtr'. intros a0 Hina0.
       apply Hno_match. simpl. auto.
 Qed.
 
-Lemma no_before_IA_init : forall init input oact oact' s,
+(*Lemma immafter_no_match : forall B A tr tr',
+  ImmAfterStrong B A tr ->
+  (forall a, List.In a tr' ->
+             ~ActionMatch.AMatch _ _ _ COMPTDEC A a) ->
+  ImmAfterStrong B A (tr' ++ tr).
+Proof.
+  intros B A tr tr' Hias Hno_match.
+  induction tr'.
+    auto.
+
+    simpl. apply IAS_cons.
+      cut (ImmAfterStrong B A (tr' ++ tr)).
+        intro Hias'. destruct Hias'.
+          constructor.
+
+          apply IA_nA; eauto.
+          
+        apply IHtr'. intros a0 Hina0.
+        apply Hno_match. simpl. auto.
+
+        apply Hno_match. simpl. auto.
+Qed.*)
+
+Lemma no_before_IA_init : forall init input B A s,
   InitialState PAYD COMPT COMPTDEC COMPS KSTD IENVD init input s ->
-  no_match init oact' ->
+  no_match init A ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
-   ImmAfter PAYD COMPT COMPS COMPTDEC oact oact' tr.
+   ImmAfter _ _ _ COMPTDEC B A tr.
 Proof.
   intros. rewrite <- List.app_nil_r.
   apply immafter_no_match.
@@ -449,17 +616,17 @@ Proof.
     eapply no_match_init; eauto.
 Qed.
 
-Lemma no_before_IA_hdlr : forall c m input oact oact' s s',
+Lemma no_before_IA_hdlr : forall c m input B A s s',
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
-  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact' ->
-  not_recv_match (comp_type _ _ c) (tag _ m) oact' ->
-  not_select_match (comp_type _ _ c) oact' ->
+  no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) A ->
+  not_recv_match (comp_type _ _ c) (tag _ m) A ->
+  not_select_match (comp_type _ _ c) A ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
-   ImmAfter PAYD COMPT COMPS COMPTDEC oact oact' tr) ->
+   ImmAfter _ _ _ COMPTDEC B A tr) ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
    ktr PAYD COMPT COMPS KSTD s' = inhabits tr ->
-   ImmAfter PAYD COMPT COMPS COMPTDEC oact oact' tr.
+   ImmAfter _ _ _ COMPTDEC B A tr.
 Proof.
   intros.
   eapply no_match_hdlr; eauto.
@@ -526,27 +693,23 @@ Proof.
   intros. eapply no_match_init; eauto.
 Qed.
 
-Lemma no_disabler_hdlr : forall c m input oact s s',
+Lemma no_disabler_hdlr : forall c m input oact s s' act,
   ValidExchange PAYD COMPT COMPTDEC COMPS KSTD HANDLERS c m input s s' ->
   no_match (projT2 (HANDLERS (tag _ m) (comp_type _ _ c))) oact ->
   not_recv_match (comp_type _ _ c) (tag _ m) oact ->
   not_select_match (comp_type _ _ c) oact ->
   (forall tr : Reflex.KTrace PAYD COMPT COMPS,
-   ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
-   forall act,
      List.In act tr ->
+     ktr PAYD COMPT COMPS KSTD s = inhabits tr ->
      ~ActionMatch.AMatch _ _ _ COMPTDEC oact act) ->
   forall tr : Reflex.KTrace PAYD COMPT COMPS,
-   ktr PAYD COMPT COMPS KSTD s' = inhabits tr ->
-   forall act,
-     List.In act tr ->
-     ~ActionMatch.AMatch _ _ _ COMPTDEC oact act.
+    List.In act tr ->
+    ktr PAYD COMPT COMPS KSTD s' = inhabits tr ->
+    ~ActionMatch.AMatch _ _ _ COMPTDEC oact act.
 Proof.
-  intros. generalize dependent act.
+  intros. revert H4.
   eapply no_match_hdlr with
-  (P:=fun tr => forall act,
-                  List.In act tr ->
-                  ~ActionMatch.AMatch _ _ _ COMPTDEC oact act);
+  (P:=fun tr => List.In act tr -> ~ActionMatch.AMatch _ _ _ COMPTDEC oact act);
     eauto.
   intros. apply List.in_app_or in H7.
   destruct H7; eauto.

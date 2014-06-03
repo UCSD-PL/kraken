@@ -15,31 +15,79 @@ Definition KTrace := KTrace PAYD COMPT COMPS.
 Definition AMatch := AMatch PAYD COMPT COMPS COMPTDEC.
 Hint Unfold AMatch.
 
-(*after occurs immediately after before occurs.*)
-Inductive ImmAfter (after:KOAction) (before:KOAction)
+(*B occurs immediately after A occurs.*)
+(*Inductive ImmAfter (B:KOAction) (A:KOAction)
   : KTrace -> Prop :=
-| IA_nil : ImmAfter after before nil
-(*An action not matching before is added*)
-| IA_nB : forall before' tr, ImmAfter after before tr ->
-                             ~AMatch before before' ->
-                             ImmAfter after before (before'::tr)
-(*An action matching before is added*)
-| IA_B : forall before' after' tr, ImmAfter after before tr ->
-                                   AMatch after after' ->
-                                   ImmAfter after before (after'::before'::tr).
+| IA_nil : ImmAfter B A nil
+| IA_single : forall x, ImmAfter B A (x::nil)
+| IA_B : forall b tr, ImmAfter B A tr ->
+                      AMatch B b ->
+                      ImmAfter B A (b::tr)
+| IA_nA : forall x na tr, ImmAfter B A (na::tr) ->
+                          ~AMatch A na ->
+                          ImmAfter B A (x::na::tr).*)
 
-(*before occurs immediate before after occurs*)
-Inductive ImmBefore (before:KOAction) (after:KOAction)
+(*A immediate before B occurs*)
+Inductive ImmBefore (A:KOAction) (B:KOAction)
   : KTrace -> Prop :=
-| IB_nil : ImmBefore before after nil
-(*An action not matching after is added*)
-| IB_nA : forall after' tr, ImmBefore before after tr ->
-                            ~AMatch after after' ->
-                            ImmBefore before after (after'::tr)
-(*An action matching after is added*)
-| IB_A : forall after' before' tr, ImmBefore before after tr ->
-                                   AMatch before before' ->
-                                   ImmBefore before after (after'::before'::tr).
+| IB_nil : ImmBefore A B nil
+| IB_nB : forall nb tr, ImmBefore A B tr ->
+                        ~AMatch B nb ->
+                        ImmBefore A B (nb::tr)
+| IB_A : forall x a tr, ImmBefore A B (a::tr) ->
+                        AMatch A a ->
+                        ImmBefore A B (x::a::tr).
+
+Theorem immbefore_ok :
+  forall A B b T1 T2,
+    AMatch B b ->
+    ImmBefore A B (T1 ++ b::T2) ->
+    exists a, exists T3,
+      AMatch A a /\ T2 = a::T3.
+Proof.
+  intros A B b T1 T2 HmatchB Hib.
+  remember (T1 ++ b::T2) as T.
+  generalize dependent T1.
+  generalize dependent T2.
+  induction Hib; intros T2 T1 HT.
+    pose (app_cons_not_nil T1 T2 b).
+    contradiction.
+
+    destruct T1.
+      simpl in HT. inversion HT.
+      subst b. contradiction.
+
+      inversion HT. eauto.
+
+    destruct T1.
+      simpl in HT. inversion HT. eauto.
+
+      inversion HT. eauto.
+Qed.
+
+Definition ImmAfter B A tr := ImmBefore B A (rev tr).
+
+Lemma immafter_ok :
+  forall A B a T1 T2,
+  AMatch A a ->
+  ImmAfter B A (T1 ++ a::T2) ->
+  exists b, exists T3,
+    AMatch B b /\ T1 = T3 ++ b::nil.
+Proof.
+  unfold ImmAfter.
+  intros A B a T1 T2 HmatchA Hib.
+  rewrite rev_app_distr in Hib.
+  simpl in Hib. rewrite <- app_assoc in Hib.
+  eapply immbefore_ok in Hib; eauto.
+  destruct Hib as [b H]. destruct H as [T3 H].
+  exists b. exists (rev T3).
+  destruct H.
+  split.
+    auto.
+
+    rewrite <- rev_involutive with (l:=T1).
+    rewrite H0. auto.
+Qed.
 
 Inductive Enables (past:KOAction) (future:KOAction)
   : KTrace -> Prop :=
@@ -48,11 +96,72 @@ Inductive Enables (past:KOAction) (future:KOAction)
                                 ~AMatch future act ->
                                 Enables past future (act::tr)
 | E_future : forall act tr, Enables past future tr ->
-                            (exists past', In past' (act::tr) /\
+                            (exists past', In past' tr /\
                                            AMatch past past') ->
                             Enables past future (act::tr).
 
-Definition Not_In (A:KOAction) (tr:KTrace) : Prop :=
+Lemma enables_ok :
+  forall A B b T1 T2,
+    AMatch B b ->
+    Enables A B (T1 ++ b :: T2) ->
+    exists a, exists T3, exists T4,
+      AMatch A a /\ T2 = T3 ++ a :: T4.
+Proof.
+  intros A B b T1 T2 Hmatch Hen.
+  remember (T1 ++ b :: T2) as T.
+  generalize dependent T1.
+  generalize dependent T2.
+  induction Hen; intros T2 T1 HT.
+    pose (app_cons_not_nil T1 T2 b).
+    contradiction.
+
+    destruct T1.
+      simpl in HT. inversion HT.
+      subst b. contradiction.
+
+      inversion HT. eauto.
+
+    destruct T1.
+      simpl in HT. inversion HT.
+      subst tr.
+      destruct H as [a H].
+      destruct H as [Hin HmatchA].
+      apply List.in_split in Hin.
+      destruct Hin as [l1 rest].
+      destruct rest as [l2 H].
+      eauto.
+
+      inversion HT. eauto.
+Qed.
+
+Definition Ensures A B tr := Enables B A (rev tr).
+
+Lemma ensures_ok :
+  forall A B a T1 T2,
+    AMatch A a ->
+    Ensures A B (T1 ++ a :: T2) ->
+    exists b, exists T3, exists T4,
+      AMatch B b /\ T1 = T3 ++ b :: T4.
+Proof.
+  unfold Ensures.
+  intros A B a T1 T2 HmatchA Hen.
+  rewrite rev_app_distr in Hen.
+  simpl in Hen. rewrite <- app_assoc in Hen.
+  eapply enables_ok in Hen; eauto.
+  destruct Hen as [b H]. destruct H as [T3 H].
+  destruct H as [T4 H].
+  exists b. exists (rev T4).
+  exists (rev T3).
+  destruct H.
+  split.
+    auto.
+
+    rewrite <- rev_involutive with (l:=T1).
+    rewrite H0. rewrite List.rev_app_distr.
+    simpl. rewrite <- List.app_assoc. auto.
+Qed.
+
+(*Definition Not_In (A:KOAction) (tr:KTrace) : Prop :=
   forall a, In a tr -> ~AMatch A a.
 
 Inductive Enables' (past:KOAction) (future:KOAction)
@@ -72,7 +181,7 @@ Proof.
   pose proof (HNot_In a) as H.
   apply H.
   simpl; right; assumption.
-Qed.  
+Qed.
 
 Theorem enables_equiv : forall A B tr,
   Enables A B tr <-> Enables' A B tr.
@@ -108,13 +217,13 @@ Proof.
 
         replace (act::tr'++a::tr0) with ((act::tr')++a::tr0) by auto;
         apply E_A; auto.
-    
+
     (*Enables' -> Enables*)
     intro E'.
     destruct E'.
       induction tr.
         apply E_nil.
-        
+
         apply E_not_future.
         apply IHtr; eapply not_in_cons; eauto.
 
@@ -128,7 +237,7 @@ Proof.
           simpl.
           apply E_future.
             apply E_nil.
-            
+
             exists a; simpl; auto.
 
           simpl in *.
@@ -139,7 +248,7 @@ Proof.
             apply E_future.
               apply E_not_future.
                 assumption.
- 
+
                 unfold Not_In in H'.
                 pose proof (H' a0).
                 intuition.
@@ -151,7 +260,7 @@ Proof.
               apply E_future.
                 apply E_not_future.
                   assumption.
- 
+
                   unfold Not_In in H'.
                   pose proof (H' a0).
                   intuition.
@@ -165,7 +274,7 @@ Proof.
             assumption.
 
             exists a; intuition.
-Qed.        
+Qed.        *)
 
 Inductive Disables (disabler:KOAction) (disablee:KOAction)
   : KTrace -> Prop :=
@@ -177,5 +286,86 @@ Inductive Disables (disabler:KOAction) (disablee:KOAction)
                               (forall act', In act' tr ->
                                             ~AMatch disabler act') ->
                               Disables disabler disablee (act::tr).
+
+Lemma disables_ok :
+  forall A B a b T1 T2,
+    AMatch A a ->
+    Disables A B (T1 ++ a :: T2) ->
+    AMatch B b ->
+    ~ In b T1.
+Proof.
+  intros A B a b T1 T2 HmatchA Hdis HmatchB Hin.
+  induction T1.
+  inversion Hin.
+  simpl in *. intuition.
+    subst. inversion Hdis; subst.
+    contradiction.
+    elim (H2 a).
+      apply in_or_app. right. now constructor.
+      assumption.
+    inversion Hdis; auto.
+Qed.
+
+Definition decide_amatch A a : {AMatch A a} + {~ AMatch A a} :=
+  decide_act _ _ _ COMPTDEC A a.
+
+Lemma disables_snoc : forall A B T na,
+  ~ AMatch A na ->
+  Disables A B T ->
+  Disables A B (T ++ na :: nil).
+Proof.
+  intros A B T na Hnmatch D.
+  induction T.
+    apply D_disablee. apply D_nil. inversion 1.
+    simpl.
+    destruct (decide_amatch B a) as [Hmatch|Hmatch].
+      apply D_disablee.
+        apply IHT. now inversion D.
+        intros act' Hin Hmatch'. apply in_app_or in Hin. intuition.
+          inversion D. contradiction. now apply (H3 act').
+        inversion H.
+          subst. auto. auto.
+      apply D_not_disablee; [|assumption]. apply IHT. now inversion D.
+Qed.
+
+Lemma disables_no_disablee_in_suffix : forall A B prefix suffix,
+  Disables A B prefix ->
+  (forall elt, In elt suffix -> ~ AMatch B elt) ->
+  Disables A B (suffix ++ prefix).
+Proof.
+  intros A B prefix suffix D H.
+  induction suffix.
+    assumption.
+    simpl. apply D_not_disablee.
+      apply IHsuffix; auto. intros elt Hin. apply H. now right.
+      apply H. now left.
+Qed.
+
+Lemma disables_rev' : forall A B T,
+  Disables A B T ->
+  Disables B A (rev T).
+Proof.
+  intros A B T D.
+  induction T.
+  apply D_nil. simpl.
+  inversion D; subst; simpl in *.
+
+    apply disables_snoc. assumption. apply IHT. now inversion D.
+
+    destruct (decide_amatch B a).
+
+      rename a into b. apply disables_no_disablee_in_suffix.
+      apply D_disablee. constructor. inversion 1.
+      intros elt Hin. apply H2. now apply in_rev.
+      apply disables_snoc. easy. auto.
+Qed.
+
+Lemma disables_rev : forall A B T,
+  Disables A B T <-> Disables B A (rev T).
+Proof.
+  split.
+  apply disables_rev'.
+  rewrite <- (rev_involutive T) at 2. apply disables_rev'.
+Qed.
 
 End PolLang.

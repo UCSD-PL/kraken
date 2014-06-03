@@ -28,7 +28,7 @@ Definition kstate := kstate PAYD COMPT COMPS KSTD.
 Definition ktr := ktr PAYD COMPT COMPS KSTD.
 Definition Nop := Reflex.Nop PAYD COMPT COMPS KSTD.
 
-Require Import NIExists.
+Require Import NIInputTree.
 Require Import Ynot.
 
 Ltac uninhabit :=
@@ -38,47 +38,61 @@ Ltac uninhabit :=
   end.
 
 Ltac remove_redundant_ktr :=
-  unfold NIExists.ktr in *;
+  unfold NIInputTree.ktr in *;
   match goal with
   | [ H : Reflex.ktr _ _ _ _ ?s = inhabits ?tr,
       H' : Reflex.ktr _ _ _ _ ?s = inhabits ?tr' |- _ ]
     => rewrite H' in H; apply pack_injective in H; subst tr
   end.
 
-Lemma prune_nop_1 : forall clblr vlblr c m i s s',
+Lemma prune_nop_1 : forall clblr vlblr cslblr c m i s s',
   ValidExchange c m i s s' ->
   projT2 (HANDLERS (tag _ m) (comp_type COMPT COMPS c)) =
   Nop _ _ ->
-  high_out_eq _ _ _ _ s s' clblr /\ vars_eq _ _ _ _ s s' vlblr.
+  high_out_eq _ _ _ _ s s' clblr /\ vars_eq _ _ _ _ s s' vlblr /\ cs_eq _ _ _ _ s s' cslblr.
 Proof.
-  intros clblr vlblr c m i s s' Hve Hnop.
+  intros clblr vlblr cslblr c m i s s' Hve Hnop.
   inversion Hve. clear Hve.
-    subst s'0. unfold hdlrs. generalize i. rewrite Hnop. 
+    subst s'0. unfold hdlrs. generalize i.
+    destruct (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)).
+    simpl in *. simpl in *. unfold kstate_run_prog.
+    simpl in *. clear H3. clear hdlrs. rewrite Hnop. 
     intros. simpl. unfold kstate_run_prog. unfold hdlr_state_run_cmd.
     simpl. split. 
       unfold high_out_eq. intros. simpl in *.
       uninhabit. simpl. remove_redundant_ktr. auto.
 
-      unfold vars_eq. simpl. auto.
+      split.
+        unfold vars_eq. simpl. auto.
+
+        unfold cs_eq. simpl. auto.
 Qed.
 
-Lemma prune_nop_2 : forall clblr vlblr c m i s1 s1' s2 s2',
+Lemma prune_nop_2 : forall clblr vlblr cslblr c m i s1 s1' s2 s2',
   ValidExchange c m i s1 s1' ->
   ValidExchange c m i s2 s2' ->
   projT2 (HANDLERS (tag _ m) (comp_type COMPT COMPS c)) =
   Nop _ _ ->
   high_out_eq _ _ _ _ s1 s2 clblr -> vars_eq _ _ _ _ s1 s2 vlblr ->
-  high_out_eq _ _ _ _ s1' s2' clblr /\ vars_eq _ _ _ _ s1' s2' vlblr.
+  cs_eq _ _ _ _ s1 s2 cslblr ->
+  high_out_eq _ _ _ _ s1' s2' clblr /\ vars_eq _ _ _ _ s1' s2' vlblr /\
+  cs_eq _ _ _ _ s1' s2' cslblr.
 Proof.
-  intros clblr vlblr c m i s1 s2 s1' s2' Hve1 Hve2 Hnop Hout Hvars.
+  intros clblr vlblr cslblr c m i s1 s2 s1' s2' Hve1 Hve2 Hnop Hout Hvars.
   inversion Hve1. inversion Hve2. clear Hve1. clear Hve2.
-    subst s'0. subst s'. unfold hdlrs. unfold hdlrs0. generalize i. rewrite Hnop. 
+    subst s'0. subst s'. unfold hdlrs. unfold hdlrs0. generalize i.
+    destruct (HANDLERS (tag PAYD m) (comp_type COMPT COMPS c)).
+    simpl in *. simpl in *. unfold kstate_run_prog.
+    simpl in *. clear H3 H8. clear hdlrs. clear hdlrs0. rewrite Hnop. 
     intros. unfold kstate_run_prog. unfold hdlr_state_run_cmd.
     simpl. split. 
       unfold high_out_eq. intros. simpl in *.
       repeat uninhabit. simpl. auto.
 
-      unfold vars_eq. simpl. auto.
+      split.
+        unfold vars_eq. simpl. auto.
+
+        unfold cs_eq. simpl. auto.
 Qed.
 
 (*

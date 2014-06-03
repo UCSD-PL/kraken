@@ -1,0 +1,104 @@
+Components :
+  AccessControl "access-control.py" () ()
+  Disk          "disk.py"           () ()
+  Listener      "listener.py"       () ()
+  Client         "client.py"        () (user:str, addr:str)
+
+Messages :
+  LoginReq(str, str, str)
+  ACLoginReq(str, str, str)
+  ClientExists(str, str)
+  ACLoginResT(str, str)
+  ACLoginResF(str, str)
+  LoginResT(str, str)
+  LoginResF(str, str)
+  FileReq(str)
+  ACFileReq(str, str, str)
+  ACFileResT(str, str, str)
+  ACFileResF(str, str, str)
+  DFileReq(str, str, str)
+  DFileRes(str, str, str, fd)
+  FileRes(str, fd)
+  FileResF(str)
+
+State :
+  AC : AccessControl
+  D  : Disk
+  L  : Listener
+
+Operations :
+
+Init :
+  ACtemp <- spawn AccessControl();
+  AC <- ACtemp;
+  Dtemp <- spawn Disk();
+  D <- Dtemp;
+  Ltemp <- spawn Listener();
+  L <- Ltemp
+
+Handlers :
+  When l:Listener sends LoginReq(u, p, a) respond:
+    send(AC, ACLoginReq(u, p, a))
+
+  When ac:AccessControl sends ACLoginResT(u, a) respond:
+    lookup Client(u, a)
+    { cl => nop }
+    { c <- spawn Client(u, a);
+      send(L, LoginResT(u, a))
+    }
+
+  When ac:AccessControl sends ACLoginResF(u, a) respond:
+    send(L, LoginResF(u, a))
+
+  When c:Client sends FileReq(r) respond:
+    send(AC, ACFileReq(c.user, c.addr, r))
+
+  When ac:AccessControl sends ACFileResT(u, a, r) respond:
+    send(D, DFileReq(u, a, r))
+
+  When ac:AccessControl sends ACFileResF(u, a, r) respond:
+    lookup Client(u, a)
+    { c => send(c, FileResF(r)) }
+    { nop }
+
+  When d:Disk sends DFileRes(u, a, r, f) respond:
+    lookup Client(u, a)
+    { c => send(c, FileRes(r, f)) }
+    { nop }
+
+Properties :
+  AccessCorrect:
+    forall u, a, r:
+      [Recv(AccessControl(), ACFileResT(u, a, r))]
+      Enables
+      [Send(Disk(), DFileReq(u, a, r))]
+
+  AccessCorrectDisk:
+    forall u, a, r, f:
+      [Recv(Disk(), DFileRes(u, a, r, f))]
+      Enables
+      [Send(Client(u, a), FileRes(r, f))]
+
+  AccessCorrectEnsures:
+    forall u, a, r:
+      [Recv(AccessControl(), ACFileResT(u, a, r))]
+      Ensures
+      [Send(Disk(), DFileReq(u, a, r))]
+
+  AuthCorrect:
+    forall u, a:
+      [Recv(AccessControl(), ACLoginResT(u, a))]
+      Enables
+      [Spawn Client(u, a)]
+
+  NoDupClients:
+    forall u, a:
+      [Spawn Client(u, a)]
+      Disables
+      [Spawn Client(u, a)]
+
+  AuthEnablesReq:
+    forall u, a:
+      [Recv(AccessControl(), ACLoginResT(u, a))]
+      Enables
+      [Send(AccessControl(), ACFileReq(u, a, _))]

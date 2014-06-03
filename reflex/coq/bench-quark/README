@@ -1,0 +1,55 @@
+Reflex Browser: A Secure Web Browser with A Kernel Verified in Reflex.
+
+Build a verified replacement kernel for Google Chromium to ensure that
+it is completely impervious to certain classes of attack.
+
+== Directory Explanation ==
+
+./run.sh : shell script to run Reflex Browser.
+
+./Kernel.v : Reflex Browser implementation written in Reflex.
+
+./ml/kernel : compiled executable Reflex Browser which manages other
+browser components at the center to guarantee security.
+
+./test/quark/tab/* : HTML Renderer implementation written in
+Python (tab component)
+
+./test/quark/input/* : address bar component to take care of keyboard
+typing and mouse clicks.
+
+./test/quark/output/* : screen component to actually show the
+renderered webpage sent from tab components
+
+./test/quark/cookie/* : cookie component to store and retrieve cookies
+for tabs.
+
+== Usage Instruction ==
+
+Enter "./run.sh" to execute Reflex Browser. You can type one of the
+function keys in the address bar window (a black terminal screen) to
+start web browsing :
+
+F12 : Open a new tab 
+
+F1~10 : Focus the tab identified by a function key, and tabs are
+assigned a function key in the order they are created by the user.
+
+Reflex Browser is built as a proof of concept; it works on many web
+sites but it lacks many functionalities that a normal browser has. For
+example, Reflex Browser can open google.com or wikipedia.org, but it
+cannot download a file or currently you cannot type a random URL to
+open in an opened tab.
+
+== Scenario of Usage ==
+
+./run.sh (enter)
+
+Push F12 in the address bar and type "google.com"
+
+Wait until the new tab is fully loaded
+
+Type some search keywords in the search bar.
+
+Push F12 to open a new tab on "wikipedia.org"
+

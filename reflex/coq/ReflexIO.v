@@ -18,13 +18,15 @@ Require Import ReflexVec.
 Ltac sep' := sep fail idtac.
 
 Inductive Action : Set :=
-| Exec   : str -> list str -> fd -> Action
-| Call   : str -> list str -> fd -> Action
-| Select : list fd -> fd -> Action
-| Recv   : fd -> str -> Action
-| Send   : fd -> str -> Action
-| RecvFD : fd -> fd -> Action (* RecvFD f f' : use f to recv f' *)
-| SendFD : fd -> fd -> Action (* SendFD f f' : use f to send f' *)
+| Exec      : str -> list str -> fd -> Action
+| Call      : str -> list str -> fd -> Action
+| InvokeFD  : str -> list str -> fd -> Action
+| InvokeStr : str -> list str -> str -> Action
+| Select    : list fd -> fd -> Action
+| Recv      : fd -> str -> Action
+| Send      : fd -> str -> Action
+| RecvFD    : fd -> fd -> Action (* RecvFD f f' : use f to recv f' *)
+| SendFD    : fd -> fd -> Action (* SendFD f f' : use f to send f' *)
 .
 
 Definition Trace : Set := list Action.
@@ -67,6 +69,8 @@ Definition action_fds (a : Action) : list fd :=
   match a with
   | Exec _ _ f => f::nil
   | Call _ _ f => f::nil
+  | InvokeFD _ _ f => f::nil
+  | InvokeStr _ _ _ => nil
   | Select _ _ => nil
   | Recv _ _   => nil
   | Send _ _   => nil
@@ -78,8 +82,6 @@ Definition trace_fds (tr : Trace) : list fd :=
   flat_map action_fds tr.
 
 Definition devnull := Num "000" "000".
-
-Axiom devnull_open : emp ==> open devnull.
 
 Axiom exec :
   forall (prog : str) (args : list str) (tr : [Trace]),
@@ -297,6 +299,18 @@ Axiom call :
   STsep (tr ~~ traced tr)
         (fun f : fd => tr ~~ open f *
           traced (Call prog args f :: tr)).
+
+Axiom invoke_fd :
+  forall (prog : str) (args : list str) (tr : [Trace]),
+  STsep (tr ~~ traced tr)
+        (fun f : fd => tr ~~ open f *
+          traced (InvokeFD prog args f :: tr)).
+
+Axiom invoke_str :
+  forall (prog : str) (args : list str) (tr : [Trace]),
+  STsep (tr ~~ traced tr)
+        (fun s : str => tr ~~
+          traced (InvokeStr prog args s :: tr)).
 
 Fixpoint in_fd (f : fd) (l : list fd) {struct l} : Set :=
   match l with

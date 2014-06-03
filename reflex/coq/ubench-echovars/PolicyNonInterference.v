@@ -9,9 +9,6 @@ Import SystemFeatures Language Spec.
 
 Require Import NIExists.
 
-Require Import Ynot.
-Require Import NITactics.
-
 Definition clblr (c : comp COMPT COMPS) :=
   match comp_type _ _ c with
   | Echo1 => true
@@ -25,8 +22,10 @@ Definition vlblr (f : fin (projT1 KSTD)) : bool :=
   | Some (Some bad) => match bad with end
   end.
 
+Definition cslblr (c : comp COMPT COMPS) := true.
+
 Theorem ni : NI PAYD COMPT COMPTDEC COMPS
-  IENVD KSTD INIT HANDLERS clblr vlblr.
+  IENVD KSTD INIT HANDLERS clblr vlblr cslblr.
 Proof.
   Time solve [ni].
 Qed.

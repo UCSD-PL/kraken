@@ -9,7 +9,8 @@ BENCHKERNELS  := $(wildcard bench-*/Kernel.v)
 all:
 	$(MAKE) depend
 	$(MAKE) coq
-	$(MAKE) ubenchkernels
+# Need to rewrite ubench kernels
+#	$(MAKE) ubenchkernels
 	$(MAKE) benchkernels
 
 BENCHNAME := benchmark-$(shell date +"%y-%m-%d-%H:%M:%S")
@@ -17,10 +18,10 @@ BENCHDIR  := benchmarks
 BENCHFULL := $(BENCHDIR)/$(BENCHNAME)
 
 bench: all
-	./bench.sh $(COQC) $(YNOT) bench
+	./bench.sh $(COQC) $(YNOT) bench $(BENCHOUT) $(TIMEOUT)
 
 ubench: all
-	./bench.sh $(COQC) $(YNOT) ubench
+	./bench.sh $(COQC) $(YNOT) ubench $(BENCHOUT) $(TIMEOUT)
 
 build:
 	$(MAKE) depend
@@ -32,7 +33,8 @@ depend: $(FILES) $(BENCHKERNELS) $(UBENCHKERNELS)
 
 coq: $(FILES:.v=.vo)
 ubenchkernels: $(UBENCHKERNELS:.v=.vo)
-benchkernels: $(BENCHKERNELS:.v=.vo)
+benchkernels:
+	for i in `find . -maxdepth 1 -name "bench-*"`; do make kernel -C $$i; done
 
 %.vo: %.v
 	$(COQC) $(INCLUDES) $*.v
@@ -40,7 +42,7 @@ benchkernels: $(BENCHKERNELS:.v=.vo)
 clean:
 	rm -f *.vo *.glob
 	rm -f ../ml/*.vo ../ml/*.ml ../ml/*.mli
-	for i in `find . -name "bench-*"`; do make clean -C $$i; done
+	for i in `find . -maxdepth 1 -name "bench-*"`; do make clean -C $$i; done
 
 include .depend
 

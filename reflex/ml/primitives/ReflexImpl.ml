@@ -133,8 +133,10 @@ let exec cprog cargs _ =
 
 let call cprog cargs _ =
   let prog = string_of_str cprog in
+  log (Printf.sprintf "call : %s " prog);
   let args = List.map string_of_str cargs in
-  let r, w = Unix.pipe () in
+  (* let r, w = Unix.pipe () in *)
+  let r, w = Unix.socketpair Unix.PF_UNIX Unix.SOCK_STREAM 0 in
   match Unix.fork () with
   | 0 -> (* child *) begin
     Unix.close r;
@@ -172,7 +174,7 @@ let recv cfd n _ =
       Unix.recv fd s 0 i []) ()
   in
   if r <> i then
-    failwith "recv - wrong # of bytes"
+    failwith (Printf.sprintf "recv - wrong # of bytes from %d (%d <> %d):(%s)" (int_of_fd fd) r i s)
   else begin
     log (Printf.sprintf "recv : %d %d -> \"%s\""
           (int_of_fd fd) i (String.escaped s));
@@ -218,3 +220,27 @@ let send_fd cfd x _ =
   log (Printf.sprintf "send_fd : %d %d -> ()"
         (int_of_fd fd) (int_of_fd x));
   ()
+
+(* BEGIN:UserPrimitives *)
+let _INVOKE_FD_MAP : (string * (string list -> Unix.file_descr)) list =
+  []
+
+let _INVOKE_STR_MAP : (string * (string list -> string)) list =
+  []
+(* END:UserPrimitives *)
+
+let invoke_fd cprog cargs _ =
+  let prog = string_of_str cprog in
+  let args = List.map string_of_str cargs in
+  let fd = (List.assoc prog _INVOKE_FD_MAP) args in
+  log (Printf.sprintf "invoke_fd : %s [%s] -> %d"
+    prog (String.concat ", " args) (int_of_fd fd));
+  cfd_of_fd fd
+
+let invoke_str cprog cargs _ =
+  let prog = string_of_str cprog in
+  let args = List.map string_of_str cargs in
+  let s = (List.assoc prog _INVOKE_STR_MAP) args in
+  log (Printf.sprintf "invoke_str : %s [%s] -> %s"
+    prog (String.concat ", " args) s);
+  str_of_string s

@@ -1,60 +1,76 @@
 #!/bin/bash
 
-if [ $# -ne 3 ]
-then echo "Usage: bench COQC YNOT PREFIX"; exit 65
+if [ $# -ne 5 ]
+then echo "Usage: bench COQC YNOT PREFIX OUTPUTDIR TIMEOUT"; exit 65
 fi
 
 COQC=$1
 YNOT=$2
 PREFIX=$3
 BENCHINCLUDES="-R $YNOT Ynot -I . -I .."
-BENCHNAME=$PREFIX-`date +"%y-%m-%d-%H:%M:%S"`
-BENCHDIR=benchmarks
+BENCHNAME=results
+BENCHDIR=$4
 BENCHFULL=$BENCHDIR/$BENCHNAME
+TIMEOUT=$5
 
-echo "Benchmark,Policy,Time" >> $BENCHFULL.csv
+echo "Benchmark,Policy,Time (Ltac),Time (Qed),Memory (kb)" > $BENCHFULL.csv
 
 for d in `ls -d -- $PREFIX-*`;
 do (
-  echo `basename $d`;
+  echo "Checking policies for `basename $d`";
   cd $d;
   $COQC $BENCHINCLUDES Kernel.v;
   for b in `find . -name "Policy*.v"`;
   do (
-    echo `basename $b .v`;
+    policy=`basename $b .v`;
+    echo $policy;
     echo -n `basename $d`,    | sed -e "s/^$PREFIX-//" >> ../$BENCHFULL.csv;
-    echo -n `basename $b .v`, | sed -e "s/^Policy//"   >> ../$BENCHFULL.csv;
-    coqres=`timeout --foreground 1h $COQC $BENCHINCLUDES $b 2>&1`;
+    echo -n `basename $b .v`\
+      | sed -e "s/^Policy//"\ >> ../$BENCHFULL.csv;
+    echo -n , >> ../$BENCHFULL.csv;
+    tmp=`mktemp`;
+    timeout $TIMEOUT $COQC $BENCHINCLUDES $b &> "$tmp" &
+    timeoutpid=$!
+    coqpid=`pidof coqtop.opt`;
+    while [[ -z $coqpid ]]; do
+        sleep 0.1;
+	coqpid=`pidof coqtop.opt`
+    done;
+    peak=0;
+    while ps -p $coqpid > /dev/null; do
+      sleep 0.2
+      sample=`ps -o rss= $coqpid 2>&1`
+      if [[ "$sample" -gt "$peak" ]]; then
+          peak=$sample
+      fi
+    done
+    wait $timeoutpid
     status=$?;
-    coqtime=`echo "$coqres" \
-      | grep "Finished transaction" \
-      | sed -r 's/Finished transaction in (.*)/\1/'
+    coqres=$(<$tmp) && rm $tmp
+    coqtime=`echo -n "$coqres"\
+      | grep "Finished transaction"\
+      | sed -r 's/Finished transaction in (.*)\. secs.*/\1/'\
+      | paste -sd ","
       `;
     if [[ "$status" = "124" ]];
-    then echo "Timeout" >> ../$BENCHFULL.csv;
+    then echo "Timeout $TIMEOUT,,$peak" >> ../$BENCHFULL.csv;
     else
       if [[ "$status" = "0" ]];
       then
         if [[ -z "$coqtime" ]];
         then
-          echo $coqres\
+          echo -n $coqres\
             | tr -d '"'\
             | sed -e 's/_/\\_/'\
             | sed -r 's/(.*)/{\1}/' >> ../$BENCHFULL.csv;
-        else echo {$coqtime} >> ../$BENCHFULL.csv;
+        else echo -n $coqtime >> ../$BENCHFULL.csv;
         fi;
+        echo ,$peak >> ../$BENCHFULL.csv;
       else
-        echo "Error with status code: $status" >> ../$BENCHFULL.csv;
+        echo "Error with status code: $status,,$peak" >> ../$BENCHFULL.csv;
       fi;
     fi;
   );
   done;
 );
 done
-
-(
-  cd $BENCHDIR;
-  sed -e "s;%CSV%;$BENCHNAME.csv;" template.tex > $BENCHNAME.tex;
-  pdflatex $BENCHNAME.tex
-)
-

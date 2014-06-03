@@ -1,0 +1,149 @@
+Components :
+  UserInput "../test/quark/input/run.sh"     () ()
+  Output    "../test/quark/output/output.sh" () ()
+  Tab       "../test/quark/tab/tab.sh"       () (id:str, domain:str)
+  CProc     "../test/quark/cookie/cookie.py" () (domain:str)
+
+Messages :
+  TabCreate(str, str)
+  TabSwitch(str)
+  Navigate(str)
+  KeyPress(str)
+  MouseClick(str)
+  AddrAdd(str, str)
+  RenderCompleted(str)
+  RenderRequest(str)
+  URLRequest(str)
+  URLResponse(fd)
+  SocketRequest(str)
+  SocketResponse(fd)
+  CookieChannelInit()
+  TabProcessRegister(fd)
+  CookieProcessRegister(fd)
+  AddrFocus(str)
+  DomainSet(str)
+
+State :
+  Out    : Output
+  CurTab : Tab
+  User   : UserInput
+
+Operations :
+  Misc.dom : str -> str -> str
+
+Init :
+  Outtemp <- spawn Output();
+  Usertemp <- spawn UserInput();
+  Out <- Outtemp;
+  User <- Usertemp;
+  t <- spawn Tab("", "google.com");
+  send(t, DomainSet("google.com"));
+  CurTab <- t;
+  send(Usertemp, AddrAdd("", "google.com"))
+
+Handlers :
+  When u:UserInput sends TabCreate(id, domain) respond:
+    lookup Tab(id, _)
+    { t => nop }
+    { t <- spawn Tab(id, domain);
+      send(t, DomainSet(domain));
+      CurTab <- t;
+      send(User, AddrAdd(id, domain))
+    }
+
+  When u:UserInput sends TabSwitch(id) respond:
+    lookup Tab(id, _)
+    { t => CurTab <- t;
+           send(User, AddrFocus(id));
+           send(CurTab, RenderRequest(""))
+    }
+    { nop }
+
+  When u:UserInput sends Navigate(url) respond:
+    if ((dom "/" url) == CurTab.domain)
+    then send(CurTab, Navigate(url))
+    else nop
+
+  When u:UserInput sends KeyPress(key) respond:
+    send(CurTab, KeyPress(key))
+
+  When u:UserInput sends MouseClick(coord) respond:
+    send(CurTab, MouseClick(coord))
+
+  When t:Tab sends RenderCompleted(key) respond:
+    if (t == CurTab)
+    then send(Out, RenderCompleted(key))
+    else nop
+
+  When t:Tab sends URLRequest(url) respond:
+    f <- call "../test/quark/common/pywget.py"(url);
+    send(t, URLResponse(f))
+
+  When t:Tab sends SocketRequest(url) respond:
+    dom_ok <- invokestr "dom_ok" (url, t.domain);
+    if (dom_ok == "")
+    then f <- invokefd "create_socket" (url);
+         send(t, SocketResponse(f))
+    else nop
+
+  When t:Tab sends CookieChannelInit(f) respond:
+    f <- call "create_ckchan.py"();
+    send(t, CookieProcessRegister(f));
+    lookup CProc(t.domain)
+    { cp => send(cp, TabProcessRegister(f)) }
+    { c <- spawn CProc(t.domain);
+      send(c, DomainSet(t.domain));
+      send(c, TabProcessRegister(f))
+    }
+
+Properties :
+  CProcUnique:
+    forall d:
+      [Spawn CProc(d)] Disables [Spawn CProc(d)]
+
+  CookieSameDomainEnables:
+    forall d, f:
+      [Send(Tab(_, d), CookieProcessRegister(f))]
+      Enables
+      [Send(CProc(d), TabProcessRegister(f))]
+
+  CookieSameDomainImmAfter:
+    forall f:
+      [Send(Tab(_, _), CookieProcessRegister(f))]
+      ImmAfter
+      [Call "create_ckchan.py" () f]
+
+  CookieSameDomainEnsures:
+    forall d, f:
+      [Send(Tab(_, d), CookieProcessRegister(f))]
+      Ensures
+      [Send(CProc(d), TabProcessRegister(f))]
+
+  SocketCreateBeforeSend:
+    forall f:
+      [InvokeFD "create_socket" (_) f]
+      ImmBefore
+      [Send(Tab(_, _), SocketResponse(f))]
+
+  SocketDomOkBeforeCreate:
+    forall url:
+      [InvokeStr "dom_ok" (url, _) ""]
+      ImmBefore
+      [InvokeFD "create_socket" (url) _]
+
+  SocketRequestBeforeDomOk:
+    forall d, url:
+      [Recv(Tab(_, d), SocketRequest(url))]
+      ImmBefore
+      [InvokeStr "dom_ok" (url, d) _]
+
+  TabIdUnique:
+    forall id:
+      [Spawn Tab(id, _)] Disables [Spawn Tab(id, _)]
+
+  DomainNonInterference:
+    forall d:
+      NoInterfere
+        HighComps : Tab(_, d), CProc(d), UserInput()
+        HighVars : CurTab, Out, User
+        HighCompList : Tab(_, _), UserInput(), Output()

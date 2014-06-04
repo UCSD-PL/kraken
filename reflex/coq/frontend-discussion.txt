@@ -1,0 +1,54 @@
+We decided to implement the Reflex frontend in python. The frontend is
+unverified. There were a few other options that we considered:
+
+1.) Try to implement everything using Coq's notation.
+
+2.) Implement as much as possible in Coq's notation and do everything
+we can't do in notation in some other language.
+
+3a.) Define our ideal syntax in Coq and implement a Coq function which
+takes a program in the ideal syntax and translates it to an (option
+reflex_program).
+
+3b.) Implement the translator in 3a and formally verify it.
+
+4.) Implement a verified version of the python frontend in Coq.
+
+Option (1) proved to be difficult, as Coq's notation mechanism did not
+seem powerful enough for our purposes. Moreover, implementing the
+frontend using Coq's notation mechanism doesn't add to the guarantees
+provided by Reflex. There's no guarantee that our encoding of Reflex's
+syntax respects the Reflex semantics. Also, we're not sure that Coq's
+notation mechanism is formally verified. Moreover, if we stick to
+Coq's notation, it would be difficult to provide meaningfull error
+messages to the user when the user writes an invalid Reflex program.
+
+Option (2) also doesn't provide any guarantee of frontend
+correctness. It might allow us to provide meaningful error messages in
+some cases, but also might result in a more confusing implementation
+because the frontend would be spread across two different languages.
+
+We began to implement option (3a) and it would almost certainly
+require changes to the proof automation for our policies (we initially
+developed the proof automation without any Reflex frontend). It would
+also most likely result in significantly worse performance for our
+proof automation, as more reductions would be required (the main
+bottleneck in our proof automation's performance). Option (3b) has the
+downsides of (3a) plus significantly more development effort for
+verification. Moreover, it's not entirely clear what the correctness
+theorem would be for the translator.
+
+Option (4) would be pretty cool but is probably a research project in
+its own right. As with option (3b), its not clear what we would
+formally verify. Moreover, Compcert has done something like this, so
+there may not be anything novel.
+
+We felt that the python frontend is the best compromise. It provides
+as much of a guarantee as options (1), (2), and (3a) (no guarantee)
+while being far less development effort than options (3b) and (4), and
+it allows for the possibility of adding meaningful error messages for
+the user. Moreover, one could argue that the frontend falls into the
+same category as the operating system and ocaml compiler. People have
+already implemented verified frontends, verified operating systems,
+and verified compilers. We provide a language for non-experts to
+implement a different part of the software stack.

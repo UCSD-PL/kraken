@@ -4,11 +4,12 @@ import msg
 
 credentials = {
   'foo' : 'bar',
+  'default' : ' ',
 }
 
 owners = {
-  '../test/webserver/public.txt'  : {'foo'},
-  '../test/webserver/private.txt' : {},
+  'public.txt'  : {'foo', 'default'},
+  'private.txt' : {},
 }
 
 def try_except(success, failure, *exceptions):
@@ -28,12 +29,14 @@ def main():
     s = str(m)
     try:
       if m[0] == msg.ACLoginReq:
-        [_, user, password, compid] = m
+        [_, user, password, compid, rfile, wfile] = m
         try: ok = password == credentials[user]
         except KeyError: ok = False
         if ok:
           debug(user + " logged in")
-          msg.send(msg.ACLoginResT, user, compid)
+          debug("RFile: " + str(rfile))
+          debug("WFile: " + str(wfile))
+          msg.send(msg.ACLoginResT, user, compid, rfile, wfile)
         else:
           debug(user + " refused (wrong password)")
           msg.send(msg.ACLoginResF, user, compid)

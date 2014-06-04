@@ -18,6 +18,7 @@ DFileReq     = "DFileReq"
 DFileRes     = "DFileRes"
 FileRes      = "FileRes"
 FileResF     = "FileResF"
+InitClient   = "InitClient"
 
 FD    = None
 KCHAN = None
@@ -90,10 +91,10 @@ def msg_str(m):
 def recv():
   tag = recv_num()
   m = {
-    0 : lambda : [LoginReq    , recv_str(), recv_str(), recv_str()],
-    1 : lambda : [ACLoginReq  , recv_str(), recv_str(), recv_str()],
+    0 : lambda : [LoginReq    , recv_str(), recv_str(), recv_str(), recv_fd(), recv_fd()],
+    1 : lambda : [ACLoginReq  , recv_str(), recv_str(), recv_str(), recv_fd(), recv_fd()],
     2 : lambda : [ClientExists, recv_str(), recv_str()],
-    3 : lambda : [ACLoginResT , recv_str(), recv_str()],
+    3 : lambda : [ACLoginResT , recv_str(), recv_str(), recv_fd(), recv_fd()],
     4 : lambda : [ACLoginResF , recv_str(), recv_str()],
     5 : lambda : [LoginResT   , recv_str(), recv_str()],
     6 : lambda : [LoginResF   , recv_str(), recv_str()],
@@ -105,6 +106,7 @@ def recv():
    12 : lambda : [DFileRes    , recv_str(), recv_str(), recv_str(), recv_fd()],
    13 : lambda : [FileRes     , recv_str(), recv_fd()],
    14 : lambda : [FileResF    , recv_str()],
+   15 : lambda : [InitClient  , recv_fd(), recv_fd()],
 }[tag]()
   log('recv : %s' % msg_str(m))
   return m
@@ -112,10 +114,10 @@ def recv():
 def send(*m):
   tag = m[0]
   {
-    LoginReq    : lambda : [send_num(0), send_str(m[1]), send_str(m[2]), send_str(m[3])],
-    ACLoginReq  : lambda : [send_num(1), send_str(m[1]), send_str(m[2]), send_str(m[3])],
+    LoginReq    : lambda : [send_num(0), send_str(m[1]), send_str(m[2]), send_str(m[3]), send_fd(m[4]), send_fd(m[5])],
+    ACLoginReq  : lambda : [send_num(1), send_str(m[1]), send_str(m[2]), send_str(m[3]), send_fd(m[4]), send_fd(m[5])],
     ClientExists: lambda : [send_num(2), send_str(m[1]), send_str(m[2])],
-    ACLoginResT : lambda : [send_num(3), send_str(m[1]), send_str(m[2])],
+    ACLoginResT : lambda : [send_num(3), send_str(m[1]), send_str(m[2]), send_fd(m[3]), send_fd(m[4])],
     ACLoginResF : lambda : [send_num(4), send_str(m[1]), send_str(m[2])],
     LoginResT   : lambda : [send_num(5), send_str(m[1]), send_str(m[2])],
     LoginResF   : lambda : [send_num(6), send_str(m[1]), send_str(m[2])],
@@ -127,7 +129,7 @@ def send(*m):
     DFileRes    : lambda : [send_num(12), send_str(m[1]), send_str(m[2]), send_str(m[3]), send_fd(m[4])],
     FileRes     : lambda : [send_num(13), send_str(m[1]), send_fd(m[2])],
     FileResF    : lambda : [send_num(14), send_str(m[1])],
-
+    InitClient  : lambda : [send_num(15), send_fd(m[1]), send_fd(m[2])]
   }[tag]()
   log('send : %s' % msg_str(m))
 

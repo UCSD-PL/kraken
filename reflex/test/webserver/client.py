@@ -12,13 +12,19 @@ def main():
   while True:
     for f in {'doesnnotexist.txt', 'private.txt', 'public.txt'}:
       debug("Requesting " + f)
-      msg.send(msg.FileReq, '../test/webserver/' + f)
+      msg.send(msg.FileReq, f)
       m = msg.recv()
       if m[0] == msg.FileRes:
-        [_, _, fd] = m
-        debug("access to file " + f + " was authorized, with content\n" + fd.read())
+        [_, name, fd] = m
+        contents = fd.read()
+        debug("access to file " + name + " was authorized, with content\n" + contents)
+        wfile.write(contents)
       elif m[0] == msg.FileResF:
-        debug("access to file " + f + " was refused")
+        debug("access to file " + m[1] + " was refused")
+      elif m[0] == msg.InitClient:
+        rfile = m[1]
+        wfile = m[2]
+        print rfile, wfile
       else:
         debug("unexpected message " + str(m))
       time.sleep(i)

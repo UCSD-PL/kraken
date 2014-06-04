@@ -5,9 +5,13 @@ Components :
   Client        "../../../test/webserver/client.py"         () (user:str, id:str)
 
 Messages :
-  LoginReq(str)
-  ClientExists(str)
-  
+  LoginReq(str, str, str, fd, fd)
+  ACLoginReq(str, str, str, fd, fd)
+  ClientExists(str, str)
+  ACLoginResT(str, str, fd, fd)
+  ACLoginResF(str, str)
+  LoginResT(str, str)
+  LoginResF(str, str)
   FileReq(str)
   ACFileReq(str, str, str)
   ACFileResT(str, str, str)

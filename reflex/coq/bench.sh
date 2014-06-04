@@ -13,11 +13,11 @@ BENCHDIR=$4
 BENCHFULL=$BENCHDIR/$BENCHNAME
 TIMEOUT=$5
 
-echo "Benchmark,Policy,Time (Ltac),Time (Qed)" >> $BENCHFULL.csv
+echo "Benchmark,Policy,Time (Ltac),Time (Qed),Memory (kb)" > $BENCHFULL.csv
 
 for d in `ls -d -- $PREFIX-*`;
 do (
-  echo `basename $d`;
+  echo "Checking policies for `basename $d`";
   cd $d;
   $COQC $BENCHINCLUDES Kernel.v;
   for b in `find . -name "Policy*.v"`;

@@ -3,7 +3,7 @@ Components :
   Output    "../test/quark/output/output.sh" () ()
   Tab       "../test/quark/tab/tab.sh"       () (id:str, domain:str)
   CProc     "../test/quark/cookie/cookie.py" () (domain:str)
-  LinkDisp  "../test/quark/link/link.py"     () ()
+  LinkDisp  "../test/quark/link/link.sh"     () ()
 
 Messages :
   TabCreate(str, str)
@@ -18,11 +18,11 @@ Messages :
   URLResponse(fd)
   SocketRequest(str)
   SocketResponse(fd)
-  OpenLink(str)
   CookieChannelInit(fd)
   TabProcessRegister(fd)
   AddrFocus(str)
   DomainSet(str)
+  OpenLink(str)
 
 State :
   Out    : Output
@@ -40,10 +40,10 @@ Init :
   Link <- Linktemp;
   Out <- Outtemp;
   User <- Usertemp;
-  t <- spawn Tab("", "google.com");
+  t <- spawn Tab("g", "google.com");
   send(t, DomainSet("google.com"));
   CurTab <- t;
-  send(Usertemp, AddrAdd("", "google.com"))
+  send(Usertemp, AddrAdd("g", "google.com"))
 
 Handlers :
   When u:UserInput sends TabCreate(id, domain) respond:

@@ -12,7 +12,7 @@ def main():
     m = msg.recv()
     if m[0] == msg.DFileReq:
       [_, user, compid, request] = m
-      fd = open("/home/ucsd/kraken/reflex/test/webserver/" + request)
+      fd = open("../../../test/webserver/" + request)
       msg.send(msg.DFileRes, user, compid, request, fd)
     else:
       debug("Unhandled message " + str(m))

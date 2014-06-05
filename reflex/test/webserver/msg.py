@@ -62,6 +62,11 @@ def recv_fd():
   f = os.fdopen(fd, 'r')
   return f
 
+def recv_fd_w():
+  fd, _ = passfd.recvfd(KCHAN)
+  f = os.fdopen(fd, 'w')
+  return f
+
 def send_num(n):
   s = struct.pack('>H', n)
   KCHAN.send(s)
@@ -91,7 +96,7 @@ def msg_str(m):
 def recv():
   tag = recv_num()
   m = {
-    0 : lambda : [LoginReq    , recv_str(), recv_str(), recv_str(), recv_fd(), recv_fd()],
+    0 : lambda : [LoginReq    , recv_str(), recv_str(), recv_str(), recv_fd(), recv_fd_w()],
     1 : lambda : [ACLoginReq  , recv_str(), recv_str(), recv_str(), recv_fd(), recv_fd()],
     2 : lambda : [ClientExists, recv_str(), recv_str()],
     3 : lambda : [ACLoginResT , recv_str(), recv_str(), recv_fd(), recv_fd()],
@@ -106,7 +111,7 @@ def recv():
    12 : lambda : [DFileRes    , recv_str(), recv_str(), recv_str(), recv_fd()],
    13 : lambda : [FileRes     , recv_str(), recv_fd()],
    14 : lambda : [FileResF    , recv_str()],
-   15 : lambda : [InitClient  , recv_fd(), recv_fd()],
+   15 : lambda : [InitClient  , recv_fd(), recv_fd_w()],
 }[tag]()
   log('recv : %s' % msg_str(m))
   return m

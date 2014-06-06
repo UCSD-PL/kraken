@@ -8,7 +8,7 @@ credentials = {
 }
 
 owners = {
-  'public.txt'  : {'foo', 'default'},
+  '/index.html'  : {'foo', 'default'},
   'private.txt' : {},
 }
 

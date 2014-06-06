@@ -18,15 +18,15 @@ The important parts of the repository are the following:
 
 Simply run `make` to build the interpreter. In order to build a particular kernel, place your kernel in `reflex/coq/bench-<name>`. Under that directory, run
 
-`ln -s ../Makefile.bench Makefile
-cd ../../
-make build NAME=<name>`
+`ln -s ../Makefile.bench Makefile`
+`cd ../../`
+`make build NAME=<name>`
 
 The resulting binary will reside in `reflex/coq/bench-<name>/ml/kernel`.
 
 ## Running the proof automation on our properties
-`cd reflex/coq
-make bench BENCHOUT=<results-dir> TIMEOUT=<timeout>`
+`cd reflex/coq`
+`make bench BENCHOUT=<results-dir> TIMEOUT=<timeout>`
 
 A single file called <results-dir>/results.csv will be created, giving, for each property, the time taken to produce a proof (Ltac), the time taken to check the proof (Qed), and the maximum memory used while creating the proof.
 

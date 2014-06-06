@@ -20,7 +20,8 @@ Simply run `make` to build the interpreter. In order to build a particular kerne
 
 ```ln -s ../Makefile.bench Makefile
 cd ../../
-`make build NAME=<name>```
+`make build NAME=<name>
+```
 
 The resulting binary will reside in `reflex/coq/bench-<name>/ml/kernel`.
 

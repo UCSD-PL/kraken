@@ -18,10 +18,9 @@ The important parts of the repository are the following:
 
 Simply run `make` to build the interpreter. In order to build a particular kernel, place your kernel in `reflex/coq/bench-<name>`. Under that directory, run
 
-`ln -s ../Makefile.bench Makefile`
-
-`cd ../../`
-`make build NAME=<name>`
+```ln -s ../Makefile.bench Makefile
+cd ../../
+`make build NAME=<name>```
 
 The resulting binary will reside in `reflex/coq/bench-<name>/ml/kernel`.
 

@@ -34,7 +34,7 @@ policies: clean kernel $(POLICIES:.v=.vo)
 #	-timeout --foreground 1h $(COQC) $(INCLUDES) $*.v
 
 Kernel.v:
-	python2 ../parser_ply.py Kernel.reflex Kernel.v > /dev/null
+	python ../parser_ply.py Kernel.reflex Kernel.v > /dev/null
 
 clean:
 	rm -f *.vo *.glob *.v

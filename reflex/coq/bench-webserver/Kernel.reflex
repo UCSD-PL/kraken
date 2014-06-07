@@ -1,14 +1,14 @@
 Components :
-  AccessControl "access-control.py" () ()
-  Disk          "disk.py"           () ()
-  Listener      "listener.py"       () ()
-  Client         "client.py"        () (user:str, addr:str)
+  AccessControl "../../../test/webserver/access-control.py" () ()
+  Disk          "../../../test/webserver/disk.py"           () ()
+  Listener      "../../../test/webserver/listener.py"       () ()
+  Client        "../../../test/webserver/client.py"         () (user:str, id:str)
 
 Messages :
-  LoginReq(str, str, str)
-  ACLoginReq(str, str, str)
+  LoginReq(str, str, str, fd, fd)
+  ACLoginReq(str, str, str, fd, fd)
   ClientExists(str, str)
-  ACLoginResT(str, str)
+  ACLoginResT(str, str, fd, fd)
   ACLoginResF(str, str)
   LoginResT(str, str)
   LoginResF(str, str)
@@ -20,6 +20,7 @@ Messages :
   DFileRes(str, str, str, fd)
   FileRes(str, fd)
   FileResF(str)
+  InitClient(fd, fd)
 
 State :
   AC : AccessControl
@@ -37,13 +38,14 @@ Init :
   L <- Ltemp
 
 Handlers :
-  When l:Listener sends LoginReq(u, p, a) respond:
-    send(AC, ACLoginReq(u, p, a))
+  When l:Listener sends LoginReq(u, p, a, rfd, wfd) respond:
+    send(AC, ACLoginReq(u, p, a, rfd, wfd))
 
-  When ac:AccessControl sends ACLoginResT(u, a) respond:
+  When ac:AccessControl sends ACLoginResT(u, a, rfd, wfd) respond:
     lookup Client(u, a)
     { cl => nop }
     { c <- spawn Client(u, a);
+      send(c, InitClient(rfd, wfd));
       send(L, LoginResT(u, a))
     }
 
@@ -51,7 +53,7 @@ Handlers :
     send(L, LoginResF(u, a))
 
   When c:Client sends FileReq(r) respond:
-    send(AC, ACFileReq(c.user, c.addr, r))
+    send(AC, ACFileReq(c.user, c.id, r))
 
   When ac:AccessControl sends ACFileResT(u, a, r) respond:
     send(D, DFileReq(u, a, r))
@@ -87,7 +89,7 @@ Properties :
 
   AuthCorrect:
     forall u, a:
-      [Recv(AccessControl(), ACLoginResT(u, a))]
+      [Recv(AccessControl(), ACLoginResT(u, a, _, _))]
       Enables
       [Spawn Client(u, a)]
 
@@ -99,6 +101,6 @@ Properties :
 
   AuthEnablesReq:
     forall u, a:
-      [Recv(AccessControl(), ACLoginResT(u, a))]
+      [Recv(AccessControl(), ACLoginResT(u, a, _, _))]
       Enables
       [Send(AccessControl(), ACFileReq(u, a, _))]
